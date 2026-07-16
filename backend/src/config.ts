@@ -8,13 +8,23 @@ function obrigatoria(nome: string): string {
   return valor;
 }
 
+// `??` cai no fallback só com null/undefined; `COOKIE_SECRET=` no .env é string
+// vazia e passaria reto. O trim() aqui pega o vazio, que é o bug do 2.5.2.
+function opcional(nome: string, padrao: string): string {
+  const v = process.env[nome];
+  return v === undefined || v.trim() === '' ? padrao : v;
+}
+
+const isProd = process.env.NODE_ENV === 'production';
+
 export const config = {
   databaseUrl: obrigatoria('DATABASE_URL'),
   port: Number(process.env.PORT ?? 3333),
-  corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
-  // Segredo pra assinar o cookie de sessão. Em produção vem do ambiente; o
-  // fallback só existe pro dev não travar. NUNCA use o fallback em produção.
-  cookieSecret:
-    process.env.COOKIE_SECRET ?? 'dev-inseguro-troque-em-producao-2f9c1a7b4e6d8005',
-  isProd: process.env.NODE_ENV === 'production',
+  corsOrigin: opcional('CORS_ORIGIN', 'http://localhost:5173'),
+  // Em produção, sem segredo o processo não sobe (falhar no deploy é melhor que
+  // assinar sessão com string de dev). Em dev, fallback funcional.
+  cookieSecret: isProd
+    ? obrigatoria('COOKIE_SECRET')
+    : opcional('COOKIE_SECRET', 'dev-inseguro-nao-use-em-producao'),
+  isProd,
 } as const;
