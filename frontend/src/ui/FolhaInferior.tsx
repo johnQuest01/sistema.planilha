@@ -3,6 +3,9 @@ import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import './ui.css';
 
+// Folha inferior modal (bottom sheet). O foco é aplicado apenas na montagem para
+// não fechar o teclado do celular ao digitar (ver correção do efeito abaixo).
+
 interface Props {
   titulo: string;
   onFechar: () => void;
