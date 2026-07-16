@@ -135,7 +135,7 @@ export function Preencher({
           Novo registro
         </Botao>
         <Botao
-          variante="fantasma"
+          variante="padrao"
           onClick={() => setAdicionandoCampo((a) => !a)}
           aria-expanded={adicionandoCampo}
         >
