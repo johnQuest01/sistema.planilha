@@ -6,29 +6,30 @@
   bottom: calc(var(--e3) + env(safe-area-inset-bottom, 0px));
   z-index: 55;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--e2);
-  max-width: min(72vw, 340px);
-  padding: 6px var(--e3);
+  /* Cabe na tela, mas mostra o nome INTEIRO (quebra linha em vez de abreviar). */
+  max-width: calc(100vw - var(--e3) * 2);
+  padding: 8px var(--e3);
   background: var(--cartao);
   border: 1px solid var(--linha);
-  border-radius: 999px;
+  border-radius: var(--raio-2);
   box-shadow: var(--sombra);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--tinta-2);
 }
 .presenca-online__dot {
   flex: none;
   width: 8px;
   height: 8px;
+  margin-top: 5px;
   border-radius: 50%;
   background: #2ecc71;
   box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.2);
 }
 .presenca-online__txt {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .presenca-avisos {
