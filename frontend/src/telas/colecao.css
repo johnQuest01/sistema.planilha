@@ -202,14 +202,18 @@
 }
 
 /* ---- form adicionar bloco ---- */
+/* Fundo claro sólido + texto escuro: este form também é usado sobre o tapete escuro
+   (ex.: "Adicionar campo" no Preencher), onde antes ficava ilegível (transparente). */
 .add-bloco {
   margin-top: var(--e3);
   display: flex;
   flex-direction: column;
   gap: var(--e3);
   padding: var(--e3);
-  border: 1px dashed var(--linha-2);
+  border: 1px solid var(--linha);
   border-radius: var(--raio);
+  background: var(--papel-2);
+  color: var(--tinta);
 }
 .add-bloco__tipos {
   display: flex;
@@ -244,7 +248,8 @@
   padding: var(--e2);
   border: 1px solid var(--linha);
   border-radius: var(--raio-2);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--papel);
+  color: var(--tinta);
 }
 .secao-builder__item {
   display: flex;

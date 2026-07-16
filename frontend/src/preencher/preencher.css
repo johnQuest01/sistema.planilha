@@ -11,7 +11,8 @@
 .add-campo-inline {
   margin-bottom: var(--e3);
   padding: var(--e3);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--papel);
+  color: var(--tinta);
   border: 1px solid var(--linha);
   border-radius: var(--raio-2);
   text-align: left;

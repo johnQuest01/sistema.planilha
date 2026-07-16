@@ -77,8 +77,14 @@
   border: 1px solid var(--linha-2);
   border-radius: var(--raio);
   background: var(--papel-2);
+  /* Texto digitado sempre escuro sobre o campo claro (não herdar cor clara de áreas
+     sobre o tapete, como o estado vazio do Preencher). */
+  color: var(--tinta);
   outline: none;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.campo__controle::placeholder {
+  color: var(--tinta-3);
 }
 textarea.campo__controle {
   padding: var(--e3);
