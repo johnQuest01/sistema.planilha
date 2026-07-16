@@ -21,3 +21,10 @@ export const registrarSchema = z
   .strict();
 
 export type Registrar = z.infer<typeof registrarSchema>;
+
+// Troca do código de convite (só o dono do workspace).
+export const codigoConviteSchema = z
+  .object({
+    codigo: z.string().trim().min(4, 'mínimo 4 caracteres').max(200),
+  })
+  .strict();

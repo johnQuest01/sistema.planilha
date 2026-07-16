@@ -3,6 +3,7 @@ import { ProvedorAuth, useAuth } from './contexto/Auth';
 import { Entrar } from './telas/Entrar';
 import { Inicio } from './telas/Inicio';
 import { Colecao } from './telas/Colecao';
+import { Config } from './telas/Config';
 import { Carregando } from './ui/Carregando';
 
 function Protegida({ children }: { children: JSX.Element }): JSX.Element {
@@ -33,6 +34,14 @@ function Rotas(): JSX.Element {
         element={
           <Protegida>
             <Colecao />
+          </Protegida>
+        }
+      />
+      <Route
+        path="/config"
+        element={
+          <Protegida>
+            <Config />
           </Protegida>
         }
       />

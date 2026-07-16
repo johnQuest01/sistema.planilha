@@ -76,6 +76,11 @@ export const api = {
   registrar: (nome: string, email: string, senha: string, codigo: string) =>
     pedir<Usuario>('/api/auth/registrar', corpoJson({ nome, email, senha, codigo })),
   sair: () => pedir<{ ok: boolean }>('/api/auth/sair', { method: 'POST' }),
+  definirCodigoConvite: (codigo: string) =>
+    pedir<{ ok: boolean }>('/api/auth/codigo-convite', {
+      method: 'PATCH',
+      body: JSON.stringify({ codigo }),
+    }),
 
   // --- coleções ---
   listarColecoes: () => pedir<ColecaoResumo[]>('/api/colecoes'),

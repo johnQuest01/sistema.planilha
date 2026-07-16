@@ -174,3 +174,53 @@
   color: var(--perigo);
   font-size: 14px;
 }
+
+/* tela de configuração (código de convite) */
+.config {
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+.config__titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  font-size: 20px;
+  font-weight: 700;
+}
+.config__ajuda {
+  color: var(--tinta-3);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.config__salvo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e2);
+  padding: var(--e3);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-2);
+  background: var(--cartao);
+}
+.config__salvo-rotulo {
+  font-size: 14px;
+}
+.config__salvo-codigo {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.config__forma {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+.config__acoes {
+  display: flex;
+  gap: var(--e2);
+  flex-wrap: wrap;
+}

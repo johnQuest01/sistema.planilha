@@ -2,10 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { sql } from '../db/client';
 import { gerarHash, conferirSenha } from '../auth/senha';
 import { NOME_COOKIE_SESSAO, opcoesLimpar, opcoesSessao } from '../auth/cookies';
-import { exigeDono, usuarioObrigatorio } from '../auth/exigeDono';
+import { exigeDono, usuarioObrigatorio, contaObrigatoria } from '../auth/exigeDono';
 import { criarSessao, revogarSessao } from '../auth/sessoes';
 import { workspaceContaId, workspaceCodigoHash } from '../auth/workspace';
-import { credenciaisSchema, registrarSchema } from '../validacao/credenciais';
+import { credenciaisSchema, registrarSchema, codigoConviteSchema } from '../validacao/credenciais';
 
 // `contas`/`usuarios`/`sessoes` não têm RLS (ver migration 002): a auth media o
 // acesso aqui, então falamos direto com `sql`, fora do `comConta`.
@@ -78,5 +78,20 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
   app.get('/api/auth/eu', { preHandler: exigeDono }, async (req, reply) => {
     const u = usuarioObrigatorio(req);
     return reply.send({ id: u.id, nome: u.nome, email: u.email, papel: u.papel });
+  });
+
+  // Troca o código de convite do workspace. Só o dono DO workspace (não dono de
+  // outra conta qualquer): exige papel 'dono' e que a conta logada seja a workspace.
+  app.patch('/api/auth/codigo-convite', { preHandler: exigeDono }, async (req, reply) => {
+    const u = usuarioObrigatorio(req);
+    const contaId = contaObrigatoria(req);
+    const wsId = await workspaceContaId();
+    if (u.papel !== 'dono' || contaId !== wsId) {
+      return reply.code(403).send({ erro: 'só o dono pode trocar o código de convite' });
+    }
+    const { codigo } = codigoConviteSchema.parse(req.body);
+    const hashCodigo = await gerarHash(codigo);
+    await sql`update contas set codigo_convite_hash = ${hashCodigo} where id = ${wsId}`;
+    return reply.send({ ok: true });
   });
 }
