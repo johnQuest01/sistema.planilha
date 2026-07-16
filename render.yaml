@@ -1,0 +1,37 @@
+# Blueprint do backend no Render (seção 7.4). Import: New > Blueprint > este repo.
+# Os valores marcados `sync: false` são preenchidos no painel (segredos) e NÃO
+# ficam no git. Troque os placeholders CORS_ORIGIN e R2_PUBLIC_BASE pelos reais.
+services:
+  - type: web
+    name: mostruario-api
+    runtime: node
+    plan: free # cold start no free tier: 1º acesso do dia é lento (ver 7.4). Não resolva com ping.
+    rootDir: . # raiz do repo — é workspace npm
+    buildCommand: npm ci && npm run build -w backend
+    startCommand: node dist/backend/src/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production # ativa o obrigatoria('COOKIE_SECRET'): sem segredo, o processo não sobe (2.5.2)
+      - key: NODE_VERSION
+        value: "20"
+      - key: CORS_ORIGIN
+        value: https://REPLACE-APP.vercel.app
+      - key: R2_BUCKET
+        value: mostruario-midia # bucket dedicado, NUNCA o do outro projeto do dono (7.1)
+      - key: R2_PUBLIC_BASE
+        value: https://midia.REPLACE-DOMINIO # domínio customizado via CDN da Cloudflare (7.2b)
+      # --- segredos: preenchidos no painel, ficam fora do git ---
+      - key: DATABASE_URL # Neon POOLED (host com -pooler, ?sslmode=require) — a aplicação (7.6)
+        sync: false
+      - key: DATABASE_URL_DIRECT # Neon DIRECT (sem -pooler) — só as migrations (7.6)
+        sync: false
+      - key: COOKIE_SECRET # node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID # token R2 Object Read & Write ESCOPADO a mostruario-midia (7.1)
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
