@@ -4,7 +4,10 @@ import path from 'node:path';
 import postgres from 'postgres';
 
 async function main(): Promise<void> {
-  const databaseUrl = process.env.DATABASE_URL;
+  // Migrations vão pela DIRECT (sem PgBouncer): DDL longo por pooler em transaction
+  // mode é onde nascem erros que não se reproduzem (ver seção 7.6). Fallback pra
+  // DATABASE_URL mantém o dev, que não tem string separada.
+  const databaseUrl = process.env.DATABASE_URL_DIRECT ?? process.env.DATABASE_URL;
   if (databaseUrl === undefined || databaseUrl.trim() === '') {
     console.error('DATABASE_URL ausente. Preencha backend/.env antes de migrar.');
     process.exit(1);
