@@ -12,10 +12,18 @@ interface Props {
 
 export function FolhaInferior({ titulo, onFechar, children, acaoTopo }: Props): JSX.Element {
   const folhaRef = useRef<HTMLDivElement>(null);
+  // onFechar é recriado a cada render do pai (Ficha). Guardamos numa ref para o
+  // efeito de montagem NÃO depender dele — senão ele re-executava a cada tecla,
+  // chamando folhaRef.focus() e roubando o foco do input (no celular, fecha o teclado).
+  const onFecharRef = useRef(onFechar);
+  useEffect(() => {
+    onFecharRef.current = onFechar;
+  }, [onFechar]);
 
+  // Só na montagem: trava o scroll do fundo, foca a folha uma vez e escuta Esc.
   useEffect(() => {
     function aoTeclar(e: KeyboardEvent): void {
-      if (e.key === 'Escape') onFechar();
+      if (e.key === 'Escape') onFecharRef.current();
     }
     document.addEventListener('keydown', aoTeclar);
     const anterior = document.body.style.overflow;
@@ -25,7 +33,7 @@ export function FolhaInferior({ titulo, onFechar, children, acaoTopo }: Props): 
       document.removeEventListener('keydown', aoTeclar);
       document.body.style.overflow = anterior;
     };
-  }, [onFechar]);
+  }, []);
 
   return (
     <div
