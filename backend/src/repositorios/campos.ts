@@ -76,6 +76,18 @@ export async function editarCampo(tx: Tx, id: string, patch: PatchCampo): Promis
   const tipo = patch.tipo ?? (atual.tipo as TipoCampo);
   const config = patch.config ?? atual.config ?? {};
 
+  // Trocar o tipo de um bloco que já tem dados corromperia os `valores` gravados
+  // (ver 2.5.6): o valor antigo continuaria lá com a forma do tipo velho. Renomear
+  // é livre; trocar tipo com registros é 409. Apagar o bloco (limpa os valores) e
+  // recriar é o caminho consciente.
+  if (tipo !== atual.tipo) {
+    const cont = await tx<{ n: number }[]>`
+      select count(*)::int as n from registros where colecao_id = ${atual.colecao_id}`;
+    if ((cont[0]?.n ?? 0) > 0) {
+      throw new ErroHttp(409, 'não dá pra trocar o tipo de um bloco que já tem dados preenchidos');
+    }
+  }
+
   // Invariante depende do estado final (tipo + config mesclados), por isso a
   // checagem mora aqui e não no Zod.
   if (tipo === 'selecao' && (config.opcoes === undefined || config.opcoes.length === 0)) {
