@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build -w frontend",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "npm install",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://mostruario-api.onrender.com/api/:path*" },
+    { "source": "/health", "destination": "https://mostruario-api.onrender.com/health" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
