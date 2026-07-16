@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Copy } from 'lucide-react';
+import { Copy, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao as TColecao } from '../../../shared/tipos';
+import { useAuth } from '../contexto/Auth';
 import { Segmentado } from '../ui/Segmentado';
+import { Botao } from '../ui/Botao';
 import { Carregando } from '../ui/Carregando';
 import { TopoApp } from './TopoApp';
 import { Criar } from './Criar';
@@ -15,10 +17,14 @@ type Modo = 'criar' | 'preencher';
 export function Colecao(): JSX.Element {
   const { id = '' } = useParams();
   const navegar = useNavigate();
+  const { estado } = useAuth();
+  const usuario = estado.fase === 'logado' ? estado.usuario : null;
   const [colecao, setColecao] = useState<TColecao | null>(null);
   const [modo, setModo] = useState<Modo>('criar');
   const [nomeEdit, setNomeEdit] = useState('');
   const [duplicando, setDuplicando] = useState(false);
+  const [confirmandoApagar, setConfirmandoApagar] = useState(false);
+  const [apagando, setApagando] = useState(false);
   const nomeSalvo = useRef('');
 
   const recarregar = useCallback(async () => {
@@ -85,9 +91,24 @@ export function Colecao(): JSX.Element {
     }
   }
 
+  async function apagar(): Promise<void> {
+    if (apagando) return;
+    setApagando(true);
+    try {
+      await api.apagarColecao(id);
+      navegar('/', { replace: true });
+    } catch {
+      setApagando(false);
+      setConfirmandoApagar(false);
+    }
+  }
+
   if (colecao === null) return <Carregando />;
 
   const ehPreencher = modo === 'preencher';
+  // Só o dono ou quem criou a planilha pode apagá-la (o backend também barra com 403).
+  const podeApagar =
+    usuario !== null && (usuario.papel === 'dono' || colecao.criadoPor === usuario.id);
 
   return (
     <div className="pagina">
@@ -119,6 +140,17 @@ export function Colecao(): JSX.Element {
           >
             <Copy size={18} />
           </button>
+          {podeApagar && (
+            <button
+              type="button"
+              className="btn btn--icone colecao-barra__apagar"
+              aria-label="Apagar planilha"
+              title="Apagar planilha"
+              onClick={() => setConfirmandoApagar(true)}
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
           <Segmentado
             rotuloAria="Modo da planilha"
             valor={modo}
@@ -129,6 +161,20 @@ export function Colecao(): JSX.Element {
             ]}
           />
         </div>
+
+        {confirmandoApagar && (
+          <div className="colecao-apagar-confirma">
+            <span className="colecao-apagar-confirma__txt">
+              Apagar “{colecao.nome}” e tudo que ela contém? Isso não pode ser desfeito.
+            </span>
+            <Botao variante="perigo" disabled={apagando} onClick={() => void apagar()}>
+              Apagar planilha
+            </Botao>
+            <Botao variante="fantasma" onClick={() => setConfirmandoApagar(false)}>
+              Cancelar
+            </Botao>
+          </div>
+        )}
 
         {modo === 'criar' ? (
           <Criar colecao={colecao} aoMudarCampos={atualizarCampos} recarregar={() => void recarregar()} />

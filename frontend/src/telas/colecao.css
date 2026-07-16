@@ -179,6 +179,28 @@
   color: var(--perigo);
 }
 
+/* apagar planilha aberta (barra do topo) */
+.colecao-barra__apagar:hover {
+  color: var(--perigo);
+}
+.colecao-apagar-confirma {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e2);
+  margin-bottom: var(--e3);
+  padding: var(--e2) var(--e3);
+  background: rgba(192, 57, 43, 0.08);
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  border-radius: var(--raio);
+}
+.colecao-apagar-confirma__txt {
+  flex: 1;
+  min-width: 200px;
+  font-size: 14px;
+  color: var(--perigo);
+}
+
 /* ---- form adicionar bloco ---- */
 .add-bloco {
   margin-top: var(--e3);
