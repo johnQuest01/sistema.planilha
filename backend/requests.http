@@ -108,7 +108,122 @@ DELETE {{host}}/api/campos/{{campoStatusId}}
 ### Ver de novo (ordem preservada, sem o Status)
 GET {{host}}/api/colecoes/{{colecaoId}}
 
-### Sair
+### ======================= Fase 3: registros =======================
+
+### Campo imagem maxFotos 1 (capa única)
+# @name campoFoto1
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Capa", "tipo": "imagem", "config": { "maxFotos": 1 } }
+
+@campoFoto1Id = {{campoFoto1.response.body.id}}
+
+### Campo imagem maxFotos 5 (galeria)
+# @name campoFoto5
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Galeria", "tipo": "imagem", "config": { "maxFotos": 5 } }
+
+@campoFoto5Id = {{campoFoto5.response.body.id}}
+
+### Campo numero (guardar id pro registro e pro teste de 409)
+# @name campoPeso
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Gramatura", "tipo": "numero", "config": { "sufixo": "g/m2" } }
+
+@campoPesoId = {{campoPeso.response.body.id}}
+
+### maxFotos em bloco que NÃO é imagem deve dar 400 (seção 4.2)
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Errado", "tipo": "texto", "config": { "maxFotos": 3 } }
+
+### Criar registro com número + galeria vazia → 201
+# @name registro1
+POST {{host}}/api/colecoes/{{colecaoId}}/registros
+Content-Type: application/json
+
+{ "valores": { "{{campoPesoId}}": 180, "{{campoFoto5Id}}": [] } }
+
+@registroId = {{registro1.response.body.id}}
+
+### Chave inventada nos valores → 400 (.strict)
+POST {{host}}/api/colecoes/{{colecaoId}}/registros
+Content-Type: application/json
+
+{ "valores": { "chave_inventada": "x" } }
+
+### imagem como string solta (não array) → 400
+POST {{host}}/api/colecoes/{{colecaoId}}/registros
+Content-Type: application/json
+
+{ "valores": { "{{campoFoto1Id}}": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/aaaaaaaaaaaaaaaaaaaaa.jpg" } }
+
+### imagem com URL em vez de key → 400
+POST {{host}}/api/colecoes/{{colecaoId}}/registros
+Content-Type: application/json
+
+{ "valores": { "{{campoFoto1Id}}": ["https://evil.com/a.jpg"] } }
+
+### 3 keys num campo maxFotos 1 → 400
+POST {{host}}/api/colecoes/{{colecaoId}}/registros
+Content-Type: application/json
+
+{ "valores": { "{{campoFoto1Id}}": [
+  "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/aaaaaaaaaaaaaaaaaaaaa.jpg",
+  "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/bbbbbbbbbbbbbbbbbbbbb.jpg",
+  "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/ccccccccccccccccccccc.jpg"
+] } }
+
+### 3 keys num campo maxFotos 5 → 201
+POST {{host}}/api/colecoes/{{colecaoId}}/registros
+Content-Type: application/json
+
+{ "valores": { "{{campoFoto5Id}}": [
+  "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/aaaaaaaaaaaaaaaaaaaaa.jpg",
+  "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/bbbbbbbbbbbbbbbbbbbbb.jpg",
+  "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/ccccccccccccccccccccc.jpg"
+] } }
+
+### numero como string → 400
+POST {{host}}/api/colecoes/{{colecaoId}}/registros
+Content-Type: application/json
+
+{ "valores": { "{{campoPesoId}}": "180" } }
+
+### PATCH de um campo só preserva os outros (merge)
+PATCH {{host}}/api/registros/{{registroId}}
+Content-Type: application/json
+
+{ "valores": { "{{campoPesoId}}": 200 } }
+
+### Listar registros da coleção
+GET {{host}}/api/colecoes/{{colecaoId}}/registros
+
+### Trocar o tipo de um campo com registros existentes → 409 (2.5.6)
+PATCH {{host}}/api/campos/{{campoPesoId}}
+Content-Type: application/json
+
+{ "tipo": "texto" }
+
+### :id não-uuid vira 404, não 500 (2.5.5)
+GET {{host}}/api/colecoes/nao-e-uuid/registros
+
+### Registro de outra conta / inexistente → 404 (RLS)
+PATCH {{host}}/api/registros/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+
+{ "valores": {} }
+
+### Apagar registro → 204
+DELETE {{host}}/api/registros/{{registroId}}
+
+### Sair (revoga a sessão no servidor, não só limpa o cookie — 2.5.3)
 POST {{host}}/api/auth/sair
 
 ### Sem sessão, criar campo deve dar 401
@@ -116,3 +231,9 @@ POST {{host}}/api/colecoes/{{colecaoId}}/campos
 Content-Type: application/json
 
 { "nome": "NaoDeveria", "tipo": "texto" }
+
+### Rate limit: reenviar este POST 11x em 1 min → o 11º responde 429 (2.5.4)
+POST {{host}}/api/auth/entrar
+Content-Type: application/json
+
+{ "email": "dono@exemplo.com", "senha": "errada" }

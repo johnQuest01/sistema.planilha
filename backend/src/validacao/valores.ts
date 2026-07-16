@@ -1,0 +1,45 @@
+import { z } from 'zod';
+import type { Campo } from '../../../shared/tipos';
+
+// Enforça exatamente a forma que o SERVIDOR gera (seção 7.2): <uuid>/<uuid>/<nano21>.<ext>.
+// Regex frouxa aqui vira chave aceita que o servidor nunca emitiu (ver seção 4.3).
+const R2_KEY =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[A-Za-z0-9_-]{21}\.(jpe?g|png|webp)$/;
+
+// Um validador por bloco, derivado do tipo. `imagem` guarda sempre string[] (galeria,
+// seção 4), de keys do R2 — jamais URL — com teto de maxFotos.
+function schemaDoCampo(c: Campo): z.ZodTypeAny {
+  switch (c.tipo) {
+    case 'texto':
+    case 'paragrafo':
+      return z.string();
+    case 'numero':
+      return z.number().finite();
+    case 'data':
+      return z.string().date();
+    case 'booleano':
+      return z.boolean();
+    case 'imagem':
+      return z.array(z.string().regex(R2_KEY)).max(c.config.maxFotos ?? 1);
+    case 'selecao': {
+      const opcoes = c.config.opcoes ?? [];
+      const [primeira, ...resto] = opcoes;
+      // selecao sem opções não aceita valor nenhum — falha explícita, não string livre.
+      if (primeira === undefined) return z.never();
+      return z.enum([primeira, ...resto]);
+    }
+    default:
+      return z.never();
+  }
+}
+
+// Monta o schema dos `valores` a partir dos campos da coleção. `.strict()` derruba
+// qualquer chave que não seja id de campo daquela coleção. Todos opcionais: registro
+// sem um valor (ou sem foto) é válido, e o PATCH é merge (ver seção 5).
+export function schemaDeValores(campos: Campo[]): z.ZodObject<z.ZodRawShape, 'strict'> {
+  const shape: z.ZodRawShape = {};
+  for (const c of campos) {
+    shape[c.id] = schemaDoCampo(c).optional();
+  }
+  return z.object(shape).strict();
+}

@@ -10,6 +10,7 @@ import { sql } from './db/client';
 import { rotasAuth } from './rotas/auth';
 import { rotasColecoes } from './rotas/colecoes';
 import { rotasCampos } from './rotas/campos';
+import { rotasRegistros } from './rotas/registros';
 
 export function buildServer() {
   const app = Fastify({
@@ -42,6 +43,7 @@ export function buildServer() {
   app.register(rotasAuth);
   app.register(rotasColecoes);
   app.register(rotasCampos);
+  app.register(rotasRegistros);
 
   return app;
 }
