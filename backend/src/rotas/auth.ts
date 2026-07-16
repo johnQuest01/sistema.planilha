@@ -3,6 +3,7 @@ import { sql } from '../db/client';
 import { gerarHash, conferirSenha } from '../auth/senha';
 import { NOME_COOKIE_SESSAO, opcoesLimpar, opcoesSessao } from '../auth/cookies';
 import { exigeDono, contaObrigatoria } from '../auth/exigeDono';
+import { criarSessao, revogarSessao } from '../auth/sessoes';
 import { credenciaisSchema } from '../validacao/credenciais';
 
 // `contas` não tem RLS (ver migration 002): a lógica de auth media o acesso aqui,
@@ -22,7 +23,8 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
     const conta = linhas[0];
     if (conta === undefined) throw new Error('insert de conta não retornou linha');
 
-    reply.setCookie(NOME_COOKIE_SESSAO, conta.id, opcoesSessao());
+    const sessaoId = await criarSessao(conta.id);
+    reply.setCookie(NOME_COOKIE_SESSAO, sessaoId, opcoesSessao());
     return reply.code(201).send({ id: conta.id, email });
   });
 
@@ -38,11 +40,21 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
       return reply.code(401).send({ erro: 'credenciais inválidas' });
     }
 
-    reply.setCookie(NOME_COOKIE_SESSAO, conta.id, opcoesSessao());
+    const sessaoId = await criarSessao(conta.id);
+    reply.setCookie(NOME_COOKIE_SESSAO, sessaoId, opcoesSessao());
     return reply.send({ id: conta.id, email });
   });
 
-  app.post('/api/auth/sair', async (_req, reply) => {
+  // Revoga a sessão no servidor, não só no cliente: o valor assinado deixa de ser
+  // aceito (era o furo do 2.5.3 — limpar o cookie não deslogava de verdade).
+  app.post('/api/auth/sair', async (req, reply) => {
+    const assinado = req.cookies[NOME_COOKIE_SESSAO];
+    if (assinado !== undefined) {
+      const conferido = req.unsignCookie(assinado);
+      if (conferido.valid && conferido.value !== null) {
+        await revogarSessao(conferido.value);
+      }
+    }
     reply.clearCookie(NOME_COOKIE_SESSAO, opcoesLimpar());
     return reply.send({ ok: true });
   });

@@ -1,8 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { NOME_COOKIE_SESSAO } from './cookies';
-
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { contaDaSessao, FORMATO_ID_SESSAO } from './sessoes';
 
 // preHandler do CAMINHO DONO. Único que habilita mexer em ESTRUTURA.
 // Não compartilha código com o caminho de convite (ver seção 6.1) — de propósito.
@@ -14,12 +12,19 @@ export async function exigeDono(req: FastifyRequest, reply: FastifyReply): Promi
   }
 
   const conferido = req.unsignCookie(assinado);
-  if (!conferido.valid || conferido.value === null || !UUID.test(conferido.value)) {
+  if (!conferido.valid || conferido.value === null || !FORMATO_ID_SESSAO.test(conferido.value)) {
     await reply.code(401).send({ erro: 'sessão inválida' });
     return;
   }
 
-  req.contaId = conferido.value;
+  // A sessão precisa existir, não estar revogada e não ter expirado.
+  const contaId = await contaDaSessao(conferido.value);
+  if (contaId === null) {
+    await reply.code(401).send({ erro: 'sessão inválida' });
+    return;
+  }
+
+  req.contaId = contaId;
 }
 
 // Lê a conta já validada pelo preHandler. Evita `!` non-null nos handlers.
