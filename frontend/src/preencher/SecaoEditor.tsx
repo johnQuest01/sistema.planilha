@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Copy, Plus, Trash2 } from 'lucide-react';
 import type { Campo, SubCampo } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import { CampoValor } from './CampoValor';
@@ -40,6 +40,12 @@ export function SecaoEditor({
   function remover(i: number): void {
     aoMudar(linhas.filter((_, idx) => idx !== i));
   }
+  // Duplica a linha logo abaixo dela, copiando os valores já preenchidos.
+  function duplicar(i: number): void {
+    const alvo = linhas[i];
+    if (alvo === undefined) return;
+    aoMudar([...linhas.slice(0, i + 1), { ...alvo }, ...linhas.slice(i + 1)]);
+  }
 
   return (
     <div className="secao">
@@ -49,14 +55,24 @@ export function SecaoEditor({
         <div key={i} className="secao__linha">
           <div className="secao__cabeca">
             <span className="secao__num">#{i + 1}</span>
-            <button
-              type="button"
-              className="btn btn--icone"
-              aria-label={`Remover linha ${i + 1}`}
-              onClick={() => remover(i)}
-            >
-              <Trash2 size={16} />
-            </button>
+            <div className="secao__linha-acoes">
+              <button
+                type="button"
+                className="btn btn--icone"
+                aria-label={`Duplicar linha ${i + 1}`}
+                onClick={() => duplicar(i)}
+              >
+                <Copy size={16} />
+              </button>
+              <button
+                type="button"
+                className="btn btn--icone"
+                aria-label={`Remover linha ${i + 1}`}
+                onClick={() => remover(i)}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
           </div>
           <div className="secao__campos">
             {subs.map((s) => (
