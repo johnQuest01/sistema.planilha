@@ -101,6 +101,23 @@ export async function editarCampo(tx: Tx, id: string, patch: PatchCampo): Promis
     throw new ErroHttp(400, 'maxFotos só se aplica a bloco de imagem');
   }
 
+  // Reduzir maxFotos abaixo do que já existe apagaria fotos silenciosamente na
+  // próxima gravação. Se algum registro já tem mais fotos que o novo teto, 409.
+  if (tipo === 'imagem' && config.maxFotos !== undefined) {
+    const maxExistente = await tx<{ maxo: number }[]>`
+      select coalesce(max(jsonb_array_length(valores -> ${id})), 0) as maxo
+      from registros
+      where colecao_id = ${atual.colecao_id}
+        and jsonb_typeof(valores -> ${id}) = 'array'`;
+    const jaTem = maxExistente[0]?.maxo ?? 0;
+    if (config.maxFotos < jaTem) {
+      throw new ErroHttp(
+        409,
+        `há registro com ${jaTem} fotos neste bloco; não dá pra reduzir o máximo para ${config.maxFotos}`,
+      );
+    }
+  }
+
   const linhas = await tx<LinhaCampo[]>`
     update campos set nome = ${nome}, tipo = ${tipo}, config = ${tx.json(config)}
     where id = ${id}
@@ -138,31 +155,39 @@ export async function apagarCampo(tx: Tx, id: string): Promise<boolean> {
   return true;
 }
 
-// Troca a ordem com o vizinho na direção pedida. Toca só as 2 linhas afetadas.
-export async function moverCampo(
+// Reordena a coleção INTEIRA a partir da ordem final recebida. Recebe a lista
+// completa de ids (não um delta): resposta fora de ordem deixa de importar, pois
+// cada requisição carrega a verdade inteira. Reescreve `ordem` com GAP=100.
+// Retorna null quando a coleção não é do dono (RLS) → 404; lança 400 quando os ids
+// divergem dos da coleção (faltando, sobrando ou repetido).
+export async function reordenarCampos(
   tx: Tx,
-  id: string,
-  direcao: 'cima' | 'baixo',
-): Promise<Campo | null> {
-  const atual = await lerCampo(tx, id);
-  if (atual === null) return null;
+  colecaoId: string,
+  ids: string[],
+): Promise<Campo[] | null> {
+  if (!(await colecaoExiste(tx, colecaoId))) return null;
 
-  const vizinhos =
-    direcao === 'cima'
-      ? await tx<LinhaCampo[]>`
-          select id, colecao_id, nome, tipo, ordem, config from campos
-          where colecao_id = ${atual.colecao_id} and ordem < ${atual.ordem}
-          order by ordem desc limit 1`
-      : await tx<LinhaCampo[]>`
-          select id, colecao_id, nome, tipo, ordem, config from campos
-          where colecao_id = ${atual.colecao_id} and ordem > ${atual.ordem}
-          order by ordem asc limit 1`;
+  const atuais = await tx<{ id: string }[]>`
+    select id from campos where colecao_id = ${colecaoId}`;
+  const idsBanco = new Set(atuais.map((r) => r.id));
+  const idsPedido = new Set(ids);
 
-  const vizinho = vizinhos[0];
-  if (vizinho === undefined) return mapCampo(atual); // já é a ponta, no-op
+  const semRepetidos = idsPedido.size === ids.length;
+  const mesmaQtd = idsBanco.size === idsPedido.size;
+  const todosPertencem = ids.every((id) => idsBanco.has(id));
+  if (!semRepetidos || !mesmaQtd || !todosPertencem) {
+    throw new ErroHttp(400, 'a ordem precisa conter exatamente os blocos desta coleção');
+  }
 
-  await tx`update campos set ordem = ${vizinho.ordem} where id = ${atual.id}`;
-  await tx`update campos set ordem = ${atual.ordem} where id = ${vizinho.id}`;
+  // Reescreve a ordem com GAP=100 (0, 100, 200…). São poucos blocos; cada update é
+  // uma linha, tudo dentro da mesma transação — atômico.
+  for (const [i, id] of ids.entries()) {
+    await tx`update campos set ordem = ${i * GAP} where id = ${id} and colecao_id = ${colecaoId}`;
+  }
 
-  return mapCampo({ ...atual, ordem: vizinho.ordem });
+  const linhas = await tx<LinhaCampo[]>`
+    select id, colecao_id, nome, tipo, ordem, config
+    from campos where colecao_id = ${colecaoId}
+    order by ordem, criado_em`;
+  return linhas.map(mapCampo);
 }

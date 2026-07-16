@@ -89,6 +89,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ nome }),
     }),
+  duplicarColecao: (id: string) =>
+    pedir<Colecao>(`/api/colecoes/${id}/duplicar`, { method: 'POST' }),
   apagarColecao: (id: string) =>
     pedir<void>(`/api/colecoes/${id}`, { method: 'DELETE' }),
 
@@ -103,8 +105,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     }),
-  moverCampo: (id: string, direcao: 'cima' | 'baixo') =>
-    pedir<Campo>(`/api/campos/${id}/mover`, corpoJson({ direcao })),
+  reordenarCampos: (colecaoId: string, ids: string[]) =>
+    pedir<Campo[]>(`/api/colecoes/${colecaoId}/campos/ordem`, {
+      method: 'PATCH',
+      body: JSON.stringify({ ids }),
+    }),
   apagarCampo: (id: string) => pedir<void>(`/api/campos/${id}`, { method: 'DELETE' }),
 
   // --- registros ---

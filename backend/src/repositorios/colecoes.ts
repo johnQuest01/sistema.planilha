@@ -92,3 +92,36 @@ export async function apagarColecao(tx: Tx, id: string): Promise<boolean> {
   const linhas = await tx<{ id: string }[]>`delete from colecoes where id = ${id} returning id`;
   return linhas.length > 0;
 }
+
+// Duplica o FORMATO de uma coleção: mesma configuração de blocos, planilha vazia.
+// Copia nome/tipo/ordem/config de cada campo com id NOVO (id compartilhado entre
+// coleções corromperia os `valores` de uma ao apagar campo da outra). Não copia
+// registros (é o ponto do recurso) nem convites (escopados à coleção de origem).
+// Retorna null quando a origem não é do dono (RLS) → 404.
+export async function duplicarColecao(
+  tx: Tx,
+  contaId: string,
+  origemId: string,
+): Promise<Colecao | null> {
+  const origem = await obterColecao(tx, origemId);
+  if (origem === null) return null;
+
+  const novas = await tx<LinhaColecao[]>`
+    insert into colecoes (conta_id, nome) values (${contaId}, ${`${origem.nome} (cópia)`})
+    returning id, nome, criado_em, atualizado_em`;
+  const nova = novas[0];
+  if (nova === undefined) throw new Error('insert de coleção duplicada não retornou linha');
+
+  const camposCopiados: Campo[] = [];
+  for (const campo of origem.campos) {
+    const linhas = await tx<LinhaCampo[]>`
+      insert into campos (colecao_id, nome, tipo, ordem, config)
+      values (${nova.id}, ${campo.nome}, ${campo.tipo}, ${campo.ordem}, ${tx.json(campo.config)})
+      returning id, colecao_id, nome, tipo, ordem, config`;
+    const linha = linhas[0];
+    if (linha === undefined) throw new Error('insert de campo duplicado não retornou linha');
+    camposCopiados.push(mapCampo(linha));
+  }
+
+  return { id: nova.id, nome: nova.nome, campos: camposCopiados };
+}

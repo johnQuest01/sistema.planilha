@@ -2,8 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { comConta } from '../db/comConta';
 import { exigeDono, contaObrigatoria } from '../auth/exigeDono';
 import { validaIdParam } from '../validacao/params';
-import { criarCampoSchema, editarCampoSchema, moverCampoSchema } from '../validacao/campo';
-import { apagarCampo, criarCampo, editarCampo, moverCampo } from '../repositorios/campos';
+import { criarCampoSchema, editarCampoSchema, reordenarCamposSchema } from '../validacao/campo';
+import { apagarCampo, criarCampo, editarCampo, reordenarCampos } from '../repositorios/campos';
 
 export async function rotasCampos(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { id: string } }>(
@@ -30,15 +30,18 @@ export async function rotasCampos(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.post<{ Params: { id: string } }>(
-    '/api/campos/:id/mover',
+  // Reordenação em lote: body traz a ordem final completa (ids). Substitui os
+  // antigos POST /api/campos/:id/mover — ordem completa é imune a resposta fora de
+  // ordem, delta de vizinho não é.
+  app.patch<{ Params: { id: string } }>(
+    '/api/colecoes/:id/campos/ordem',
     { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
-      const { direcao } = moverCampoSchema.parse(req.body);
+      const { ids } = reordenarCamposSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
-      const campo = await comConta(contaId, (tx) => moverCampo(tx, req.params.id, direcao));
-      if (campo === null) return reply.code(404).send({ erro: 'campo não encontrado' });
-      return reply.send(campo);
+      const campos = await comConta(contaId, (tx) => reordenarCampos(tx, req.params.id, ids));
+      if (campos === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
+      return reply.send(campos);
     },
   );
 
