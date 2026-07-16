@@ -24,10 +24,16 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
   const valoresRef = useRef<Record<string, unknown>>(registro.valores);
   const sujosRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const montadoRef = useRef(true);
   const [confirmando, setConfirmando] = useState(false);
 
-  // Salva de fato os campos marcados como "sujos" num único PATCH (o backend faz merge).
+  // aoAtualizar muda de identidade a cada render do pai. Guardamos numa ref para
+  // o flush não se recriar (e o efeito de desmontagem não ficar reprocessando).
+  const aoAtualizarRef = useRef(aoAtualizar);
+  useEffect(() => {
+    aoAtualizarRef.current = aoAtualizar;
+  }, [aoAtualizar]);
+
+  // Salva os campos "sujos" num único PATCH (o backend faz merge).
   const flush = useCallback(async () => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
@@ -40,21 +46,20 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
     for (const id of ids) parcial[id] = valoresRef.current[id];
     try {
       const atualizado = await api.editarRegistro(registro.id, parcial);
-      valoresRef.current = atualizado.valores;
-      // o pai continua montado mesmo quando a ficha fecha: sempre reflete na lista.
-      aoAtualizar(atualizado);
-      if (montadoRef.current) setValores(atualizado.valores);
+      // NÃO sobrescrevemos `valores`/`valoresRef` com a resposta: se o usuário digitou
+      // durante o request, a resposta está defasada e apagaria/reescreveria o que ele
+      // acabou de digitar. O estado local é a fonte da verdade; refletimos no pai com
+      // os valores locais mais recentes (que já incluem o que foi digitado em voo).
+      aoAtualizarRef.current({ ...atualizado, valores: valoresRef.current });
     } catch {
       // devolve os ids à fila pra tentar de novo no próximo flush
       for (const id of ids) sujosRef.current.add(id);
     }
-  }, [registro.id, aoAtualizar]);
+  }, [registro.id]);
 
   // Flush garantido ao desmontar (fechar por Esc, clique fora, X ou navegação).
   useEffect(() => {
-    montadoRef.current = true;
     return () => {
-      montadoRef.current = false;
       void flush();
     };
   }, [flush]);
