@@ -1,18 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Plus, Rows2, Rows3 } from 'lucide-react';
+import { ListPlus, Plus, Rows2, Rows3 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
-import type { Colecao, Registro } from '../../../shared/tipos';
+import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import { Carregando } from '../ui/Carregando';
 import { useMedia } from '../ui/useMedia';
 import { Tabela } from '../preencher/Tabela';
 import { ListaDensa } from '../preencher/ListaDensa';
 import { Ficha } from '../preencher/Ficha';
+import { FormBloco, type DadosBloco } from './FormBloco';
 import '../preencher/preencher.css';
 
 const PAGINA = 50;
 
-export function Preencher({ colecao }: { colecao: Colecao }): JSX.Element {
+export function Preencher({
+  colecao,
+  aoMudarCampos,
+}: {
+  colecao: Colecao;
+  aoMudarCampos: (fn: (campos: Campo[]) => Campo[]) => void;
+}): JSX.Element {
   const ehMobile = useMedia('(max-width: 768px)');
   const [registros, setRegistros] = useState<Registro[] | null>(null);
   const [fim, setFim] = useState(false);
@@ -20,6 +27,15 @@ export function Preencher({ colecao }: { colecao: Colecao }): JSX.Element {
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [aberta, setAberta] = useState<Registro | null>(null);
   const [solto, setSolto] = useState(false);
+  const [adicionandoCampo, setAdicionandoCampo] = useState(false);
+
+  // Adiciona um campo durante o preenchimento (vale em qualquer planilha, inclusive
+  // cópias). O campo criado entra na coleção na hora, então tabela/ficha já o mostram.
+  async function adicionarCampo(d: DadosBloco): Promise<void> {
+    const criado = await api.criarCampo(colecao.id, d);
+    aoMudarCampos((cs) => [...cs, criado]);
+    setAdicionandoCampo(false);
+  }
 
   useEffect(() => {
     let vivo = true;
@@ -81,7 +97,24 @@ export function Preencher({ colecao }: { colecao: Colecao }): JSX.Element {
   if (colecao.campos.length === 0) {
     return (
       <div className="preencher-vazio">
-        Esta planilha ainda não tem blocos. Vá em <strong>Criar</strong> para montar a ficha.
+        <p>Esta planilha ainda não tem blocos.</p>
+        {adicionandoCampo ? (
+          <div className="add-campo-inline">
+            <FormBloco
+              inicial={{ nome: '', tipo: 'texto', config: {} }}
+              textoAcao="Adicionar campo"
+              encadear={false}
+              autoFoco
+              aoSalvar={adicionarCampo}
+              aoCancelar={() => setAdicionandoCampo(false)}
+            />
+          </div>
+        ) : (
+          <Botao variante="primario" onClick={() => setAdicionandoCampo(true)}>
+            <ListPlus size={18} />
+            Adicionar campo
+          </Botao>
+        )}
       </div>
     );
   }
@@ -92,6 +125,14 @@ export function Preencher({ colecao }: { colecao: Colecao }): JSX.Element {
         <Botao variante="primario" onClick={() => void novo()}>
           <Plus size={18} />
           Novo registro
+        </Botao>
+        <Botao
+          variante="fantasma"
+          onClick={() => setAdicionandoCampo((a) => !a)}
+          aria-expanded={adicionandoCampo}
+        >
+          <ListPlus size={18} />
+          Adicionar campo
         </Botao>
         <span className="preencher-barra__espaco" />
         <span className="preencher-contagem">{registros.length} registro(s)</span>
@@ -110,6 +151,19 @@ export function Preencher({ colecao }: { colecao: Colecao }): JSX.Element {
       </div>
 
       {erro !== null && <p className="aviso-erro">{erro}</p>}
+
+      {adicionandoCampo && (
+        <div className="add-campo-inline">
+          <FormBloco
+            inicial={{ nome: '', tipo: 'texto', config: {} }}
+            textoAcao="Adicionar campo"
+            encadear={false}
+            autoFoco
+            aoSalvar={adicionarCampo}
+            aoCancelar={() => setAdicionandoCampo(false)}
+          />
+        </div>
+      )}
 
       {registros.length === 0 ? (
         <div className="preencher-vazio">Nenhum registro ainda. Toque em “Novo registro”.</div>

@@ -133,7 +133,7 @@ export function Colecao(): JSX.Element {
         {modo === 'criar' ? (
           <Criar colecao={colecao} aoMudarCampos={atualizarCampos} recarregar={() => void recarregar()} />
         ) : (
-          <Preencher colecao={colecao} />
+          <Preencher colecao={colecao} aoMudarCampos={atualizarCampos} />
         )}
       </div>
     </div>

@@ -3,8 +3,22 @@
 .preencher-barra {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--e2);
   margin-bottom: var(--e3);
+}
+
+.add-campo-inline {
+  margin-bottom: var(--e3);
+  padding: var(--e3);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-2);
+  text-align: left;
+}
+.preencher-vazio .add-campo-inline {
+  margin-top: var(--e3);
+  margin-bottom: 0;
 }
 .preencher-barra__espaco {
   flex: 1;
