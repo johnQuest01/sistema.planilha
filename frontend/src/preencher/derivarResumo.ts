@@ -1,6 +1,13 @@
 import type { Campo, Registro } from '../../../shared/tipos';
 
 const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const fmtDataHora = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 export function textoDe(v: unknown): string {
   return typeof v === 'string' ? v : '';
@@ -23,6 +30,16 @@ export function formatarValor(campo: Campo, valor: unknown): string {
       if (s === '') return '';
       const d = new Date(`${s}T00:00:00`);
       return Number.isNaN(d.getTime()) ? s : fmtData.format(d);
+    }
+    case 'datahora': {
+      const s = textoDe(valor);
+      if (s === '') return '';
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? s : fmtDataHora.format(d);
+    }
+    case 'secao': {
+      const n = Array.isArray(valor) ? valor.length : 0;
+      return n === 0 ? '' : `${n} ${n === 1 ? 'linha' : 'linhas'}`;
     }
     case 'booleano':
       return valor === true ? 'Sim' : valor === false ? 'Não' : '';

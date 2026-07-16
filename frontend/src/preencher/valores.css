@@ -23,3 +23,16 @@
   height: 20px;
   accent-color: var(--fita);
 }
+.valor-data {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+.valor-data .campo__controle {
+  flex: 1;
+  min-width: 0;
+}
+.valor-data__agora {
+  flex: none;
+  white-space: nowrap;
+}

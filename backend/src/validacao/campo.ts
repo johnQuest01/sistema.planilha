@@ -1,5 +1,33 @@
 import { z } from 'zod';
-import { TIPOS_CAMPO } from '../../../shared/tipos';
+import { TIPOS_CAMPO, TIPOS_SUBCAMPO } from '../../../shared/tipos';
+
+// Config de um subcampo (quadradinho dentro de uma seção): não aninha outra seção.
+const subConfigSchema = z
+  .object({
+    opcoes: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
+    sufixo: z.string().trim().max(16).optional(),
+    obrigatorio: z.boolean().optional(),
+    autoAgora: z.boolean().optional(),
+  })
+  .strict();
+
+const subCampoSchema = z
+  .object({
+    id: z.string().uuid(),
+    nome: z.string().trim().min(1).max(60),
+    tipo: z.enum(TIPOS_SUBCAMPO),
+    config: subConfigSchema.default({}),
+  })
+  .strict()
+  .superRefine((s, ctx) => {
+    if (s.tipo === 'selecao' && (s.config.opcoes?.length ?? 0) === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'seleção exige ao menos uma opção',
+        path: ['config', 'opcoes'],
+      });
+    }
+  });
 
 const configSchema = z
   .object({
@@ -9,6 +37,10 @@ const configSchema = z
     // Teto de 10 não é estético: cada foto é uma key no jsonb, um objeto no R2 e um
     // PUT contra o rate limit do convite (ver seção 4.2). Só para tipo 'imagem'.
     maxFotos: z.number().int().min(1).max(10).optional(),
+    // data/datahora: já vem com o momento atual ao criar registro.
+    autoAgora: z.boolean().optional(),
+    // secao: os quadradinhos que se repetem por linha (1..50).
+    subcampos: z.array(subCampoSchema).min(1).max(50).optional(),
   })
   .strict();
 
@@ -46,6 +78,28 @@ function proibeMaxFotosSeNaoImagem(
   }
 }
 
+// Seção precisa de ao menos um subcampo; e subcampos só existem em seção.
+function exigeSubcamposSeSecao(
+  tipo: (typeof TIPOS_CAMPO)[number],
+  subcampos: unknown[] | undefined,
+  ctx: z.RefinementCtx,
+): void {
+  if (tipo === 'secao' && (subcampos === undefined || subcampos.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'seção exige ao menos um campo',
+      path: ['config', 'subcampos'],
+    });
+  }
+  if (tipo !== 'secao' && subcampos !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'subcampos só se aplicam a seção',
+      path: ['config', 'subcampos'],
+    });
+  }
+}
+
 export const criarCampoSchema = z
   .object({
     nome: z.string().trim().min(1).max(60),
@@ -56,6 +110,7 @@ export const criarCampoSchema = z
   .superRefine((val, ctx) => {
     exigeOpcoesSeSelecao(val.tipo, val.config.opcoes, ctx);
     proibeMaxFotosSeNaoImagem(val.tipo, val.config.maxFotos, ctx);
+    exigeSubcamposSeSecao(val.tipo, val.config.subcampos, ctx);
   });
 
 export const editarCampoSchema = z

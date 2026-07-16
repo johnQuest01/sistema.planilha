@@ -8,6 +8,7 @@ import { useMedia } from '../ui/useMedia';
 import { Tabela } from '../preencher/Tabela';
 import { ListaDensa } from '../preencher/ListaDensa';
 import { Ficha } from '../preencher/Ficha';
+import { agoraLocal, hojeLocal } from '../preencher/CampoValor';
 import { FormBloco, type DadosBloco } from './FormBloco';
 import '../preencher/preencher.css';
 
@@ -74,7 +75,14 @@ export function Preencher({
 
   async function novo(): Promise<void> {
     try {
-      const r = await api.criarRegistro(colecao.id);
+      // Campos data/datahora com "preencher automaticamente" já nascem com o momento atual.
+      const iniciais: Record<string, unknown> = {};
+      for (const c of colecao.campos) {
+        if ((c.tipo === 'data' || c.tipo === 'datahora') && c.config.autoAgora === true) {
+          iniciais[c.id] = c.tipo === 'datahora' ? agoraLocal() : hojeLocal();
+        }
+      }
+      const r = await api.criarRegistro(colecao.id, iniciais);
       setRegistros((atual) => (atual === null ? [r] : [r, ...atual]));
       setAberta(r);
     } catch (e) {

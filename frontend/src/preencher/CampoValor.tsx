@@ -16,6 +16,18 @@ function comoTexto(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
 
+// "YYYY-MM-DD" e "YYYY-MM-DDTHH:mm" na hora LOCAL do aparelho (sem UTC/fuso).
+export function hojeLocal(): string {
+  const d = new Date();
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+export function agoraLocal(): string {
+  const d = new Date();
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${hojeLocal()}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 // Renderiza o input do valor conforme o tipo do campo. Não trata 'imagem' — o chamador
 // cuida disso (Grade, na ficha; placeholder, na prévia).
 export function CampoValor({
@@ -86,13 +98,37 @@ export function CampoValor({
       );
     case 'data':
       return (
-        <input
-          className="campo__controle"
-          type="date"
-          value={comoTexto(valor)}
-          onChange={(e) => aoMudar(e.target.value === '' ? undefined : e.target.value)}
-          {...comum}
-        />
+        <div className="valor-data">
+          <input
+            className="campo__controle"
+            type="date"
+            value={comoTexto(valor)}
+            onChange={(e) => aoMudar(e.target.value === '' ? undefined : e.target.value)}
+            {...comum}
+          />
+          {!desabilitado && (
+            <button type="button" className="btn btn--fantasma valor-data__agora" onClick={() => aoMudar(hojeLocal())}>
+              Hoje
+            </button>
+          )}
+        </div>
+      );
+    case 'datahora':
+      return (
+        <div className="valor-data">
+          <input
+            className="campo__controle"
+            type="datetime-local"
+            value={comoTexto(valor)}
+            onChange={(e) => aoMudar(e.target.value === '' ? undefined : e.target.value)}
+            {...comum}
+          />
+          {!desabilitado && (
+            <button type="button" className="btn btn--fantasma valor-data__agora" onClick={() => aoMudar(agoraLocal())}>
+              Agora
+            </button>
+          )}
+        </div>
       );
     case 'booleano':
       return (

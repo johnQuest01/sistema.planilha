@@ -1,7 +1,8 @@
+import { Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { ErroApi } from '../api/cliente';
-import { TIPOS_CAMPO } from '../../../shared/tipos';
-import type { ConfigCampo, TipoCampo } from '../../../shared/tipos';
+import { TIPOS_CAMPO, TIPOS_SUBCAMPO } from '../../../shared/tipos';
+import type { ConfigCampo, SubCampo, TipoCampo, TipoSubCampo } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import { Chip } from '../ui/Chip';
 import { IconeTipo, ROTULO_TIPO } from '../ui/IconeTipo';
@@ -11,6 +12,25 @@ export interface DadosBloco {
   nome: string;
   tipo: TipoCampo;
   config: ConfigCampo;
+}
+
+// Estado de edição de um subcampo (quadradinho da seção) antes de virar SubCampo.
+interface RascunhoSub {
+  id: string;
+  nome: string;
+  tipo: TipoSubCampo;
+  sufixo: string;
+  opcoesTexto: string;
+}
+
+function subDeCampo(s?: SubCampo): RascunhoSub {
+  return {
+    id: s?.id ?? crypto.randomUUID(),
+    nome: s?.nome ?? '',
+    tipo: s?.tipo ?? 'texto',
+    sufixo: s?.config.sufixo ?? '',
+    opcoesTexto: (s?.config.opcoes ?? []).join(', '),
+  };
 }
 
 // Form de bloco reutilizado no "adicionar" (encadeia), no "editar" (fecha ao salvar)
@@ -35,6 +55,10 @@ export function FormBloco({
   const [sufixo, setSufixo] = useState(inicial.config.sufixo ?? '');
   const [opcoesTexto, setOpcoesTexto] = useState((inicial.config.opcoes ?? []).join(', '));
   const [maxFotos, setMaxFotos] = useState(inicial.config.maxFotos ?? 1);
+  const [autoAgora, setAutoAgora] = useState(inicial.config.autoAgora === true);
+  const [subcampos, setSubcampos] = useState<RascunhoSub[]>(
+    (inicial.config.subcampos ?? []).map((s) => subDeCampo(s)),
+  );
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const nomeRef = useRef<HTMLInputElement>(null);
@@ -49,7 +73,26 @@ export function FormBloco({
       return { opcoes };
     }
     if (tipo === 'imagem') return { maxFotos };
+    if (tipo === 'data' || tipo === 'datahora') return autoAgora ? { autoAgora: true } : {};
+    if (tipo === 'secao') {
+      const lista: SubCampo[] = subcampos.map((s) => {
+        const config: ConfigCampo = {};
+        if (s.tipo === 'numero' && s.sufixo.trim() !== '') config.sufixo = s.sufixo.trim();
+        if (s.tipo === 'selecao') {
+          config.opcoes = s.opcoesTexto
+            .split(',')
+            .map((o) => o.trim())
+            .filter((o) => o !== '');
+        }
+        return { id: s.id, nome: s.nome.trim(), tipo: s.tipo, config };
+      });
+      return { subcampos: lista };
+    }
     return {};
+  }
+
+  function alterarSub(id: string, mudanca: Partial<RascunhoSub>): void {
+    setSubcampos((atual) => atual.map((s) => (s.id === id ? { ...s, ...mudanca } : s)));
   }
 
   async function salvar(): Promise<void> {
@@ -59,11 +102,31 @@ export function FormBloco({
       nomeRef.current?.focus();
       return;
     }
-    const config = montarConfig();
-    if (tipo === 'selecao' && (config.opcoes?.length ?? 0) === 0) {
-      setErro('adicione ao menos uma opção');
-      return;
+    if (tipo === 'selecao') {
+      const opcoes = opcoesTexto.split(',').map((o) => o.trim()).filter((o) => o !== '');
+      if (opcoes.length === 0) {
+        setErro('adicione ao menos uma opção');
+        return;
+      }
     }
+    if (tipo === 'secao') {
+      if (subcampos.length === 0) {
+        setErro('adicione ao menos um campo à seção');
+        return;
+      }
+      if (subcampos.some((s) => s.nome.trim() === '')) {
+        setErro('dê um nome a cada campo da seção');
+        return;
+      }
+      const selSemOpcao = subcampos.some(
+        (s) => s.tipo === 'selecao' && s.opcoesTexto.split(',').every((o) => o.trim() === ''),
+      );
+      if (selSemOpcao) {
+        setErro('cada campo de seleção precisa de ao menos uma opção');
+        return;
+      }
+    }
+    const config = montarConfig();
     setSalvando(true);
     setErro(null);
     try {
@@ -74,6 +137,8 @@ export function FormBloco({
         setSufixo('');
         setOpcoesTexto('');
         setMaxFotos(1);
+        setAutoAgora(false);
+        setSubcampos([]);
         nomeRef.current?.focus();
       }
     } catch (e) {
@@ -138,6 +203,78 @@ export function FormBloco({
             onChange={(e) => setMaxFotos(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
           />
         </label>
+      )}
+      {(tipo === 'data' || tipo === 'datahora') && (
+        <label className="add-bloco__auto">
+          <input
+            type="checkbox"
+            checked={autoAgora}
+            onChange={(e) => setAutoAgora(e.target.checked)}
+          />
+          <span>
+            Preencher automaticamente com {tipo === 'datahora' ? 'a data e hora' : 'a data'} atual ao
+            criar o registro
+          </span>
+        </label>
+      )}
+
+      {tipo === 'secao' && (
+        <div className="secao-builder">
+          <span className="campo__rotulo">Campos da seção (quadradinhos que se repetem)</span>
+          {subcampos.map((s) => (
+            <div key={s.id} className="secao-builder__item">
+              <div className="secao-builder__linha">
+                <input
+                  className="campo__controle"
+                  placeholder="Nome do campo (ex.: Cor)"
+                  value={s.nome}
+                  onChange={(e) => alterarSub(s.id, { nome: e.target.value })}
+                />
+                <select
+                  className="campo__controle secao-builder__tipo"
+                  value={s.tipo}
+                  onChange={(e) => alterarSub(s.id, { tipo: e.target.value as TipoSubCampo })}
+                >
+                  {TIPOS_SUBCAMPO.map((t) => (
+                    <option key={t} value={t}>
+                      {ROTULO_TIPO[t]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn--icone"
+                  aria-label="Remover campo da seção"
+                  onClick={() => setSubcampos((atual) => atual.filter((x) => x.id !== s.id))}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              {s.tipo === 'numero' && (
+                <input
+                  className="campo__controle"
+                  placeholder="Unidade (ex.: kg, R$, m)"
+                  value={s.sufixo}
+                  onChange={(e) => alterarSub(s.id, { sufixo: e.target.value })}
+                />
+              )}
+              {s.tipo === 'selecao' && (
+                <input
+                  className="campo__controle"
+                  placeholder="Opções separadas por vírgula"
+                  value={s.opcoesTexto}
+                  onChange={(e) => alterarSub(s.id, { opcoesTexto: e.target.value })}
+                />
+              )}
+            </div>
+          ))}
+          <Botao
+            variante="fantasma"
+            onClick={() => setSubcampos((atual) => [...atual, subDeCampo()])}
+          >
+            + Adicionar campo à seção
+          </Botao>
+        </div>
       )}
 
       {erro !== null && <p className="aviso-erro">{erro}</p>}

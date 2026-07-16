@@ -5,9 +5,18 @@ import type { Colecao, Registro } from '../../../shared/tipos';
 import { FolhaInferior } from '../ui/FolhaInferior';
 import { Botao } from '../ui/Botao';
 import { CampoValor } from './CampoValor';
+import { SecaoEditor, linhasDe } from './SecaoEditor';
 import { Grade } from '../imagens/Grade';
 import { keysDoCampo, tituloDoRegistro } from './derivarResumo';
 import './preencher.css';
+
+const fmtPreenchido = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 interface Props {
   colecao: Colecao;
@@ -102,6 +111,15 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
                   void flush();
                 }}
               />
+            ) : campo.tipo === 'secao' ? (
+              <SecaoEditor
+                campo={campo}
+                linhas={linhasDe(valores[campo.id])}
+                aoMudar={(linhas) => {
+                  marcar(campo.id, linhas);
+                  agendarFlush();
+                }}
+              />
             ) : (
               <CampoValor
                 campo={campo}
@@ -139,6 +157,10 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
             </Botao>
           )}
         </div>
+
+        <p className="ficha__preenchido">
+          Preenchido em {fmtPreenchido.format(new Date(registro.atualizadoEm))}
+        </p>
       </div>
     </FolhaInferior>
   );

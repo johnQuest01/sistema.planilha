@@ -175,6 +175,50 @@
   display: flex;
   gap: var(--e2);
 }
+.add-bloco__auto {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e2);
+  font-size: 13px;
+  color: var(--tinta-2);
+  cursor: pointer;
+}
+.add-bloco__auto input {
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--fita);
+  flex: none;
+}
+
+/* ---- builder de seção (subcampos) ---- */
+.secao-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  padding: var(--e2);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-2);
+  background: rgba(0, 0, 0, 0.03);
+}
+.secao-builder__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e1, 6px);
+}
+.secao-builder__linha {
+  display: flex;
+  gap: var(--e2);
+  align-items: center;
+}
+.secao-builder__linha .campo__controle {
+  min-width: 0;
+}
+.secao-builder__tipo {
+  flex: none;
+  width: 40%;
+  max-width: 160px;
+}
 
 /* ---- prévia ---- */
 .previa {

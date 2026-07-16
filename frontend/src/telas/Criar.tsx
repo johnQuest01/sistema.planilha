@@ -22,6 +22,10 @@ function subtitulo(campo: Campo): string {
       const n = campo.config.maxFotos ?? 1;
       return `Imagem · até ${n} ${n === 1 ? 'foto' : 'fotos'}`;
     }
+    case 'secao': {
+      const n = campo.config.subcampos?.length ?? 0;
+      return `Seção · ${n} ${n === 1 ? 'campo' : 'campos'}`;
+    }
     default:
       return ROTULO_TIPO[campo.tipo];
   }
@@ -294,6 +298,10 @@ export function Criar({
                 {campo.tipo === 'imagem' ? (
                   <span className="previa__mat">
                     <Plus size={20} />
+                  </span>
+                ) : campo.tipo === 'secao' ? (
+                  <span className="etiqueta">
+                    Seção · {(campo.config.subcampos ?? []).map((s) => s.nome).join(', ') || 'sem campos'}
                   </span>
                 ) : (
                   <CampoValor campo={campo} valor={undefined} aoMudar={() => undefined} desabilitado />

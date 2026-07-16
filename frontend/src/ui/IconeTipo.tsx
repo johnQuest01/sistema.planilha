@@ -1,8 +1,10 @@
 import {
   AlignLeft,
   Calendar,
+  CalendarClock,
   Hash,
   Image,
+  Layers,
   ListChecks,
   ToggleLeft,
   Type,
@@ -17,7 +19,9 @@ const ICONE: Record<TipoCampo, LucideIcon> = {
   imagem: Image,
   selecao: ListChecks,
   data: Calendar,
+  datahora: CalendarClock,
   booleano: ToggleLeft,
+  secao: Layers,
 };
 
 export const ROTULO_TIPO: Record<TipoCampo, string> = {
@@ -27,7 +31,9 @@ export const ROTULO_TIPO: Record<TipoCampo, string> = {
   imagem: 'Imagem',
   selecao: 'Seleção',
   data: 'Data',
+  datahora: 'Data e hora',
   booleano: 'Sim / Não',
+  secao: 'Seção',
 };
 
 export function IconeTipo({ tipo, size = 18 }: { tipo: TipoCampo; size?: number }): JSX.Element {

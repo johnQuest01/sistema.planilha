@@ -91,6 +91,14 @@ export function Tabela({ colecao, registros, aoAtualizar, aoAbrirFicha }: Props)
                       </td>
                     );
                   }
+                  if (c.tipo === 'secao') {
+                    // Seção se edita na ficha (linhas repetíveis), não inline na célula.
+                    return (
+                      <td key={c.id} className="celula-editavel" onClick={() => aoAbrirFicha(r)}>
+                        <span className="etiqueta">{formatarValor(c, r.valores[c.id]) || '— linhas'}</span>
+                      </td>
+                    );
+                  }
                   return (
                     <td
                       key={c.id}

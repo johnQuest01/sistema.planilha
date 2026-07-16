@@ -1,7 +1,22 @@
 export const TIPOS_CAMPO = [
-  'texto', 'paragrafo', 'numero', 'imagem', 'selecao', 'data', 'booleano'
+  'texto', 'paragrafo', 'numero', 'imagem', 'selecao', 'data', 'datahora', 'booleano', 'secao'
 ] as const;
 export type TipoCampo = typeof TIPOS_CAMPO[number];
+
+// Tipos permitidos DENTRO de uma seção (sem imagem nem seção aninhada).
+export const TIPOS_SUBCAMPO = [
+  'texto', 'numero', 'selecao', 'data', 'datahora', 'booleano'
+] as const;
+export type TipoSubCampo = typeof TIPOS_SUBCAMPO[number];
+
+// Subcampo é um "quadradinho" de uma seção. Usa `type` (não `interface`) de propósito:
+// aliases de objeto ganham index signature implícita e satisfazem ConfigCampo/ValorJson.
+export type SubCampo = {
+  id: string;
+  nome: string;
+  tipo: TipoSubCampo;
+  config: ConfigCampo;
+};
 
 // Valor JSON puro. A index signature de ConfigCampo precisa ser estruturalmente
 // serializável pro driver (postgres.js) aceitar `sql.json(config)` sem cast; `unknown`
@@ -19,6 +34,8 @@ export interface ConfigCampo {
   sufixo?: string;        // numero — "kg", "R$", "g/m²"
   obrigatorio?: boolean;
   maxFotos?: number;      // só para tipo 'imagem'. 1..10, default 1.
+  autoAgora?: boolean;    // data/datahora: já vem com a data/hora atual ao criar registro
+  subcampos?: SubCampo[]; // secao: os "quadradinhos" que se repetem por linha
   [k: string]: ValorJson | undefined;
 }
 
