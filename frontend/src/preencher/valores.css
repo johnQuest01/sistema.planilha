@@ -1,0 +1,25 @@
+.valor-num {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+.valor-num .campo__controle {
+  flex: 1;
+}
+.valor-num__sufixo {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--tinta-3);
+  flex: none;
+}
+.valor-bool {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  min-height: var(--toque);
+}
+.valor-bool__check {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--fita);
+}

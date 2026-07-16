@@ -1,24 +1,52 @@
-import { useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { ProvedorAuth, useAuth } from './contexto/Auth';
+import { Entrar } from './telas/Entrar';
+import { Inicio } from './telas/Inicio';
+import { Colecao } from './telas/Colecao';
+import { Carregando } from './ui/Carregando';
 
-// Placeholder da Fase 1. As telas reais (8.1/8.2/8.3) e o design system entram na Fase 4.
-// Aqui só confirmamos que o frontend fala com o backend via proxy do Vite.
-export function App() {
-  const [saude, setSaude] = useState<string>('checando…');
+function Protegida({ children }: { children: JSX.Element }): JSX.Element {
+  const { estado } = useAuth();
+  if (estado.fase === 'carregando') return <Carregando />;
+  if (estado.fase === 'deslogado') return <Navigate to="/entrar" replace />;
+  return children;
+}
 
-  useEffect(() => {
-    fetch('/health')
-      .then((r) => r.json())
-      .then((j: { status?: string; db?: boolean }) =>
-        setSaude(`backend: ${j.status ?? '?'} · db: ${j.db === true ? 'ok' : 'falhou'}`),
-      )
-      .catch(() => setSaude('backend offline'));
-  }, []);
-
+function Rotas(): JSX.Element {
+  const { estado } = useAuth();
   return (
-    <main style={{ fontFamily: 'system-ui', padding: 24 }}>
-      <h1>Mostruário</h1>
-      <p>Fase 1 — fundação no ar.</p>
-      <p>{saude}</p>
-    </main>
+    <Routes>
+      <Route
+        path="/entrar"
+        element={estado.fase === 'logado' ? <Navigate to="/" replace /> : <Entrar />}
+      />
+      <Route
+        path="/"
+        element={
+          <Protegida>
+            <Inicio />
+          </Protegida>
+        }
+      />
+      <Route
+        path="/c/:id"
+        element={
+          <Protegida>
+            <Colecao />
+          </Protegida>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+export function App(): JSX.Element {
+  return (
+    <BrowserRouter>
+      <ProvedorAuth>
+        <Rotas />
+      </ProvedorAuth>
+    </BrowserRouter>
   );
 }

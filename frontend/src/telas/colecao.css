@@ -1,0 +1,171 @@
+/* Casca da coleção + modo Criar (8.2). */
+
+.colecao-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  flex-wrap: wrap;
+  margin-bottom: var(--e4);
+}
+.titulo-editavel {
+  flex: 1;
+  min-width: 200px;
+  min-height: var(--toque);
+  padding: 4px var(--e2);
+  border: 1px solid transparent;
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--giz);
+  font-size: 22px;
+  font-weight: 700;
+  outline: none;
+}
+.titulo-editavel:hover {
+  border-color: rgba(238, 243, 236, 0.25);
+}
+.titulo-editavel:focus {
+  background: var(--papel-2);
+  color: var(--tinta);
+  border-color: var(--fita);
+}
+
+/* duas colunas no desktop: editor + prévia */
+.criar {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--e5);
+}
+@media (min-width: 860px) {
+  .criar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.painel {
+  background: var(--papel);
+  border-radius: var(--raio-2);
+  box-shadow: var(--sombra);
+  padding: var(--e4);
+}
+.painel__titulo {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tinta-2);
+  margin-bottom: var(--e3);
+}
+
+/* ---- lista de blocos ---- */
+.blocos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.bloco {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--papel-2);
+}
+.bloco__mover {
+  display: flex;
+  flex-direction: column;
+}
+.bloco__mover .btn--icone {
+  min-height: 22px;
+  min-width: 28px;
+}
+.bloco__icone {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--raio);
+  background: rgba(23, 32, 28, 0.05);
+  color: var(--tinta-2);
+  flex: none;
+}
+.bloco__corpo {
+  flex: 1;
+  min-width: 0;
+}
+.bloco__nome {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bloco__sub {
+  margin-top: 2px;
+}
+.bloco__acoes {
+  display: flex;
+  gap: 2px;
+}
+.bloco__editar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  width: 100%;
+}
+
+/* confirmação inline de exclusão */
+.confirma-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  background: rgba(192, 57, 43, 0.08);
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  border-radius: var(--raio);
+}
+.confirma-inline__texto {
+  flex: 1;
+  font-size: 14px;
+  color: var(--perigo);
+}
+
+/* ---- form adicionar bloco ---- */
+.add-bloco {
+  margin-top: var(--e3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding: var(--e3);
+  border: 1px dashed var(--linha-2);
+  border-radius: var(--raio);
+}
+.add-bloco__tipos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
+.add-bloco__acoes {
+  display: flex;
+  gap: var(--e2);
+}
+
+/* ---- prévia ---- */
+.previa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  opacity: 0.95;
+}
+.previa--vazia {
+  color: var(--tinta-3);
+  font-size: 14px;
+}
+.previa__mat {
+  width: 72px;
+  height: 72px;
+  border: 1px dashed var(--linha-2);
+  border-radius: var(--raio);
+  display: grid;
+  place-items: center;
+  color: var(--tinta-3);
+  background: var(--papel);
+}

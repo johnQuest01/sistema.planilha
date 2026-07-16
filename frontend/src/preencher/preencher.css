@@ -1,0 +1,151 @@
+/* Modo Preencher (8.3): tabela (desktop) e lista densa (mobile). */
+
+.preencher-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  margin-bottom: var(--e3);
+}
+.preencher-barra__espaco {
+  flex: 1;
+}
+.preencher-contagem {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: rgba(238, 243, 236, 0.7);
+}
+
+.preencher-vazio {
+  padding: var(--e6) var(--e4);
+  text-align: center;
+  color: rgba(238, 243, 236, 0.8);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(238, 243, 236, 0.2);
+  border-radius: var(--raio-2);
+}
+
+/* ---- miniatura de capa (mini _t.jpg) ---- */
+.capa {
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+  background: rgba(23, 32, 28, 0.08);
+  border: 1px solid var(--linha);
+}
+.capa--vazia {
+  display: grid;
+  place-items: center;
+  color: var(--tinta-3);
+  background: var(--papel);
+}
+
+/* ---- tabela (desktop) ---- */
+.tabela-envolto {
+  background: var(--papel);
+  border-radius: var(--raio-2);
+  box-shadow: var(--sombra);
+  overflow: auto;
+}
+.tabela {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+.tabela th,
+.tabela td {
+  padding: var(--e2) var(--e3);
+  text-align: left;
+  border-bottom: 1px solid var(--linha);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.tabela th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+  position: sticky;
+  top: 0;
+  background: var(--papel);
+}
+.tabela td.celula-editavel {
+  cursor: text;
+}
+.tabela td .campo__controle {
+  min-height: 34px;
+}
+.tabela__acoes {
+  width: 44px;
+}
+.tabela tbody tr:hover {
+  background: rgba(23, 32, 28, 0.02);
+}
+
+/* ---- lista densa (mobile) ---- */
+.lista {
+  display: flex;
+  flex-direction: column;
+  background: var(--papel);
+  border-radius: var(--raio-2);
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+.lista-item {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e2) var(--e3);
+  border: none;
+  border-bottom: 1px solid var(--linha);
+  background: transparent;
+  text-align: left;
+  width: 100%;
+}
+.lista-item:last-child {
+  border-bottom: none;
+}
+.lista--solto .lista-item {
+  padding: var(--e3);
+}
+.lista-item__corpo {
+  flex: 1;
+  min-width: 0;
+}
+.lista-item__titulo {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lista-item__resumo {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--tinta-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- ficha (dentro da folha inferior) ---- */
+.ficha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+}
+.ficha__bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ficha__rotulo {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+.ficha__salvo {
+  font-size: 12px;
+  color: var(--tinta-3);
+}

@@ -1,0 +1,75 @@
+import type { Campo, Registro } from '../../../shared/tipos';
+
+const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+export function textoDe(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+// Valor de um campo formatado para leitura (célula/resumo). Imagem não entra aqui.
+export function formatarValor(campo: Campo, valor: unknown): string {
+  switch (campo.tipo) {
+    case 'texto':
+    case 'paragrafo':
+    case 'selecao':
+      return textoDe(valor);
+    case 'numero': {
+      if (typeof valor !== 'number') return '';
+      const sufixo = campo.config.sufixo;
+      return sufixo !== undefined && sufixo !== '' ? `${valor} ${sufixo}` : String(valor);
+    }
+    case 'data': {
+      const s = textoDe(valor);
+      if (s === '') return '';
+      const d = new Date(`${s}T00:00:00`);
+      return Number.isNaN(d.getTime()) ? s : fmtData.format(d);
+    }
+    case 'booleano':
+      return valor === true ? 'Sim' : valor === false ? 'Não' : '';
+    default:
+      return '';
+  }
+}
+
+// Título = primeiro campo texto/parágrafo (na ordem). Sem valor -> "Sem nome".
+export function tituloDoRegistro(campos: Campo[], registro: Registro): string {
+  const campoTitulo = campos.find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
+  const bruto = campoTitulo === undefined ? '' : textoDe(registro.valores[campoTitulo.id]).trim();
+  return bruto === '' ? 'Sem nome' : bruto;
+}
+
+// Resumo = próximos até 3 campos de texto/número/data/seleção (fora o do título),
+// com valor preenchido.
+export function resumoDoRegistro(campos: Campo[], registro: Registro): string {
+  const campoTitulo = campos.find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
+  const tiposResumo: Campo['tipo'][] = ['texto', 'numero', 'data', 'selecao'];
+  const partes: string[] = [];
+  for (const c of campos) {
+    if (c.id === campoTitulo?.id) continue;
+    if (!tiposResumo.includes(c.tipo)) continue;
+    const txt = formatarValor(c, registro.valores[c.id]).trim();
+    if (txt !== '') partes.push(txt);
+    if (partes.length === 3) break;
+  }
+  return partes.join(' · ');
+}
+
+// Keys de imagem de um campo (array de keys da cheia). Tolerante a valor malformado.
+export function keysDoCampo(registro: Registro, campoId: string): string[] {
+  const v = registro.valores[campoId];
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+// Capa = primeira foto do primeiro campo de imagem preenchido.
+export function capaDoRegistro(campos: Campo[], registro: Registro): string | null {
+  for (const c of campos) {
+    if (c.tipo !== 'imagem') continue;
+    const keys = keysDoCampo(registro, c.id);
+    if (keys.length > 0) return keys[0] ?? null;
+  }
+  return null;
+}
+
+export function temCampoImagem(campos: Campo[]): boolean {
+  return campos.some((c) => c.tipo === 'imagem');
+}

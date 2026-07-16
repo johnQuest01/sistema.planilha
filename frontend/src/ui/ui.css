@@ -1,0 +1,204 @@
+/* Primitivos compartilhados. CSS puro; nada de lib de UI (seção 9). */
+
+/* ---- Botão ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e2);
+  min-height: var(--toque);
+  padding: 0 var(--e4);
+  border: 1px solid transparent;
+  border-radius: var(--raio);
+  background: var(--papel-2);
+  color: var(--tinta);
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1;
+  transition: filter 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn:not(:disabled):hover {
+  filter: brightness(0.97);
+}
+.btn--primario {
+  background: var(--fita);
+  color: #fff;
+  border-color: var(--fita);
+}
+.btn--primario:not(:disabled):hover {
+  background: var(--fita-forte);
+  filter: none;
+}
+.btn--fantasma {
+  background: transparent;
+  border-color: var(--linha-2);
+}
+.btn--perigo {
+  background: transparent;
+  border-color: transparent;
+  color: var(--perigo);
+}
+.btn--bloco {
+  width: 100%;
+}
+.btn--icone {
+  min-height: var(--toque);
+  min-width: var(--toque);
+  padding: 0;
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--tinta-2);
+}
+.btn--icone:not(:disabled):hover {
+  background: rgba(23, 32, 28, 0.06);
+}
+
+/* ---- Campo de texto ---- */
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.campo__rotulo {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+.campo__controle {
+  width: 100%;
+  min-height: var(--toque);
+  padding: 0 var(--e3);
+  border: 1px solid var(--linha-2);
+  border-radius: var(--raio);
+  background: var(--papel-2);
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+textarea.campo__controle {
+  padding: var(--e3);
+  min-height: 88px;
+  resize: vertical;
+}
+.campo__controle:focus {
+  border-color: var(--fita);
+  box-shadow: 0 0 0 3px rgba(217, 138, 61, 0.18);
+}
+.campo__erro {
+  color: var(--perigo);
+  font-size: 13px;
+}
+
+/* ---- Segmentado ---- */
+.segmentado {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  background: rgba(23, 32, 28, 0.06);
+  border-radius: var(--raio);
+}
+.segmentado__opcao {
+  min-height: 36px;
+  padding: 0 var(--e4);
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tinta-2);
+  font-weight: 600;
+  font-size: 14px;
+}
+.segmentado__opcao--ativa {
+  background: var(--papel-2);
+  color: var(--tinta);
+  box-shadow: var(--sombra);
+}
+
+/* ---- Chip ---- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 var(--e3);
+  border: 1px solid var(--linha-2);
+  border-radius: 999px;
+  background: var(--papel-2);
+  color: var(--tinta-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.chip--ativo {
+  border-color: var(--fita);
+  background: rgba(217, 138, 61, 0.12);
+  color: var(--tinta);
+}
+
+/* ---- Folha inferior (bottom sheet) ---- */
+.folha__fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(23, 32, 28, 0.42);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.folha {
+  width: 100%;
+  max-width: 720px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--papel);
+  border-radius: var(--raio-2) var(--raio-2) 0 0;
+  box-shadow: var(--sombra-folha);
+  animation: sobe 0.18s ease-out;
+}
+@keyframes sobe {
+  from {
+    transform: translateY(16px);
+    opacity: 0.6;
+  }
+}
+.folha__topo {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e3) var(--e4);
+  border-bottom: 1px solid var(--linha);
+}
+.folha__titulo {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+}
+.folha__corpo {
+  padding: var(--e4);
+  overflow-y: auto;
+}
+
+/* ---- Carregando ---- */
+.carregando {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--giz);
+}
+.carregando__giro {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(238, 243, 236, 0.25);
+  border-top-color: var(--giz);
+  border-radius: 50%;
+  animation: gira 0.8s linear infinite;
+}
+@keyframes gira {
+  to {
+    transform: rotate(360deg);
+  }
+}

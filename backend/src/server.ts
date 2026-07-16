@@ -12,6 +12,7 @@ import { rotasColecoes } from './rotas/colecoes';
 import { rotasCampos } from './rotas/campos';
 import { rotasRegistros } from './rotas/registros';
 import { rotasUpload } from './rotas/upload';
+import { rotasConfig } from './rotas/config';
 
 export function buildServer() {
   const app = Fastify({
@@ -41,6 +42,7 @@ export function buildServer() {
     return { status: 'ok', db: linhas[0]?.ok === 1 };
   });
 
+  app.register(rotasConfig);
   app.register(rotasAuth);
   app.register(rotasColecoes);
   app.register(rotasCampos);

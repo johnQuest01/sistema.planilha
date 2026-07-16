@@ -1,0 +1,52 @@
+/* Design system "base de corte": fundo de tapete de corte (verde escuro com grade),
+   traço de giz para realces, tinta escura para texto. Números/etiquetas em Martian Mono.
+   Os indícios do prompt (quadrado da base de corte, --giz, contador mono, visor #14181A)
+   guiam a paleta; o resto é interpretação coerente e ajustável. */
+:root {
+  /* superfícies */
+  --tapete: #1f2a26; /* base de corte (verde-escuro) */
+  --tapete-2: #24312c;
+  --papel: #f7f5ef; /* superfície clara de trabalho */
+  --papel-2: #ffffff;
+  --cartao: #ffffff;
+
+  /* tinta / texto */
+  --tinta: #17201c;
+  --tinta-2: #495650;
+  --tinta-3: #7d8a83;
+
+  /* traço / bordas */
+  --linha: #e2ded3;
+  --linha-2: #d0ccbf;
+  --grade: rgba(255, 255, 255, 0.06); /* grade da base de corte */
+
+  /* acentos */
+  --giz: #eef3ec; /* branco-giz (realce sobre o tapete) */
+  --fita: #d98a3d; /* laranja fita métrica (ação) */
+  --fita-forte: #c6771f;
+  --perigo: #c0392b;
+
+  /* visor em tela cheia */
+  --visor-fundo: #14181a;
+
+  /* raios / sombras */
+  --raio: 8px;
+  --raio-2: 12px;
+  --sombra: 0 1px 2px rgba(23, 32, 28, 0.08), 0 8px 24px rgba(23, 32, 28, 0.08);
+  --sombra-folha: 0 -8px 40px rgba(23, 32, 28, 0.22);
+
+  /* espaçamento */
+  --e1: 4px;
+  --e2: 8px;
+  --e3: 12px;
+  --e4: 16px;
+  --e5: 24px;
+  --e6: 32px;
+
+  /* alvo de toque mínimo */
+  --toque: 44px;
+
+  /* tipografia */
+  --fonte: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --mono: 'Martian Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
