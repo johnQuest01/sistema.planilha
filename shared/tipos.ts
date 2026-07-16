@@ -18,6 +18,7 @@ export interface ConfigCampo {
   opcoes?: string[];      // selecao
   sufixo?: string;        // numero — "kg", "R$", "g/m²"
   obrigatorio?: boolean;
+  maxFotos?: number;      // só para tipo 'imagem'. 1..10, default 1.
   [k: string]: ValorJson | undefined;
 }
 

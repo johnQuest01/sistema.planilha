@@ -6,6 +6,9 @@ const configSchema = z
     opcoes: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
     sufixo: z.string().trim().max(16).optional(),
     obrigatorio: z.boolean().optional(),
+    // Teto de 10 não é estético: cada foto é uma key no jsonb, um objeto no R2 e um
+    // PUT contra o rate limit do convite (ver seção 4.2). Só para tipo 'imagem'.
+    maxFotos: z.number().int().min(1).max(10).optional(),
   })
   .strict();
 
@@ -27,6 +30,22 @@ function exigeOpcoesSeSelecao(
   }
 }
 
+// `maxFotos` só faz sentido em bloco de imagem (ver seção 4.2). Mesma lógica do
+// exigeOpcoesSeSelecao acima.
+function proibeMaxFotosSeNaoImagem(
+  tipo: (typeof TIPOS_CAMPO)[number],
+  maxFotos: number | undefined,
+  ctx: z.RefinementCtx,
+): void {
+  if (tipo !== 'imagem' && maxFotos !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'maxFotos só se aplica a bloco de imagem',
+      path: ['config', 'maxFotos'],
+    });
+  }
+}
+
 export const criarCampoSchema = z
   .object({
     nome: z.string().trim().min(1).max(60),
@@ -34,7 +53,10 @@ export const criarCampoSchema = z
     config: configSchema.default({}),
   })
   .strict()
-  .superRefine((val, ctx) => exigeOpcoesSeSelecao(val.tipo, val.config.opcoes, ctx));
+  .superRefine((val, ctx) => {
+    exigeOpcoesSeSelecao(val.tipo, val.config.opcoes, ctx);
+    proibeMaxFotosSeNaoImagem(val.tipo, val.config.maxFotos, ctx);
+  });
 
 export const editarCampoSchema = z
   .object({

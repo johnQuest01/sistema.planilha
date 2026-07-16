@@ -94,6 +94,12 @@ export async function editarCampo(tx: Tx, id: string, patch: PatchCampo): Promis
     throw new ErroHttp(400, 'seleção exige ao menos uma opção');
   }
 
+  // Espelho do superRefine da entrada: maxFotos só faz sentido em `imagem`
+  // (ver seção 4.2). Vale também no estado final de um PATCH.
+  if (tipo !== 'imagem' && config.maxFotos !== undefined) {
+    throw new ErroHttp(400, 'maxFotos só se aplica a bloco de imagem');
+  }
+
   const linhas = await tx<LinhaCampo[]>`
     update campos set nome = ${nome}, tipo = ${tipo}, config = ${tx.json(config)}
     where id = ${id}
