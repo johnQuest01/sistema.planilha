@@ -132,3 +132,50 @@ sem CORS, sem CSRF novo. Quando houver domínio próprio, migre pra `app.` + `ap
 - [ ] Upload pelo celular em 4G → PUT no R2 passa (prova o CORS)
 - [ ] Miniatura da lista carrega do `R2_PUBLIC_BASE`, < 30 KB, com cache
 - [ ] Nenhum segredo em `git log -p` — só nomes de env var
+
+---
+
+## 6. Estado atual do deploy (valores reais)
+
+Ambiente já provisionado e no ar:
+
+| Peça | URL / valor |
+|---|---|
+| Frontend (Vercel) | `https://sistema-planilha-backend.vercel.app` |
+| Backend (Render)  | `https://mostruario-api.onrender.com` (`/health` ok, `/api/config` ok) |
+| Bucket R2         | `mostruario-midia` |
+| `R2_PUBLIC_BASE`  | `https://pub-856c1e1b6dc645308495de9e44b391e0.r2.dev` |
+
+O push na `main` dispara auto-deploy nos dois (Render `autoDeploy: true`; Vercel via
+integração GitHub).
+
+### 6.1 Ajustes manuais de painel (não dá pra fazer por código)
+
+**a) Render → `R2_PUBLIC_BASE`.** O painel do Render sobrescreve o `render.yaml`; hoje a
+variável está com o placeholder `https://midia.REPLACE-DOMINIO`. Troque para
+`https://pub-856c1e1b6dc645308495de9e44b391e0.r2.dev`. Sem isso o upload funciona (a foto
+vai pro bucket), mas o `<img>` monta a URL errada e não exibe. (Dashboard → serviço
+`mostruario-api` → Environment → editar `R2_PUBLIC_BASE` → Save → redeploy.)
+
+**b) Cloudflare R2 → CORS do bucket `mostruario-midia`.** Necessário pro PUT direto do
+navegador. A política pronta está em `r2-cors.json` na raiz. Dashboard → R2 → bucket
+`mostruario-midia` → **Settings** → **CORS Policy** → **Add/Edit** → colar:
+
+```json
+[
+  {
+    "AllowedOrigins": [
+      "https://sistema-planilha-backend.vercel.app",
+      "http://localhost:5173"
+    ],
+    "AllowedMethods": ["GET", "PUT"],
+    "AllowedHeaders": ["content-type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+`localhost:5173` está incluído pra testar upload em dev. Ao trocar o domínio da Vercel,
+adicione o novo em `AllowedOrigins`. O `r2.dev` é "dev only" e rate-limitado — quando
+tiver domínio próprio, migre a leitura pra `midia.<dominio>` via CDN (ver seção 2b).
