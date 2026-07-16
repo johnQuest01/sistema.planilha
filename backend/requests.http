@@ -1,0 +1,118 @@
+@host = http://localhost:3333
+
+### Registrar dono (guarda o cookie de sessão automaticamente)
+# @name registrar
+POST {{host}}/api/auth/registrar
+Content-Type: application/json
+
+{ "email": "dono@exemplo.com", "senha": "segredo123" }
+
+### Entrar (caso já tenha registrado antes)
+# @name entrar
+POST {{host}}/api/auth/entrar
+Content-Type: application/json
+
+{ "email": "dono@exemplo.com", "senha": "segredo123" }
+
+### Quem sou eu
+GET {{host}}/api/auth/eu
+
+### Criar planilha
+# @name criarColecao
+POST {{host}}/api/colecoes
+Content-Type: application/json
+
+{ "nome": "Doces" }
+
+### Listar planilhas
+GET {{host}}/api/colecoes
+
+### Guardar o id da planilha criada
+@colecaoId = {{criarColecao.response.body.id}}
+
+### Campo texto
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Sabor", "tipo": "texto" }
+
+### Campo numero com sufixo
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Peso", "tipo": "numero", "config": { "sufixo": "g" } }
+
+### Campo data
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Validade", "tipo": "data" }
+
+### Campo booleano
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Tem lactose", "tipo": "booleano" }
+
+### Campo selecao (guardando id pra mover/editar/apagar)
+# @name campoStatus
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Status", "tipo": "selecao", "config": { "opcoes": ["Pronto", "Produzindo"] } }
+
+### Campo imagem
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Foto", "tipo": "imagem" }
+
+@campoStatusId = {{campoStatus.response.body.id}}
+
+### Selecao sem opcoes deve dar 400
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "Quebrado", "tipo": "selecao" }
+
+### Chave desconhecida deve dar 400 (.strict)
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "X", "tipo": "texto", "lixo": "nao_deveria_passar" }
+
+### Ver planilha com os campos na ordem
+GET {{host}}/api/colecoes/{{colecaoId}}
+
+### Mover o campo Status pra cima
+POST {{host}}/api/campos/{{campoStatusId}}/mover
+Content-Type: application/json
+
+{ "direcao": "cima" }
+
+### Editar o campo Status (adiciona opção)
+PATCH {{host}}/api/campos/{{campoStatusId}}
+Content-Type: application/json
+
+{ "config": { "opcoes": ["Pronto", "Produzindo", "Esgotado"] } }
+
+### Renomear planilha
+PATCH {{host}}/api/colecoes/{{colecaoId}}
+Content-Type: application/json
+
+{ "nome": "Doces da casa" }
+
+### Apagar o campo Status (remove a chave dos valores dos registros)
+DELETE {{host}}/api/campos/{{campoStatusId}}
+
+### Ver de novo (ordem preservada, sem o Status)
+GET {{host}}/api/colecoes/{{colecaoId}}
+
+### Sair
+POST {{host}}/api/auth/sair
+
+### Sem sessão, criar campo deve dar 401
+POST {{host}}/api/colecoes/{{colecaoId}}/campos
+Content-Type: application/json
+
+{ "nome": "NaoDeveria", "tipo": "texto" }

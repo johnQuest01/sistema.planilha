@@ -1,0 +1,134 @@
+import type { Tx } from '../db/comConta';
+import type { Campo, ConfigCampo, TipoCampo } from '../../../shared/tipos';
+import { ErroHttp } from '../erros';
+
+interface LinhaCampo {
+  id: string;
+  colecao_id: string;
+  nome: string;
+  tipo: string;
+  ordem: number;
+  config: ConfigCampo | null;
+}
+
+const GAP = 100; // ordem em passos de 100; reordenar troca só os afetados (seção 4)
+
+function mapCampo(r: LinhaCampo): Campo {
+  return {
+    id: r.id,
+    colecaoId: r.colecao_id,
+    nome: r.nome,
+    tipo: r.tipo as TipoCampo,
+    ordem: r.ordem,
+    config: r.config ?? {},
+  };
+}
+
+async function colecaoExiste(tx: Tx, colecaoId: string): Promise<boolean> {
+  const linhas = await tx<{ id: string }[]>`select id from colecoes where id = ${colecaoId}`;
+  return linhas.length > 0;
+}
+
+async function lerCampo(tx: Tx, id: string): Promise<LinhaCampo | null> {
+  const linhas = await tx<LinhaCampo[]>`
+    select id, colecao_id, nome, tipo, ordem, config from campos where id = ${id}`;
+  return linhas[0] ?? null;
+}
+
+export interface DadosCampo {
+  nome: string;
+  tipo: TipoCampo;
+  config: ConfigCampo;
+}
+
+// Retorna null quando a coleção não é do dono (RLS não deixou enxergar) → 404.
+export async function criarCampo(
+  tx: Tx,
+  colecaoId: string,
+  dados: DadosCampo,
+): Promise<Campo | null> {
+  if (!(await colecaoExiste(tx, colecaoId))) return null;
+
+  const maxs = await tx<{ maxo: number }[]>`
+    select coalesce(max(ordem), ${-GAP}) as maxo from campos where colecao_id = ${colecaoId}`;
+  const proximaOrdem = (maxs[0]?.maxo ?? -GAP) + GAP;
+
+  const linhas = await tx<LinhaCampo[]>`
+    insert into campos (colecao_id, nome, tipo, ordem, config)
+    values (${colecaoId}, ${dados.nome}, ${dados.tipo}, ${proximaOrdem}, ${tx.json(dados.config)})
+    returning id, colecao_id, nome, tipo, ordem, config`;
+  const linha = linhas[0];
+  if (linha === undefined) throw new Error('insert de campo não retornou linha');
+  return mapCampo(linha);
+}
+
+export interface PatchCampo {
+  nome?: string;
+  tipo?: TipoCampo;
+  config?: ConfigCampo;
+}
+
+export async function editarCampo(tx: Tx, id: string, patch: PatchCampo): Promise<Campo | null> {
+  const atual = await lerCampo(tx, id);
+  if (atual === null) return null;
+
+  const nome = patch.nome ?? atual.nome;
+  const tipo = patch.tipo ?? (atual.tipo as TipoCampo);
+  const config = patch.config ?? atual.config ?? {};
+
+  // Invariante depende do estado final (tipo + config mesclados), por isso a
+  // checagem mora aqui e não no Zod.
+  if (tipo === 'selecao' && (config.opcoes === undefined || config.opcoes.length === 0)) {
+    throw new ErroHttp(400, 'seleção exige ao menos uma opção');
+  }
+
+  const linhas = await tx<LinhaCampo[]>`
+    update campos set nome = ${nome}, tipo = ${tipo}, config = ${tx.json(config)}
+    where id = ${id}
+    returning id, colecao_id, nome, tipo, ordem, config`;
+  const linha = linhas[0];
+  return linha === undefined ? null : mapCampo(linha);
+}
+
+// Apaga o campo E remove a chave dos `valores` de todos os registros da coleção
+// (critério de aceite). Tudo na mesma transação.
+export async function apagarCampo(tx: Tx, id: string): Promise<boolean> {
+  const atual = await lerCampo(tx, id);
+  if (atual === null) return false;
+
+  await tx`delete from campos where id = ${id}`;
+  await tx`
+    update registros
+    set valores = valores - ${id}, atualizado_em = now()
+    where colecao_id = ${atual.colecao_id} and valores ? ${id}`;
+  return true;
+}
+
+// Troca a ordem com o vizinho na direção pedida. Toca só as 2 linhas afetadas.
+export async function moverCampo(
+  tx: Tx,
+  id: string,
+  direcao: 'cima' | 'baixo',
+): Promise<Campo | null> {
+  const atual = await lerCampo(tx, id);
+  if (atual === null) return null;
+
+  const vizinhos =
+    direcao === 'cima'
+      ? await tx<LinhaCampo[]>`
+          select id, colecao_id, nome, tipo, ordem, config from campos
+          where colecao_id = ${atual.colecao_id} and ordem < ${atual.ordem}
+          order by ordem desc limit 1`
+      : await tx<LinhaCampo[]>`
+          select id, colecao_id, nome, tipo, ordem, config from campos
+          where colecao_id = ${atual.colecao_id} and ordem > ${atual.ordem}
+          order by ordem asc limit 1`;
+
+  const vizinho = vizinhos[0];
+  if (vizinho === undefined) return mapCampo(atual); // já é a ponta, no-op
+
+  await tx`update campos set ordem = ${vizinho.ordem} where id = ${atual.id}`;
+  await tx`update campos set ordem = ${atual.ordem} where id = ${vizinho.id}`;
+
+  return mapCampo({ ...atual, ordem: vizinho.ordem });
+}

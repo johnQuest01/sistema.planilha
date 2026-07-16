@@ -1,0 +1,29 @@
+# deps
+node_modules/
+**/node_modules/
+
+# build
+dist/
+build/
+*.tsbuildinfo
+
+# env / segredos
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+
+# logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# uploads locais / temporários
+tmp/
+*.local
