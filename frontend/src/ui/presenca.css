@@ -1,0 +1,65 @@
+/* Lista fixa de "online agora" (canto inferior esquerdo) e avisos "Fulano entrou". */
+
+.presenca-online {
+  position: fixed;
+  left: var(--e3);
+  bottom: calc(var(--e3) + env(safe-area-inset-bottom, 0px));
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  max-width: min(72vw, 340px);
+  padding: 6px var(--e3);
+  background: var(--cartao);
+  border: 1px solid var(--linha);
+  border-radius: 999px;
+  box-shadow: var(--sombra);
+  font-size: 12px;
+  color: var(--tinta-2);
+}
+.presenca-online__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2ecc71;
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.2);
+}
+.presenca-online__txt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presenca-avisos {
+  position: fixed;
+  top: calc(var(--e3) + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  width: max-content;
+  max-width: calc(100% - var(--e4) * 2);
+  pointer-events: none;
+}
+.presenca-aviso {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  background: var(--tinta);
+  color: #fff;
+  border-radius: 999px;
+  box-shadow: var(--sombra);
+  font-size: 13px;
+  font-weight: 600;
+  animation: presenca-sobe 0.2s ease-out;
+}
+@keyframes presenca-sobe {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+}

@@ -131,6 +131,13 @@ export const api = {
   apagarRegistro: (id: string) =>
     pedir<void>(`/api/registros/${id}`, { method: 'DELETE' }),
 
+  // --- presença ao vivo ---
+  presenca: () =>
+    pedir<{
+      online: { id: string; nome: string }[];
+      entradas: { id: string; usuarioId: string; nome: string; criadoEm: string }[];
+    }>('/api/presenca'),
+
   // --- upload (Fase 5) ---
   presignUpload: (
     registroId: string,

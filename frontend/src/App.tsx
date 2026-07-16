@@ -6,6 +6,7 @@ import { Colecao } from './telas/Colecao';
 import { Config } from './telas/Config';
 import { Carregando } from './ui/Carregando';
 import { InstalarApp } from './ui/InstalarApp';
+import { Presenca } from './ui/Presenca';
 
 function Protegida({ children }: { children: JSX.Element }): JSX.Element {
   const { estado } = useAuth();
@@ -56,6 +57,7 @@ export function App(): JSX.Element {
     <BrowserRouter>
       <ProvedorAuth>
         <Rotas />
+        <Presenca />
         <InstalarApp />
       </ProvedorAuth>
     </BrowserRouter>
