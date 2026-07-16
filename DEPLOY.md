@@ -84,7 +84,7 @@ Use `render.yaml` (Blueprint) ou configure à mão:
 |---|---|
 | Runtime | Node 20 |
 | Root directory | raiz do repo (workspace npm) |
-| Build | `npm ci && npm run build -w backend` |
+| Build | `npm ci --include=dev && npm run build -w backend` (NODE_ENV=production omite devDeps; sem `--include=dev` o build usa um tsc global e quebra) |
 | Start | `npm run start -w backend` (cwd=backend; `node dist/...` da raiz não acha o arquivo) |
 | Health check | `/health` |
 
