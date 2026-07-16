@@ -3,6 +3,7 @@ import type { FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import cookie from '@fastify/cookie';
+import rateLimit from '@fastify/rate-limit';
 import { ZodError } from 'zod';
 import { config } from './config';
 import { sql } from './db/client';
@@ -19,6 +20,9 @@ export function buildServer() {
   app.register(helmet);
   app.register(cors, { origin: config.corsOrigin, credentials: true });
   app.register(cookie, { secret: config.cookieSecret });
+  // Teto global por IP. As rotas de auth apertam mais (config.rateLimit local),
+  // porque o argon2 é memory-hard e cada POST custa caro (ver 2.5.4).
+  app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
 
   app.setErrorHandler((err: FastifyError | ZodError | Error, req, reply) => {
     if (err instanceof ZodError) {

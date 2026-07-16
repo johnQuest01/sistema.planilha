@@ -8,8 +8,12 @@ import { credenciaisSchema } from '../validacao/credenciais';
 
 // `contas` não tem RLS (ver migration 002): a lógica de auth media o acesso aqui,
 // então falamos direto com `sql`, fora do `comConta`.
+// Aperto por IP nas rotas que fazem argon2. Deixa pronto pro convite (Fase 6),
+// onde a chave do limiter será o token, não o IP (ver 2.5.4).
+const limiteAuth = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
+
 export async function rotasAuth(app: FastifyInstance): Promise<void> {
-  app.post('/api/auth/registrar', async (req, reply) => {
+  app.post('/api/auth/registrar', limiteAuth, async (req, reply) => {
     const { email, senha } = credenciaisSchema.parse(req.body);
 
     const existentes = await sql<{ id: string }[]>`select id from contas where email = ${email}`;
@@ -28,7 +32,7 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ id: conta.id, email });
   });
 
-  app.post('/api/auth/entrar', async (req, reply) => {
+  app.post('/api/auth/entrar', limiteAuth, async (req, reply) => {
     const { email, senha } = credenciaisSchema.parse(req.body);
 
     const linhas = await sql<{ id: string; senha_hash: string }[]>`
