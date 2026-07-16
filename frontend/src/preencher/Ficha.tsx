@@ -101,6 +101,9 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
       <div className="ficha">
         {colecao.campos.map((campo) => (
           <div key={campo.id} className="ficha__bloco">
+            {campo.config.titulo !== undefined && campo.config.titulo !== '' && (
+              <h3 className="bloco-titulo">{campo.config.titulo}</h3>
+            )}
             <span className="ficha__rotulo">
               {campo.nome}
               {campo.config.obrigatorio === true ? ' *' : ''}

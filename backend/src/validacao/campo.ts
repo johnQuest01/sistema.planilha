@@ -41,6 +41,8 @@ const configSchema = z
     autoAgora: z.boolean().optional(),
     // secao: os quadradinhos que se repetem por linha (1..50).
     subcampos: z.array(subCampoSchema).min(1).max(50).optional(),
+    // opcional: cabeçalho exibido acima do bloco (qualquer tipo).
+    titulo: z.string().trim().max(80).optional(),
   })
   .strict();
 

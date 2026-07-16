@@ -36,6 +36,7 @@ export interface ConfigCampo {
   maxFotos?: number;      // só para tipo 'imagem'. 1..10, default 1.
   autoAgora?: boolean;    // data/datahora: já vem com a data/hora atual ao criar registro
   subcampos?: SubCampo[]; // secao: os "quadradinhos" que se repetem por linha
+  titulo?: string;        // opcional: cabeçalho exibido ACIMA do bloco (qualquer tipo)
   [k: string]: ValorJson | undefined;
 }
 

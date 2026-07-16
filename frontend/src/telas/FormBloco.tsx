@@ -50,6 +50,7 @@ export function FormBloco({
   aoSalvar: (d: DadosBloco) => Promise<void>;
   aoCancelar?: () => void;
 }): JSX.Element {
+  const [titulo, setTitulo] = useState(inicial.config.titulo ?? '');
   const [nome, setNome] = useState(inicial.nome);
   const [tipo, setTipo] = useState<TipoCampo>(inicial.tipo);
   const [sufixo, setSufixo] = useState(inicial.config.sufixo ?? '');
@@ -64,31 +65,33 @@ export function FormBloco({
   const nomeRef = useRef<HTMLInputElement>(null);
 
   function montarConfig(): ConfigCampo {
-    if (tipo === 'numero') return sufixo.trim() === '' ? {} : { sufixo: sufixo.trim() };
+    // Título opcional vale para QUALQUER tipo: começa como base e recebe o resto.
+    const config: ConfigCampo = {};
+    if (titulo.trim() !== '') config.titulo = titulo.trim();
+
+    if (tipo === 'numero' && sufixo.trim() !== '') config.sufixo = sufixo.trim();
     if (tipo === 'selecao') {
-      const opcoes = opcoesTexto
+      config.opcoes = opcoesTexto
         .split(',')
         .map((o) => o.trim())
         .filter((o) => o !== '');
-      return { opcoes };
     }
-    if (tipo === 'imagem') return { maxFotos };
-    if (tipo === 'data' || tipo === 'datahora') return autoAgora ? { autoAgora: true } : {};
+    if (tipo === 'imagem') config.maxFotos = maxFotos;
+    if ((tipo === 'data' || tipo === 'datahora') && autoAgora) config.autoAgora = true;
     if (tipo === 'secao') {
-      const lista: SubCampo[] = subcampos.map((s) => {
-        const config: ConfigCampo = {};
-        if (s.tipo === 'numero' && s.sufixo.trim() !== '') config.sufixo = s.sufixo.trim();
+      config.subcampos = subcampos.map((s) => {
+        const cfg: ConfigCampo = {};
+        if (s.tipo === 'numero' && s.sufixo.trim() !== '') cfg.sufixo = s.sufixo.trim();
         if (s.tipo === 'selecao') {
-          config.opcoes = s.opcoesTexto
+          cfg.opcoes = s.opcoesTexto
             .split(',')
             .map((o) => o.trim())
             .filter((o) => o !== '');
         }
-        return { id: s.id, nome: s.nome.trim(), tipo: s.tipo, config };
+        return { id: s.id, nome: s.nome.trim(), tipo: s.tipo, config: cfg };
       });
-      return { subcampos: lista };
     }
-    return {};
+    return config;
   }
 
   function alterarSub(id: string, mudanca: Partial<RascunhoSub>): void {
@@ -133,6 +136,7 @@ export function FormBloco({
       await aoSalvar({ nome: limpo, tipo, config });
       if (encadear) {
         // encadeamento estilo Excel: limpa e reabre com foco no nome
+        setTitulo('');
         setNome('');
         setSufixo('');
         setOpcoesTexto('');
@@ -150,6 +154,19 @@ export function FormBloco({
 
   return (
     <div className="add-bloco">
+      <input
+        className="campo__controle add-bloco__titulo"
+        placeholder="Título acima do bloco (opcional)"
+        value={titulo}
+        onChange={(e) => setTitulo(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            void salvar();
+          }
+          if (e.key === 'Escape' && aoCancelar !== undefined) aoCancelar();
+        }}
+      />
       <input
         ref={nomeRef}
         className="campo__controle"

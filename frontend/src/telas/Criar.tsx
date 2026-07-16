@@ -223,6 +223,9 @@ export function Criar({
             }
             return (
               <div key={campo.id} className={`bloco${movido?.id === campo.id ? ' bloco--movido' : ''}`}>
+                {campo.config.titulo !== undefined && campo.config.titulo !== '' && (
+                  <div className="bloco__titulo-topo">{campo.config.titulo}</div>
+                )}
                 <div className="bloco__mover">
                   <button
                     ref={registrarBotao(campo.id, 'cima')}
@@ -290,11 +293,15 @@ export function Criar({
         ) : (
           <div className="previa">
             {campos.map((campo) => (
-              <label key={campo.id} className="campo">
-                <span className="campo__rotulo">
-                  {campo.nome}
-                  {campo.config.obrigatorio === true ? ' *' : ''}
-                </span>
+              <div key={campo.id} className="previa__item">
+                {campo.config.titulo !== undefined && campo.config.titulo !== '' && (
+                  <h3 className="bloco-titulo">{campo.config.titulo}</h3>
+                )}
+                <label className="campo">
+                  <span className="campo__rotulo">
+                    {campo.nome}
+                    {campo.config.obrigatorio === true ? ' *' : ''}
+                  </span>
                 {campo.tipo === 'imagem' ? (
                   <span className="previa__mat">
                     <Plus size={20} />
@@ -327,7 +334,8 @@ export function Criar({
                 ) : (
                   <CampoValor campo={campo} valor={undefined} aoMudar={() => undefined} desabilitado />
                 )}
-              </label>
+                </label>
+              </div>
             ))}
           </div>
         )}

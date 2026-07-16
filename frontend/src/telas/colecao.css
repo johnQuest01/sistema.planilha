@@ -73,11 +73,34 @@
 .bloco {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--e2);
   padding: var(--e2);
   border: 1px solid var(--linha);
   border-radius: var(--raio);
   background: var(--papel-2);
+}
+.bloco__titulo-topo {
+  flex-basis: 100%;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--tinta-2);
+}
+
+/* Título opcional exibido ACIMA do bloco (ficha e prévia). */
+.bloco-titulo {
+  font-weight: 700;
+  font-size: 15px;
+  margin: 0 0 var(--e2);
+  padding-bottom: var(--e1);
+  border-bottom: 1px solid var(--linha);
+}
+.previa__item {
+  display: flex;
+  flex-direction: column;
+}
+.add-bloco__titulo {
+  font-weight: 600;
 }
 /* Bloco recém-movido: destaque de ~600ms pra dizer O QUE se moveu (item 3a). */
 .bloco--movido {
