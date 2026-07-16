@@ -300,9 +300,30 @@ export function Criar({
                     <Plus size={20} />
                   </span>
                 ) : campo.tipo === 'secao' ? (
-                  <span className="etiqueta">
-                    Seção · {(campo.config.subcampos ?? []).map((s) => s.nome).join(', ') || 'sem campos'}
-                  </span>
+                  (campo.config.subcampos ?? []).length === 0 ? (
+                    <span className="etiqueta">Seção sem campos</span>
+                  ) : (
+                    <div className="previa-secao">
+                      {(campo.config.subcampos ?? []).map((s) => (
+                        <label key={s.id} className="campo previa-secao__campo">
+                          <span className="campo__rotulo">{s.nome}</span>
+                          <CampoValor
+                            campo={{
+                              id: s.id,
+                              colecaoId: campo.colecaoId,
+                              nome: s.nome,
+                              tipo: s.tipo,
+                              ordem: 0,
+                              config: s.config,
+                            }}
+                            valor={undefined}
+                            aoMudar={() => undefined}
+                            desabilitado
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )
                 ) : (
                   <CampoValor campo={campo} valor={undefined} aoMudar={() => undefined} desabilitado />
                 )}

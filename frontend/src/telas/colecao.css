@@ -241,3 +241,14 @@
   color: var(--tinta-3);
   background: var(--papel);
 }
+.previa-secao {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--e2);
+  padding: var(--e2);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-2);
+}
+.previa-secao__campo {
+  min-width: 0;
+}
