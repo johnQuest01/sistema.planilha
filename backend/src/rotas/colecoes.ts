@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { comConta } from '../db/comConta';
 import { exigeDono, contaObrigatoria } from '../auth/exigeDono';
+import { validaIdParam } from '../validacao/params';
 import { criarColecaoSchema, renomearColecaoSchema } from '../validacao/colecao';
 import {
   apagarColecao,
@@ -26,7 +27,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { id: string } }>(
     '/api/colecoes/:id',
-    { preHandler: exigeDono },
+    { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
       const contaId = contaObrigatoria(req);
       const colecao = await comConta(contaId, (tx) => obterColecao(tx, req.params.id));
@@ -37,7 +38,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
 
   app.patch<{ Params: { id: string } }>(
     '/api/colecoes/:id',
-    { preHandler: exigeDono },
+    { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
       const { nome } = renomearColecaoSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
@@ -49,7 +50,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
 
   app.delete<{ Params: { id: string } }>(
     '/api/colecoes/:id',
-    { preHandler: exigeDono },
+    { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
       const contaId = contaObrigatoria(req);
       const ok = await comConta(contaId, (tx) => apagarColecao(tx, req.params.id));
