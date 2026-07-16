@@ -64,6 +64,16 @@ Cloudflare — não o `r2.dev` (rate-limitado, "dev only"). Essa base é `R2_PUB
 `nanoid(21)` no caminho `<uuid-coleção>/<uuid-registro>/<nano>` (inadivinhável), e a
 regex do validador exige exatamente essa forma. Nunca afrouxe a regex.
 
+### Upload (Fase 5, já implementado no backend)
+
+- `POST /api/registros/:id/upload` `{ mime, tamanhoCheia, tamanhoMini }` → `{ key, urlCheia, urlMini }`
+  (dois presigned PUT de 60 s; ContentLength assinado limita a 2 MB cheia / 200 KB mini).
+- Fluxo do cliente: cria o registro → sobe as duas derivadas nas URLs → faz o PATCH com a `key`.
+- Órfãos: PATCH que remove key, apagar registro e apagar campo-imagem gravam em `lixo_r2`.
+  Limpeza manual: `npm run limpar-r2 -w backend` (apaga do bucket o que está lá há +7 dias).
+- **Falta a parte de frontend** (canvas que gera as 2 derivadas, visor com scroll-snap,
+  grade de edição) — depende da UI da Fase 4.
+
 ---
 
 ## 3. Render (7.4)

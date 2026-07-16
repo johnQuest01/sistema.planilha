@@ -6,6 +6,8 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+# .d.ts gerado pelo tsc -b do vite.config
+frontend/vite.config.d.ts
 
 # env / segredos
 .env

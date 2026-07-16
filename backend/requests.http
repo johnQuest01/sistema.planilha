@@ -205,6 +205,25 @@ Content-Type: application/json
 ### Listar registros da coleção
 GET {{host}}/api/colecoes/{{colecaoId}}/registros
 
+### Presign de upload — 2 derivadas (cheia + mini). Precisa R2 configurado; senão 503.
+# @name presign
+POST {{host}}/api/registros/{{registroId}}/upload
+Content-Type: application/json
+
+{ "mime": "image/jpeg", "tamanhoCheia": 900000, "tamanhoMini": 45000 }
+
+### Upload com arquivo > 2 MB → 400 (seção 6.5)
+POST {{host}}/api/registros/{{registroId}}/upload
+Content-Type: application/json
+
+{ "mime": "image/jpeg", "tamanhoCheia": 3000000, "tamanhoMini": 45000 }
+
+### Upload com mime não suportado → 400
+POST {{host}}/api/registros/{{registroId}}/upload
+Content-Type: application/json
+
+{ "mime": "image/gif", "tamanhoCheia": 100000, "tamanhoMini": 20000 }
+
 ### Trocar o tipo de um campo com registros existentes → 409 (2.5.6)
 PATCH {{host}}/api/campos/{{campoPesoId}}
 Content-Type: application/json

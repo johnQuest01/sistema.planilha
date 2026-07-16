@@ -1,6 +1,7 @@
 import type { Tx } from '../db/comConta';
 import type { Campo, ConfigCampo, TipoCampo } from '../../../shared/tipos';
 import { ErroHttp } from '../erros';
+import { marcarLixo } from './lixo';
 
 interface LinhaCampo {
   id: string;
@@ -113,6 +114,21 @@ export async function editarCampo(tx: Tx, id: string, patch: PatchCampo): Promis
 export async function apagarCampo(tx: Tx, id: string): Promise<boolean> {
   const atual = await lerCampo(tx, id);
   if (atual === null) return false;
+
+  // Se for bloco de imagem, as fotos de todos os registros viram órfãs no R2 quando a
+  // chave sai do jsonb (ver 6.4). Coleta as keys antes de removê-las.
+  if (atual.tipo === 'imagem') {
+    const linhas = await tx<{ vals: unknown }[]>`
+      select valores -> ${id} as vals from registros
+      where colecao_id = ${atual.colecao_id} and valores ? ${id}`;
+    const orfas: string[] = [];
+    for (const l of linhas) {
+      if (Array.isArray(l.vals)) {
+        for (const k of l.vals) if (typeof k === 'string') orfas.push(k);
+      }
+    }
+    await marcarLixo(tx, orfas, 'campo-imagem-apagado');
+  }
 
   await tx`delete from campos where id = ${id}`;
   await tx`
