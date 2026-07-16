@@ -14,6 +14,7 @@ export type { Usuario } from '../../../shared/tipos';
 export interface ColecaoResumo {
   id: string;
   nome: string;
+  criadoPor: string | null;
   criadoEm: string;
   atualizadoEm: string;
 }

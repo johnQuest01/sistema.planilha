@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo } from '../api/cliente';
+import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
 import { Carregando } from '../ui/Carregando';
@@ -12,10 +13,33 @@ const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short
 
 export function Inicio(): JSX.Element {
   const navegar = useNavigate();
+  const { estado } = useAuth();
+  const usuario = estado.fase === 'logado' ? estado.usuario : null;
   const [colecoes, setColecoes] = useState<ColecaoResumo[] | null>(null);
   const [nome, setNome] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
+  const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [apagandoId, setApagandoId] = useState<string | null>(null);
+
+  // Só o dono ou quem criou a planilha pode apagá-la (o backend também barra com 403).
+  function podeApagar(c: ColecaoResumo): boolean {
+    return usuario !== null && (usuario.papel === 'dono' || c.criadoPor === usuario.id);
+  }
+
+  async function apagar(id: string): Promise<void> {
+    setApagandoId(id);
+    setErro(null);
+    try {
+      await api.apagarColecao(id);
+      setColecoes((cs) => (cs === null ? cs : cs.filter((c) => c.id !== id)));
+      setConfirmando(null);
+    } catch (e) {
+      setErro(e instanceof ErroApi ? e.message : 'não foi possível apagar');
+    } finally {
+      setApagandoId(null);
+    }
+  }
 
   useEffect(() => {
     let vivo = true;
@@ -122,12 +146,44 @@ export function Inicio(): JSX.Element {
             {erro !== null && <p className="aviso-erro">{erro}</p>}
             <div className="grade-cartoes">
               {colecoes.map((c) => (
-                <Link key={c.id} to={`/c/${c.id}`} className="cartao-colecao">
-                  <span className="cartao-colecao__nome">{c.nome}</span>
-                  <span className="etiqueta cartao-colecao__meta">
-                    {fmtData.format(new Date(c.atualizadoEm))}
-                  </span>
-                </Link>
+                <div key={c.id} className="cartao-colecao">
+                  <Link to={`/c/${c.id}`} className="cartao-colecao__link">
+                    <span className="cartao-colecao__nome">{c.nome}</span>
+                    <span className="etiqueta cartao-colecao__meta">
+                      {fmtData.format(new Date(c.atualizadoEm))}
+                    </span>
+                  </Link>
+                  {podeApagar(c) && (
+                    <button
+                      type="button"
+                      className="btn btn--icone cartao-colecao__apagar"
+                      aria-label={`Apagar planilha ${c.nome}`}
+                      title="Apagar planilha"
+                      onClick={() => setConfirmando(c.id)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                  {confirmando === c.id && (
+                    <div className="cartao-colecao__confirma">
+                      <span className="cartao-colecao__confirma-txt">
+                        Apagar “{c.nome}” e tudo que ela contém?
+                      </span>
+                      <div className="cartao-colecao__confirma-acoes">
+                        <Botao
+                          variante="perigo"
+                          disabled={apagandoId === c.id}
+                          onClick={() => void apagar(c.id)}
+                        >
+                          Apagar
+                        </Botao>
+                        <Botao variante="fantasma" onClick={() => setConfirmando(null)}>
+                          Cancelar
+                        </Botao>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </>

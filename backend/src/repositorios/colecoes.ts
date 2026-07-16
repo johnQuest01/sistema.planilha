@@ -4,6 +4,7 @@ import type { Campo, Colecao, ConfigCampo, TipoCampo } from '../../../shared/tip
 export interface ColecaoResumo {
   id: string;
   nome: string;
+  criadoPor: string | null;
   criadoEm: string;
   atualizadoEm: string;
 }
@@ -11,6 +12,7 @@ export interface ColecaoResumo {
 interface LinhaColecao {
   id: string;
   nome: string;
+  criado_por: string | null;
   criado_em: Date;
   atualizado_em: Date;
 }
@@ -28,6 +30,7 @@ function mapColecao(r: LinhaColecao): ColecaoResumo {
   return {
     id: r.id,
     nome: r.nome,
+    criadoPor: r.criado_por,
     criadoEm: r.criado_em.toISOString(),
     atualizadoEm: r.atualizado_em.toISOString(),
   };
@@ -52,7 +55,7 @@ export async function criarColecao(
 ): Promise<ColecaoResumo> {
   const linhas = await tx<LinhaColecao[]>`
     insert into colecoes (conta_id, nome, criado_por) values (${contaId}, ${nome}, ${criadoPor})
-    returning id, nome, criado_em, atualizado_em`;
+    returning id, nome, criado_por, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) throw new Error('insert de coleção não retornou linha');
   return mapColecao(linha);
@@ -60,7 +63,7 @@ export async function criarColecao(
 
 export async function listarColecoes(tx: Tx, contaId: string): Promise<ColecaoResumo[]> {
   const linhas = await tx<LinhaColecao[]>`
-    select id, nome, criado_em, atualizado_em
+    select id, nome, criado_por, criado_em, atualizado_em
     from colecoes where conta_id = ${contaId}
     order by criado_em desc`;
   return linhas.map(mapColecao);
@@ -88,7 +91,7 @@ export async function renomearColecao(
   const linhas = await tx<LinhaColecao[]>`
     update colecoes set nome = ${nome}, atualizado_em = now()
     where id = ${id}
-    returning id, nome, criado_em, atualizado_em`;
+    returning id, nome, criado_por, criado_em, atualizado_em`;
   const linha = linhas[0];
   return linha === undefined ? null : mapColecao(linha);
 }
@@ -131,7 +134,7 @@ export async function duplicarColecao(
   const novas = await tx<LinhaColecao[]>`
     insert into colecoes (conta_id, nome, criado_por)
     values (${contaId}, ${`${origem.nome} (cópia)`}, ${criadoPor})
-    returning id, nome, criado_em, atualizado_em`;
+    returning id, nome, criado_por, criado_em, atualizado_em`;
   const nova = novas[0];
   if (nova === undefined) throw new Error('insert de coleção duplicada não retornou linha');
 
