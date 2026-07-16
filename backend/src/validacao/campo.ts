@@ -67,9 +67,14 @@ export const editarCampoSchema = z
   .strict()
   .refine((v) => Object.keys(v).length > 0, { message: 'nada para editar' });
 
-export const moverCampoSchema = z
-  .object({ direcao: z.enum(['cima', 'baixo']) })
+// Reordenação em lote: o cliente manda a ORDEM COMPLETA (não um delta). Assim uma
+// resposta fora de ordem deixa de importar — a última requisição carrega a verdade
+// inteira. A conferência de que os ids batem exatamente com os da coleção mora no
+// repositório (precisa do estado do banco); aqui só garantimos a forma.
+export const reordenarCamposSchema = z
+  .object({ ids: z.array(z.string().uuid()).min(1).max(200) })
   .strict();
 
 export type CriarCampo = z.infer<typeof criarCampoSchema>;
 export type EditarCampo = z.infer<typeof editarCampoSchema>;
+export type ReordenarCampos = z.infer<typeof reordenarCamposSchema>;

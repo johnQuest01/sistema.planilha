@@ -28,6 +28,15 @@
   color: var(--tinta);
   border-color: var(--fita);
 }
+/* No modo Preencher o nome aparece, mas não é editável (quem preenche não renomeia). */
+.titulo-editavel:disabled {
+  color: var(--giz);
+  opacity: 1;
+  cursor: default;
+}
+.titulo-editavel:disabled:hover {
+  border-color: transparent;
+}
 
 /* duas colunas no desktop: editor + prévia */
 .criar {
@@ -70,13 +79,32 @@
   border-radius: var(--raio);
   background: var(--papel-2);
 }
+/* Bloco recém-movido: destaque de ~600ms pra dizer O QUE se moveu (item 3a). */
+.bloco--movido {
+  border-color: var(--fita);
+  background: rgba(217, 138, 61, 0.12);
+  transition: background 0.35s ease, border-color 0.35s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bloco--movido {
+    transition: none;
+  }
+}
 .bloco__mover {
   display: flex;
   flex-direction: column;
+  gap: 6px; /* fronteira clara entre subir/descer sob o polegar (item 3) */
 }
-.bloco__mover .btn--icone {
-  min-height: 22px;
-  min-width: 28px;
+/* Alvo de toque de 44px (Apple HIG); o ícone segue pequeno, cresce o padding. */
+.bloco__mover .seta {
+  min-height: var(--toque);
+  min-width: var(--toque);
+  flex: none;
+}
+/* Desabilitada visível: .22 era quase invisível; .35 + mudança de cor. */
+.bloco__mover .seta:disabled {
+  opacity: 0.35;
+  color: var(--tinta-3);
 }
 .bloco__icone {
   display: grid;

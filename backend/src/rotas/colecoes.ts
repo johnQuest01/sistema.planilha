@@ -6,6 +6,7 @@ import { criarColecaoSchema, renomearColecaoSchema } from '../validacao/colecao'
 import {
   apagarColecao,
   criarColecao,
+  duplicarColecao,
   listarColecoes,
   obterColecao,
   renomearColecao,
@@ -45,6 +46,17 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
       const colecao = await comConta(contaId, (tx) => renomearColecao(tx, req.params.id, nome));
       if (colecao === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       return reply.send(colecao);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/colecoes/:id/duplicar',
+    { preHandler: [exigeDono, validaIdParam] },
+    async (req, reply) => {
+      const contaId = contaObrigatoria(req);
+      const copia = await comConta(contaId, (tx) => duplicarColecao(tx, contaId, req.params.id));
+      if (copia === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
+      return reply.code(201).send(copia);
     },
   );
 

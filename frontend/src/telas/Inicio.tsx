@@ -88,7 +88,12 @@ export function Inicio(): JSX.Element {
                 onChange={(e) => setNome(e.target.value)}
                 autoFocus
               />
-              <Botao variante="primario" type="submit" bloco disabled={criando}>
+              <Botao
+                variante="primario"
+                type="submit"
+                bloco
+                disabled={criando || nome.trim() === ''}
+              >
                 Criar planilha do zero
               </Botao>
               {erro !== null && <p className="aviso-erro">{erro}</p>}
@@ -108,7 +113,7 @@ export function Inicio(): JSX.Element {
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
                 />
-                <Botao variante="primario" type="submit" disabled={criando}>
+                <Botao variante="primario" type="submit" disabled={criando || nome.trim() === ''}>
                   <Plus size={18} />
                   Criar
                 </Botao>

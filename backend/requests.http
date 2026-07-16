@@ -84,11 +84,14 @@ Content-Type: application/json
 ### Ver planilha com os campos na ordem
 GET {{host}}/api/colecoes/{{colecaoId}}
 
-### Mover o campo Status pra cima
-POST {{host}}/api/campos/{{campoStatusId}}/mover
+### Reordenar os campos em lote (ordem final completa)
+PATCH {{host}}/api/colecoes/{{colecaoId}}/campos/ordem
 Content-Type: application/json
 
-{ "direcao": "cima" }
+{ "ids": ["{{campoStatusId}}"] }
+
+### Duplicar a planilha (formato em branco: sem registros, sem convites, ids novos)
+POST {{host}}/api/colecoes/{{colecaoId}}/duplicar
 
 ### Editar o campo Status (adiciona opção)
 PATCH {{host}}/api/campos/{{campoStatusId}}

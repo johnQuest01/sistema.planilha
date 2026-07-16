@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Copy } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
-import type { Colecao as TColecao } from '../../../shared/tipos';
+import type { Campo, Colecao as TColecao } from '../../../shared/tipos';
 import { Segmentado } from '../ui/Segmentado';
 import { Carregando } from '../ui/Carregando';
 import { TopoApp } from './TopoApp';
@@ -17,6 +18,7 @@ export function Colecao(): JSX.Element {
   const [colecao, setColecao] = useState<TColecao | null>(null);
   const [modo, setModo] = useState<Modo>('criar');
   const [nomeEdit, setNomeEdit] = useState('');
+  const [duplicando, setDuplicando] = useState(false);
   const nomeSalvo = useRef('');
 
   const recarregar = useCallback(async () => {
@@ -25,6 +27,12 @@ export function Colecao(): JSX.Element {
     setNomeEdit(col.nome);
     nomeSalvo.current = col.nome;
   }, [id]);
+
+  // Atualização local dos blocos (UI otimista). Nenhum write refaz o GET da coleção:
+  // quem escreve reflete a mudança aqui na hora, sem round-trip pra desenhar.
+  const atualizarCampos = useCallback((fn: (campos: Campo[]) => Campo[]) => {
+    setColecao((c) => (c === null ? c : { ...c, campos: fn(c.campos) }));
+  }, []);
 
   useEffect(() => {
     let vivo = true;
@@ -46,6 +54,11 @@ export function Colecao(): JSX.Element {
     };
   }, [id, navegar]);
 
+  // Nome da planilha também é o título da aba.
+  useEffect(() => {
+    if (colecao !== null) document.title = `${colecao.nome} · Mostruário`;
+  }, [colecao]);
+
   async function salvarNome(): Promise<void> {
     const limpo = nomeEdit.trim();
     if (limpo === '' || limpo === nomeSalvo.current) {
@@ -61,7 +74,20 @@ export function Colecao(): JSX.Element {
     }
   }
 
+  async function duplicar(): Promise<void> {
+    if (duplicando) return;
+    setDuplicando(true);
+    try {
+      const copia = await api.duplicarColecao(id);
+      navegar(`/c/${copia.id}`);
+    } catch {
+      setDuplicando(false);
+    }
+  }
+
   if (colecao === null) return <Carregando />;
+
+  const ehPreencher = modo === 'preencher';
 
   return (
     <div className="pagina">
@@ -72,6 +98,7 @@ export function Colecao(): JSX.Element {
             className="titulo-editavel"
             value={nomeEdit}
             aria-label="Nome da planilha"
+            disabled={ehPreencher}
             onChange={(e) => setNomeEdit(e.target.value)}
             onBlur={() => void salvarNome()}
             onKeyDown={(e) => {
@@ -82,6 +109,16 @@ export function Colecao(): JSX.Element {
               }
             }}
           />
+          <button
+            type="button"
+            className="btn btn--icone"
+            aria-label="Duplicar planilha (formato em branco)"
+            title="Duplicar (formato em branco)"
+            disabled={duplicando}
+            onClick={() => void duplicar()}
+          >
+            <Copy size={18} />
+          </button>
           <Segmentado
             rotuloAria="Modo da planilha"
             valor={modo}
@@ -94,7 +131,7 @@ export function Colecao(): JSX.Element {
         </div>
 
         {modo === 'criar' ? (
-          <Criar colecao={colecao} aoMudar={() => void recarregar()} />
+          <Criar colecao={colecao} aoMudarCampos={atualizarCampos} recarregar={() => void recarregar()} />
         ) : (
           <Preencher colecao={colecao} />
         )}

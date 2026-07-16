@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import { TIPOS_CAMPO } from '../../../shared/tipos';
@@ -179,34 +179,160 @@ function FormBloco({
 
 export function Criar({
   colecao,
-  aoMudar,
+  aoMudarCampos,
+  recarregar,
 }: {
   colecao: Colecao;
-  aoMudar: () => void;
+  aoMudarCampos: (fn: (campos: Campo[]) => Campo[]) => void;
+  recarregar: () => void;
 }): JSX.Element {
   const [editando, setEditando] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [erroGlobal, setErroGlobal] = useState<string | null>(null);
+  // Destaque do bloco recém-movido (~600ms) e alvo de foco que SEGUE o bloco (teclado).
+  const [movido, setMovido] = useState<{ id: string; n: number } | null>(null);
+  const [foco, setFoco] = useState<{ id: string; dir: 'cima' | 'baixo'; n: number } | null>(null);
   const campos = colecao.campos;
 
-  async function mover(campo: Campo, direcao: 'cima' | 'baixo'): Promise<void> {
+  // Espelho da ordem atual, lido pelo envio coalescido no momento em que o timer dispara.
+  const camposRef = useRef<Campo[]>(campos);
+  useEffect(() => {
+    camposRef.current = campos;
+  }, [campos]);
+
+  // Coalescência do reordenar: N toques viram UM PATCH ~400ms depois do último.
+  const timerRef = useRef<number | null>(null);
+  const enviandoRef = useRef(false);
+  // Botões das setas, por `${id}:${direcao}`, pra devolver o foco ao bloco movido.
+  const botoesRef = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  // Destaque some sozinho.
+  useEffect(() => {
+    if (movido === null) return undefined;
+    const t = window.setTimeout(() => setMovido(null), 600);
+    return () => clearTimeout(t);
+  }, [movido]);
+
+  // Foco segue o bloco, não a posição. Se o botão da direção ficou desabilitado
+  // (o bloco chegou na ponta), foca o botão oposto do mesmo bloco pra não encalhar.
+  useEffect(() => {
+    if (foco === null) return;
+    const primaria = botoesRef.current.get(`${foco.id}:${foco.dir}`);
+    if (primaria !== undefined && !primaria.disabled) {
+      primaria.focus();
+      return;
+    }
+    const oposta = foco.dir === 'cima' ? 'baixo' : 'cima';
+    botoesRef.current.get(`${foco.id}:${oposta}`)?.focus();
+  }, [foco]);
+
+  function registrarBotao(id: string, dir: 'cima' | 'baixo') {
+    const chave = `${id}:${dir}`;
+    return (el: HTMLButtonElement | null): void => {
+      if (el === null) botoesRef.current.delete(chave);
+      else botoesRef.current.set(chave, el);
+    };
+  }
+
+  function agendarEnvioOrdem(): void {
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      void enviarOrdem();
+    }, 400);
+  }
+
+  async function enviarOrdem(): Promise<void> {
+    timerRef.current = null;
+    const ids = camposRef.current.map((c) => c.id);
+    // Não persiste enquanto houver bloco otimista sem id real, nem em paralelo.
+    if (ids.some((id) => id.startsWith('tmp_')) || enviandoRef.current) {
+      agendarEnvioOrdem();
+      return;
+    }
+    enviandoRef.current = true;
     try {
-      await api.moverCampo(campo.id, direcao);
-      aoMudar();
-    } catch {
-      /* silencioso: recarrega no próximo evento */
+      // Manda a ordem final completa; o estado otimista já é a verdade na tela.
+      await api.reordenarCampos(colecao.id, ids);
+    } catch (e) {
+      setErroGlobal(e instanceof ErroApi ? e.message : 'não foi possível salvar a ordem');
+      recarregar(); // ressincroniza só no erro
+    } finally {
+      enviandoRef.current = false;
     }
   }
 
+  function mover(campo: Campo, direcao: 'cima' | 'baixo'): void {
+    setErroGlobal(null);
+    // Reordena na hora (primeiro toque); a rede é só persistência, coalescida.
+    // A posição é calculada sobre o estado mais recente (cs), então toques rápidos
+    // em sequência não brigam com closures defasadas.
+    aoMudarCampos((cs) => {
+      const idx = cs.findIndex((c) => c.id === campo.id);
+      const alvo = direcao === 'cima' ? idx - 1 : idx + 1;
+      if (idx < 0 || alvo < 0 || alvo >= cs.length) return cs;
+      const copia = [...cs];
+      const [item] = copia.splice(idx, 1);
+      if (item === undefined) return cs;
+      copia.splice(alvo, 0, item);
+      return copia;
+    });
+    const nonce = Date.now();
+    setMovido({ id: campo.id, n: nonce });
+    setFoco({ id: campo.id, dir: direcao, n: nonce });
+    agendarEnvioOrdem();
+  }
+
+  async function adicionar(d: DadosBloco): Promise<void> {
+    setErroGlobal(null);
+    const tmpId = `tmp_${crypto.randomUUID()}`;
+    const ordemBase =
+      campos.length === 0 ? 0 : Math.max(...campos.map((c) => c.ordem)) + 100;
+    const tmp: Campo = {
+      id: tmpId,
+      colecaoId: colecao.id,
+      nome: d.nome,
+      tipo: d.tipo,
+      ordem: ordemBase,
+      config: d.config,
+    };
+    // Aparece na lista na hora; o POST corre atrás e troca o id temporário pelo real.
+    aoMudarCampos((cs) => [...cs, tmp]);
+    void (async () => {
+      try {
+        const criado = await api.criarCampo(colecao.id, d);
+        aoMudarCampos((cs) => cs.map((c) => (c.id === tmpId ? criado : c)));
+      } catch (e) {
+        aoMudarCampos((cs) => cs.filter((c) => c.id !== tmpId));
+        setErroGlobal(e instanceof ErroApi ? e.message : 'não foi possível adicionar o bloco');
+      }
+    })();
+  }
+
   async function apagar(id: string): Promise<void> {
-    await api.apagarCampo(id);
+    setErroGlobal(null);
     setConfirmando(null);
-    aoMudar();
+    const snapshot = camposRef.current;
+    aoMudarCampos((cs) => cs.filter((c) => c.id !== id));
+    try {
+      await api.apagarCampo(id);
+    } catch (e) {
+      aoMudarCampos(() => snapshot);
+      setErroGlobal(e instanceof ErroApi ? e.message : 'não foi possível apagar o bloco');
+    }
   }
 
   return (
     <div className="criar">
       <section className="painel">
         <h2 className="painel__titulo">Blocos da planilha</h2>
+
+        {erroGlobal !== null && <p className="aviso-erro">{erroGlobal}</p>}
 
         <div className="blocos">
           {campos.map((campo, i) => {
@@ -219,9 +345,9 @@ export function Criar({
                     encadear={false}
                     autoFoco
                     aoSalvar={async (d) => {
-                      await api.editarCampo(campo.id, d);
+                      const atualizado = await api.editarCampo(campo.id, d);
+                      aoMudarCampos((cs) => cs.map((c) => (c.id === campo.id ? atualizado : c)));
                       setEditando(null);
-                      aoMudar();
                     }}
                     aoCancelar={() => setEditando(null)}
                   />
@@ -242,23 +368,25 @@ export function Criar({
               );
             }
             return (
-              <div key={campo.id} className="bloco">
+              <div key={campo.id} className={`bloco${movido?.id === campo.id ? ' bloco--movido' : ''}`}>
                 <div className="bloco__mover">
                   <button
+                    ref={registrarBotao(campo.id, 'cima')}
                     type="button"
-                    className="btn btn--icone"
-                    aria-label="Subir"
+                    className="btn btn--icone seta"
+                    aria-label={`Subir ${campo.nome}`}
                     disabled={i === 0}
-                    onClick={() => void mover(campo, 'cima')}
+                    onClick={() => mover(campo, 'cima')}
                   >
                     <ChevronUp size={16} />
                   </button>
                   <button
+                    ref={registrarBotao(campo.id, 'baixo')}
                     type="button"
-                    className="btn btn--icone"
-                    aria-label="Descer"
+                    className="btn btn--icone seta"
+                    aria-label={`Descer ${campo.nome}`}
                     disabled={i === campos.length - 1}
-                    onClick={() => void mover(campo, 'baixo')}
+                    onClick={() => mover(campo, 'baixo')}
                   >
                     <ChevronDown size={16} />
                   </button>
@@ -274,7 +402,7 @@ export function Criar({
                   <button
                     type="button"
                     className="btn btn--icone"
-                    aria-label="Editar bloco"
+                    aria-label={`Editar ${campo.nome}`}
                     onClick={() => setEditando(campo.id)}
                   >
                     <Pencil size={16} />
@@ -282,7 +410,7 @@ export function Criar({
                   <button
                     type="button"
                     className="btn btn--icone"
-                    aria-label="Apagar bloco"
+                    aria-label={`Apagar ${campo.nome}`}
                     onClick={() => setConfirmando(campo.id)}
                   >
                     <Trash2 size={16} />
@@ -297,10 +425,7 @@ export function Criar({
           inicial={{ nome: '', tipo: 'texto', config: {} }}
           textoAcao="Adicionar bloco"
           encadear
-          aoSalvar={async (d) => {
-            await api.criarCampo(colecao.id, d);
-            aoMudar();
-          }}
+          aoSalvar={adicionar}
         />
       </section>
 
