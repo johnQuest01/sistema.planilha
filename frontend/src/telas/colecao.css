@@ -82,18 +82,20 @@
 }
 .bloco__titulo-topo {
   flex-basis: 100%;
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--tinta-2);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--tinta);
 }
 
-/* Título opcional exibido ACIMA do bloco (ficha e prévia). */
+/* Título opcional exibido ACIMA do bloco (ficha e prévia). Bem destacado com barra
+   de acento à esquerda para saltar aos olhos. */
 .bloco-titulo {
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--tinta);
   margin: 0 0 var(--e2);
-  padding-bottom: var(--e1);
-  border-bottom: 1px solid var(--linha);
+  padding: 4px 0 4px var(--e3);
+  border-left: 3px solid var(--fita);
 }
 .previa__item {
   display: flex;

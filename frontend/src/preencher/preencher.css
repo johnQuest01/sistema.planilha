@@ -155,10 +155,12 @@
 }
 .ficha__rotulo {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--tinta-3);
+  /* Título de cada bloco destacado: escuro e em negrito para achar rápido o que preencher. */
+  color: var(--tinta);
+  font-weight: 700;
 }
 .ficha__salvo {
   font-size: 12px;
