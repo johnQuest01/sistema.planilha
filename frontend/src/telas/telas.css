@@ -22,8 +22,13 @@
 }
 .topo-app__email {
   font-family: var(--mono);
-  font-size: 12px;
-  color: rgba(238, 243, 236, 0.7);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--giz);
+  max-width: 45vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* base de corte em miniatura: quadrado com cantos de esquadro */

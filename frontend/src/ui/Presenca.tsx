@@ -6,7 +6,7 @@ import './presenca.css';
 
 // Presença "ao vivo" por polling: consulta a cada ~20s quem está online e as entradas
 // (logins) recentes, mostrando a lista fixa e avisos "Fulano entrou".
-const INTERVALO_MS = 20000;
+const INTERVALO_MS = 7000;
 const AVISO_MS = 6000;
 
 interface Online {
@@ -41,6 +41,11 @@ export function Presenca(): JSX.Element | null {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     async function tick(): Promise<void> {
+      // Colapsa timers: se foi chamado manualmente (foco), cancela o agendado.
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
       try {
         const p = await api.presenca();
         if (!vivo) return;
@@ -72,10 +77,19 @@ export function Presenca(): JSX.Element | null {
       }
     }
 
+    // Ao voltar o foco/abrir o app, consulta na hora (sensação "ao vivo").
+    function aoFocar(): void {
+      if (document.visibilityState === 'visible') void tick();
+    }
+    document.addEventListener('visibilitychange', aoFocar);
+    window.addEventListener('focus', aoFocar);
+
     void tick();
     return () => {
       vivo = false;
       if (timer !== null) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', aoFocar);
+      window.removeEventListener('focus', aoFocar);
     };
   }, [logado, meuId]);
 
