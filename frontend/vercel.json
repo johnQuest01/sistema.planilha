@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://REPLACE-RENDER-HOST.onrender.com/api/:path*" },
-    { "source": "/health", "destination": "https://REPLACE-RENDER-HOST.onrender.com/health" },
+    { "source": "/api/:path*", "destination": "https://mostruario-api.onrender.com/api/:path*" },
+    { "source": "/health", "destination": "https://mostruario-api.onrender.com/health" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
