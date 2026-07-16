@@ -30,26 +30,30 @@ export function SecaoEditor({
   const subs = campo.config.subcampos ?? [];
   const [qtd, setQtd] = useState(1);
 
+  // Sempre mostra ao menos UMA linha, para os campos ficarem visíveis para preenchimento
+  // sem precisar clicar em "Adicionar linha". A linha vira "de verdade" ao ser editada.
+  const base: Linha[] = linhas.length === 0 ? [{}] : linhas;
+
   function alterarCelula(i: number, subId: string, v: unknown): void {
-    aoMudar(linhas.map((l, idx) => (idx === i ? { ...l, [subId]: v } : l)));
+    aoMudar(base.map((l, idx) => (idx === i ? { ...l, [subId]: v } : l)));
   }
   function adicionar(n: number): void {
     const novas: Linha[] = Array.from({ length: Math.max(1, n) }, () => ({}));
-    aoMudar([...linhas, ...novas]);
+    aoMudar([...base, ...novas]);
   }
   function remover(i: number): void {
-    aoMudar(linhas.filter((_, idx) => idx !== i));
+    aoMudar(base.filter((_, idx) => idx !== i));
   }
   // Duplica a linha logo abaixo dela, copiando os valores já preenchidos.
   function duplicar(i: number): void {
-    const alvo = linhas[i];
+    const alvo = base[i];
     if (alvo === undefined) return;
-    aoMudar([...linhas.slice(0, i + 1), { ...alvo }, ...linhas.slice(i + 1)]);
+    aoMudar([...base.slice(0, i + 1), { ...alvo }, ...base.slice(i + 1)]);
   }
 
   return (
     <div className="secao">
-      {linhas.map((linha, i) => (
+      {base.map((linha, i) => (
         // A ordem/quantidade de linhas muda por índice; sem id estável, a key é o índice.
         // eslint-disable-next-line react/no-array-index-key
         <div key={i} className="secao__linha">

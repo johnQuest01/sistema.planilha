@@ -6,6 +6,8 @@
   align-items: center;
   gap: var(--e3);
   padding: var(--e3) var(--e4);
+  /* No iPhone em tela cheia (PWA) o conteúdo vai sob a barra de status; respeita o notch. */
+  padding-top: max(var(--e3), env(safe-area-inset-top, 0px));
   color: var(--giz);
 }
 .topo-app__marca {

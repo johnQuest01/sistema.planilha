@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Trash2 } from 'lucide-react';
 import { api } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
@@ -41,6 +42,31 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
   const sujosRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+  const fichaRef = useRef<HTMLDivElement>(null);
+
+  // Enter (e a seta "próximo" do teclado do iPhone) avança para o próximo campo, para
+  // preencher rápido. Em <textarea> (parágrafo) o Enter continua criando nova linha.
+  function aoTeclar(e: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (e.key !== 'Enter') return;
+    const alvo = e.target as HTMLElement;
+    if (alvo.tagName !== 'INPUT') return;
+    const tipo = (alvo as HTMLInputElement).type;
+    if (tipo === 'checkbox' || tipo === 'button' || tipo === 'submit') return;
+    const cont = fichaRef.current;
+    if (cont === null) return;
+    const focaveis = Array.from(
+      cont.querySelectorAll<HTMLElement>('input, select, textarea'),
+    ).filter(
+      (el) =>
+        !(el as HTMLInputElement).disabled && el.tabIndex !== -1 && el.offsetParent !== null,
+    );
+    const idx = focaveis.indexOf(alvo);
+    if (idx === -1) return;
+    e.preventDefault();
+    const prox = focaveis[idx + 1];
+    if (prox !== undefined) prox.focus();
+    else (alvo as HTMLInputElement).blur();
+  }
 
   // aoAtualizar muda de identidade a cada render do pai. Guardamos numa ref para
   // o flush não se recriar (e o efeito de desmontagem não ficar reprocessando).
@@ -115,7 +141,7 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
       }
       onFechar={fechar}
     >
-      <div className="ficha">
+      <div className="ficha" ref={fichaRef} onKeyDown={aoTeclar}>
         {colecao.campos.map((campo) => (
           <div key={campo.id} className="ficha__bloco">
             {campo.config.titulo !== undefined && campo.config.titulo !== '' && (

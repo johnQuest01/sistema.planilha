@@ -157,7 +157,10 @@ textarea.campo__controle {
 .folha {
   width: 100%;
   max-width: 720px;
+  /* Limita a altura para que o TOPO da folha (X, título, quem preencheu) fique SEMPRE
+     abaixo da barra de status do iPhone em tela cheia (PWA standalone). */
   max-height: 92vh;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--e3));
   display: flex;
   flex-direction: column;
   background: var(--papel);
@@ -197,6 +200,8 @@ textarea.campo__controle {
 }
 .folha__corpo {
   padding: var(--e4);
+  /* Espaço para o indicador de home do iPhone não cobrir o último campo/botão. */
+  padding-bottom: max(var(--e4), env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
 }
 

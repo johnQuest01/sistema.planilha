@@ -42,6 +42,8 @@ export function CampoValor({
   const comum = {
     disabled: desabilitado,
     autoFocus: autoFoco,
+    // Mostra "próximo" na tecla de retorno do teclado (iOS/Android) para avançar campos.
+    enterKeyHint: 'next' as const,
     onBlur: aoSairFoco,
     onKeyDown: (e: KeyboardEvent) => {
       // Esc em input number/date reverte o campo ao valor de foco e dispara um onChange
