@@ -21,7 +21,7 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: CORS_ORIGIN
-        value: https://REPLACE-APP.vercel.app
+        value: https://sistema-planilha-backend.vercel.app
       - key: R2_BUCKET
         value: mostruario-midia # bucket dedicado, NUNCA o do outro projeto do dono (7.1)
       - key: R2_PUBLIC_BASE
