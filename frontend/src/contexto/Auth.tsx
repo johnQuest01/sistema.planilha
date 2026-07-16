@@ -7,18 +7,18 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, ErroApi, type Conta } from '../api/cliente';
+import { api, ErroApi, type Usuario } from '../api/cliente';
 import { definirBaseR2 } from '../imagens/urls';
 
 type Estado =
   | { fase: 'carregando' }
   | { fase: 'deslogado' }
-  | { fase: 'logado'; conta: Conta };
+  | { fase: 'logado'; usuario: Usuario };
 
 interface ContextoAuth {
   estado: Estado;
   entrar: (email: string, senha: string) => Promise<void>;
-  registrar: (email: string, senha: string) => Promise<void>;
+  registrar: (nome: string, email: string, senha: string, codigo: string) => Promise<void>;
   sair: () => Promise<void>;
 }
 
@@ -38,8 +38,8 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
         /* sem R2 configurado: fotos não carregam, resto funciona */
       }
       try {
-        const conta = await api.eu();
-        if (vivo) setEstado({ fase: 'logado', conta });
+        const usuario = await api.eu();
+        if (vivo) setEstado({ fase: 'logado', usuario });
       } catch (erro) {
         if (vivo) {
           if (erro instanceof ErroApi && erro.status === 401) {
@@ -56,14 +56,17 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
   }, []);
 
   const entrar = useCallback(async (email: string, senha: string) => {
-    const conta = await api.entrar(email, senha);
-    setEstado({ fase: 'logado', conta });
+    const usuario = await api.entrar(email, senha);
+    setEstado({ fase: 'logado', usuario });
   }, []);
 
-  const registrar = useCallback(async (email: string, senha: string) => {
-    const conta = await api.registrar(email, senha);
-    setEstado({ fase: 'logado', conta });
-  }, []);
+  const registrar = useCallback(
+    async (nome: string, email: string, senha: string, codigo: string) => {
+      const usuario = await api.registrar(nome, email, senha, codigo);
+      setEstado({ fase: 'logado', usuario });
+    },
+    [],
+  );
 
   const sair = useCallback(async () => {
     await api.sair();

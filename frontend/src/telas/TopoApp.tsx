@@ -5,7 +5,7 @@ import './telas.css';
 
 export function TopoApp(): JSX.Element {
   const { estado, sair } = useAuth();
-  const email = estado.fase === 'logado' ? estado.conta.email : '';
+  const nome = estado.fase === 'logado' ? estado.usuario.nome : '';
   return (
     <header className="topo-app">
       <Link to="/" className="topo-app__marca" style={{ color: 'inherit', textDecoration: 'none' }}>
@@ -13,7 +13,7 @@ export function TopoApp(): JSX.Element {
         Mostruário
       </Link>
       <span className="topo-app__espaco" />
-      {email !== '' && <span className="topo-app__email">{email}</span>}
+      {nome !== '' && <span className="topo-app__email">{nome}</span>}
       <button
         type="button"
         className="btn btn--icone"

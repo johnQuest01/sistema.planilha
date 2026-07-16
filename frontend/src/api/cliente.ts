@@ -4,7 +4,10 @@ import type {
   ConfigCampo,
   Registro,
   TipoCampo,
+  Usuario,
 } from '../../../shared/tipos';
+
+export type { Usuario } from '../../../shared/tipos';
 
 // Resumo devolvido por GET /api/colecoes (sem campos). O detalhe (com campos) vem
 // por GET /api/colecoes/:id como Colecao.
@@ -13,11 +16,6 @@ export interface ColecaoResumo {
   nome: string;
   criadoEm: string;
   atualizadoEm: string;
-}
-
-export interface Conta {
-  id: string;
-  email: string;
 }
 
 export interface RespostaUpload {
@@ -72,11 +70,11 @@ function corpoJson(dados: unknown): RequestInit {
 export const api = {
   // --- config / auth ---
   config: () => pedir<{ r2PublicBase: string }>('/api/config'),
-  eu: () => pedir<Conta>('/api/auth/eu'),
+  eu: () => pedir<Usuario>('/api/auth/eu'),
   entrar: (email: string, senha: string) =>
-    pedir<Conta>('/api/auth/entrar', corpoJson({ email, senha })),
-  registrar: (email: string, senha: string) =>
-    pedir<Conta>('/api/auth/registrar', corpoJson({ email, senha })),
+    pedir<Usuario>('/api/auth/entrar', corpoJson({ email, senha })),
+  registrar: (nome: string, email: string, senha: string, codigo: string) =>
+    pedir<Usuario>('/api/auth/registrar', corpoJson({ nome, email, senha, codigo })),
   sair: () => pedir<{ ok: boolean }>('/api/auth/sair', { method: 'POST' }),
 
   // --- coleções ---

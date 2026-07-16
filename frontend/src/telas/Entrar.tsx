@@ -9,8 +9,10 @@ import './telas.css';
 export function Entrar(): JSX.Element {
   const { entrar, registrar } = useAuth();
   const [modo, setModo] = useState<'entrar' | 'registrar'>('entrar');
+  const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -20,7 +22,7 @@ export function Entrar(): JSX.Element {
     setEnviando(true);
     try {
       if (modo === 'entrar') await entrar(email.trim(), senha);
-      else await registrar(email.trim(), senha);
+      else await registrar(nome.trim(), email.trim(), senha, codigo.trim());
     } catch (err) {
       setErro(err instanceof ErroApi ? err.message : 'não foi possível continuar');
       setEnviando(false);
@@ -35,6 +37,16 @@ export function Entrar(): JSX.Element {
           Mostruário
         </div>
 
+        {modo === 'registrar' && (
+          <Campo
+            rotulo="Nome"
+            type="text"
+            autoComplete="name"
+            required
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+          />
+        )}
         <Campo
           rotulo="E-mail"
           type="email"
@@ -52,6 +64,16 @@ export function Entrar(): JSX.Element {
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
         />
+        {modo === 'registrar' && (
+          <Campo
+            rotulo="Código de convite"
+            type="text"
+            autoComplete="off"
+            required
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
+          />
+        )}
 
         {erro !== null && <p className="aviso-erro">{erro}</p>}
 

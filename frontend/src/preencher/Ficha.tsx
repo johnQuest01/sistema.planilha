@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { api } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
+import { useAuth } from '../contexto/Auth';
 import { FolhaInferior } from '../ui/FolhaInferior';
 import { Botao } from '../ui/Botao';
 import { CampoValor } from './CampoValor';
@@ -29,6 +30,12 @@ interface Props {
 const DEBOUNCE_MS = 400;
 
 export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Props): JSX.Element {
+  const { estado } = useAuth();
+  const usuario = estado.fase === 'logado' ? estado.usuario : null;
+  // Só o dono ou quem criou o registro pode apagá-lo (o backend também barra).
+  const podeApagar =
+    usuario !== null && (usuario.papel === 'dono' || registro.criadoPorId === usuario.id);
+
   const [valores, setValores] = useState<Record<string, unknown>>(registro.valores);
   const valoresRef = useRef<Record<string, unknown>>(registro.valores);
   const sujosRef = useRef<Set<string>>(new Set());
@@ -94,8 +101,18 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
 
   return (
     <FolhaInferior
-      titulo={tituloDoRegistro(colecao.campos, registroLocal)}
-      subtitulo={`Preenchido em ${fmtPreenchido.format(new Date(registro.atualizadoEm))}`}
+      titulo={
+        registro.criadoPor !== null && registro.criadoPor !== ''
+          ? `Preenchido por ${registro.criadoPor}`
+          : tituloDoRegistro(colecao.campos, registroLocal)
+      }
+      subtitulo={
+        <>
+          {colecao.nome}
+          <br />
+          {fmtPreenchido.format(new Date(registro.atualizadoEm))}
+        </>
+      }
       onFechar={fechar}
     >
       <div className="ficha">
@@ -141,29 +158,31 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
           </div>
         ))}
 
-        <div className="ficha__bloco">
-          {confirmando ? (
-            <div className="confirma-inline">
-              <span className="confirma-inline__texto">Apagar este registro?</span>
-              <Botao
-                variante="perigo"
-                onClick={() => {
-                  void api.apagarRegistro(registro.id).then(() => aoApagar(registro.id));
-                }}
-              >
-                Apagar
+        {podeApagar && (
+          <div className="ficha__bloco">
+            {confirmando ? (
+              <div className="confirma-inline">
+                <span className="confirma-inline__texto">Apagar este registro?</span>
+                <Botao
+                  variante="perigo"
+                  onClick={() => {
+                    void api.apagarRegistro(registro.id).then(() => aoApagar(registro.id));
+                  }}
+                >
+                  Apagar
+                </Botao>
+                <Botao variante="fantasma" onClick={() => setConfirmando(false)}>
+                  Cancelar
+                </Botao>
+              </div>
+            ) : (
+              <Botao variante="perigo" onClick={() => setConfirmando(true)}>
+                <Trash2 size={16} />
+                Apagar registro
               </Botao>
-              <Botao variante="fantasma" onClick={() => setConfirmando(false)}>
-                Cancelar
-              </Botao>
-            </div>
-          ) : (
-            <Botao variante="perigo" onClick={() => setConfirmando(true)}>
-              <Trash2 size={16} />
-              Apagar registro
-            </Botao>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </FolhaInferior>
   );

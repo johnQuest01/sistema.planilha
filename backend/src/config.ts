@@ -26,5 +26,8 @@ export const config = {
   cookieSecret: isProd
     ? obrigatoria('COOKIE_SECRET')
     : opcional('COOKIE_SECRET', 'dev-inseguro-nao-use-em-producao'),
+  // E-mail do dono cuja conta é o "workspace" compartilhado: todo cadastro novo
+  // cai nessa conta. Configurável por env; default é a conta do Bruno.
+  workspaceOwnerEmail: opcional('WORKSPACE_OWNER_EMAIL', 'brunoacre07@gmail.com').toLowerCase(),
   isProd,
 } as const;

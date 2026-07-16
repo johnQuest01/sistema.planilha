@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { comConta } from '../db/comConta';
-import { exigeDono, contaObrigatoria } from '../auth/exigeDono';
+import { exigeDono, contaObrigatoria, usuarioObrigatorio } from '../auth/exigeDono';
 import { validaIdParam } from '../validacao/params';
 import { criarColecaoSchema, renomearColecaoSchema } from '../validacao/colecao';
 import {
@@ -16,7 +16,8 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
   app.post('/api/colecoes', { preHandler: exigeDono }, async (req, reply) => {
     const { nome } = criarColecaoSchema.parse(req.body);
     const contaId = contaObrigatoria(req);
-    const colecao = await comConta(contaId, (tx) => criarColecao(tx, contaId, nome));
+    const u = usuarioObrigatorio(req);
+    const colecao = await comConta(contaId, (tx) => criarColecao(tx, contaId, nome, u.id));
     return reply.code(201).send(colecao);
   });
 
@@ -54,7 +55,10 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
     { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
       const contaId = contaObrigatoria(req);
-      const copia = await comConta(contaId, (tx) => duplicarColecao(tx, contaId, req.params.id));
+      const u = usuarioObrigatorio(req);
+      const copia = await comConta(contaId, (tx) =>
+        duplicarColecao(tx, contaId, req.params.id, u.id),
+      );
       if (copia === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       return reply.code(201).send(copia);
     },
@@ -65,8 +69,16 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
     { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
       const contaId = contaObrigatoria(req);
-      const ok = await comConta(contaId, (tx) => apagarColecao(tx, req.params.id));
-      if (!ok) return reply.code(404).send({ erro: 'coleção não encontrada' });
+      const u = usuarioObrigatorio(req);
+      const resultado = await comConta(contaId, (tx) =>
+        apagarColecao(tx, req.params.id, { id: u.id, papel: u.papel }),
+      );
+      if (resultado === 'nao-encontrado') {
+        return reply.code(404).send({ erro: 'coleção não encontrada' });
+      }
+      if (resultado === 'proibido') {
+        return reply.code(403).send({ erro: 'só quem criou (ou o dono) pode apagar esta planilha' });
+      }
       return reply.code(204).send();
     },
   );

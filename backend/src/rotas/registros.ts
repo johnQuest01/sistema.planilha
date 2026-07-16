@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { comConta } from '../db/comConta';
-import { exigeDono, contaObrigatoria } from '../auth/exigeDono';
+import { exigeDono, contaObrigatoria, usuarioObrigatorio } from '../auth/exigeDono';
 import { validaIdParam } from '../validacao/params';
 import {
   apagarRegistro,
@@ -41,8 +41,9 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const { valores } = corpoRegistroSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
+      const u = usuarioObrigatorio(req);
       const registro = await comConta(contaId, (tx) =>
-        criarRegistro(tx, req.params.id, valores),
+        criarRegistro(tx, req.params.id, valores, { id: u.id, nome: u.nome, papel: u.papel }),
       );
       if (registro === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       return reply.code(201).send(registro);
@@ -68,8 +69,16 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
     { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
       const contaId = contaObrigatoria(req);
-      const ok = await comConta(contaId, (tx) => apagarRegistro(tx, req.params.id));
-      if (!ok) return reply.code(404).send({ erro: 'registro não encontrado' });
+      const u = usuarioObrigatorio(req);
+      const resultado = await comConta(contaId, (tx) =>
+        apagarRegistro(tx, req.params.id, { id: u.id, nome: u.nome, papel: u.papel }),
+      );
+      if (resultado === 'nao-encontrado') {
+        return reply.code(404).send({ erro: 'registro não encontrado' });
+      }
+      if (resultado === 'proibido') {
+        return reply.code(403).send({ erro: 'só quem criou (ou o dono) pode apagar este registro' });
+      }
       return reply.code(204).send();
     },
   );

@@ -44,9 +44,14 @@ function mapCampo(r: LinhaCampo): Campo {
   };
 }
 
-export async function criarColecao(tx: Tx, contaId: string, nome: string): Promise<ColecaoResumo> {
+export async function criarColecao(
+  tx: Tx,
+  contaId: string,
+  nome: string,
+  criadoPor: string,
+): Promise<ColecaoResumo> {
   const linhas = await tx<LinhaColecao[]>`
-    insert into colecoes (conta_id, nome) values (${contaId}, ${nome})
+    insert into colecoes (conta_id, nome, criado_por) values (${contaId}, ${nome}, ${criadoPor})
     returning id, nome, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) throw new Error('insert de coleção não retornou linha');
@@ -62,8 +67,8 @@ export async function listarColecoes(tx: Tx, contaId: string): Promise<ColecaoRe
 }
 
 export async function obterColecao(tx: Tx, id: string): Promise<Colecao | null> {
-  const cols = await tx<{ id: string; nome: string }[]>`
-    select id, nome from colecoes where id = ${id}`;
+  const cols = await tx<{ id: string; nome: string; criado_por: string | null }[]>`
+    select id, nome, criado_por from colecoes where id = ${id}`;
   const col = cols[0];
   if (col === undefined) return null;
 
@@ -72,7 +77,7 @@ export async function obterColecao(tx: Tx, id: string): Promise<Colecao | null> 
     from campos where colecao_id = ${id}
     order by ordem, criado_em`;
 
-  return { id: col.id, nome: col.nome, campos: campos.map(mapCampo) };
+  return { id: col.id, nome: col.nome, criadoPor: col.criado_por, campos: campos.map(mapCampo) };
 }
 
 export async function renomearColecao(
@@ -88,9 +93,25 @@ export async function renomearColecao(
   return linha === undefined ? null : mapColecao(linha);
 }
 
-export async function apagarColecao(tx: Tx, id: string): Promise<boolean> {
-  const linhas = await tx<{ id: string }[]>`delete from colecoes where id = ${id} returning id`;
-  return linhas.length > 0;
+// Só o dono ou quem criou a planilha pode apagá-la.
+export type ResultadoApagarColecao = 'ok' | 'nao-encontrado' | 'proibido';
+
+export async function apagarColecao(
+  tx: Tx,
+  id: string,
+  ator: { id: string; papel: 'dono' | 'membro' },
+): Promise<ResultadoApagarColecao> {
+  const cols = await tx<{ criado_por: string | null }[]>`
+    select criado_por from colecoes where id = ${id}`;
+  const col = cols[0];
+  if (col === undefined) return 'nao-encontrado';
+
+  const ehDono = ator.papel === 'dono';
+  const ehCriador = col.criado_por === ator.id;
+  if (!ehDono && !ehCriador) return 'proibido';
+
+  await tx`delete from colecoes where id = ${id}`;
+  return 'ok';
 }
 
 // Duplica o FORMATO de uma coleção: mesma configuração de blocos, planilha vazia.
@@ -102,12 +123,14 @@ export async function duplicarColecao(
   tx: Tx,
   contaId: string,
   origemId: string,
+  criadoPor: string,
 ): Promise<Colecao | null> {
   const origem = await obterColecao(tx, origemId);
   if (origem === null) return null;
 
   const novas = await tx<LinhaColecao[]>`
-    insert into colecoes (conta_id, nome) values (${contaId}, ${`${origem.nome} (cópia)`})
+    insert into colecoes (conta_id, nome, criado_por)
+    values (${contaId}, ${`${origem.nome} (cópia)`}, ${criadoPor})
     returning id, nome, criado_em, atualizado_em`;
   const nova = novas[0];
   if (nova === undefined) throw new Error('insert de coleção duplicada não retornou linha');
@@ -123,5 +146,5 @@ export async function duplicarColecao(
     camposCopiados.push(mapCampo(linha));
   }
 
-  return { id: nova.id, nome: nova.nome, campos: camposCopiados };
+  return { id: nova.id, nome: nova.nome, criadoPor, campos: camposCopiados };
 }

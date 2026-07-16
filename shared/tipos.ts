@@ -53,6 +53,8 @@ export interface Registro {
   id: string;
   colecaoId: string;
   valores: Record<string, unknown>;   // chave = Campo.id
+  criadoPor: string | null;           // nome de quem criou (exibição)
+  criadoPorId: string | null;         // id de quem criou (permissão de apagar)
   criadoEm: string;
   atualizadoEm: string;
 }
@@ -60,5 +62,14 @@ export interface Registro {
 export interface Colecao {
   id: string;
   nome: string;
+  criadoPor: string | null;           // id do usuario que criou (permissão de apagar)
   campos: Campo[];
+}
+
+// Usuário logado (pessoa). Papel 'dono' pode apagar tudo; 'membro' preenche e cria.
+export interface Usuario {
+  id: string;
+  nome: string;
+  email: string;
+  papel: 'dono' | 'membro';
 }

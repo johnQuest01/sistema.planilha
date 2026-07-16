@@ -7,8 +7,17 @@ interface LinhaRegistro {
   id: string;
   colecao_id: string;
   valores: Record<string, unknown> | null;
+  criado_por: string | null;
+  criado_por_id: string | null;
   criado_em: Date;
   atualizado_em: Date;
+}
+
+// Quem está agindo, para atribuição e permissão.
+export interface Ator {
+  id: string;
+  nome: string;
+  papel: 'dono' | 'membro';
 }
 
 interface LinhaCampo {
@@ -27,6 +36,8 @@ function mapRegistro(r: LinhaRegistro): Registro {
     id: r.id,
     colecaoId: r.colecao_id,
     valores: r.valores ?? {},
+    criadoPor: r.criado_por,
+    criadoPorId: r.criado_por_id,
     criadoEm: r.criado_em.toISOString(),
     atualizadoEm: r.atualizado_em.toISOString(),
   };
@@ -60,7 +71,8 @@ async function camposDaColecao(tx: Tx, colecaoId: string): Promise<Campo[]> {
 
 async function lerRegistro(tx: Tx, id: string): Promise<LinhaRegistro | null> {
   const linhas = await tx<LinhaRegistro[]>`
-    select id, colecao_id, valores, criado_em, atualizado_em from registros where id = ${id}`;
+    select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
+    from registros where id = ${id}`;
   return linhas[0] ?? null;
 }
 
@@ -90,11 +102,11 @@ export async function listarRegistros(
   const linhas =
     before === undefined
       ? await tx<LinhaRegistro[]>`
-          select id, colecao_id, valores, criado_em, atualizado_em
+          select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
           from registros where colecao_id = ${colecaoId}
           order by criado_em desc limit ${LIMITE}`
       : await tx<LinhaRegistro[]>`
-          select id, colecao_id, valores, criado_em, atualizado_em
+          select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
           from registros where colecao_id = ${colecaoId} and criado_em < ${before}
           order by criado_em desc limit ${LIMITE}`;
 
@@ -105,6 +117,7 @@ export async function criarRegistro(
   tx: Tx,
   colecaoId: string,
   valoresBrutos: Record<string, unknown>,
+  ator: Ator,
 ): Promise<Registro | null> {
   if (!(await colecaoExiste(tx, colecaoId))) return null;
 
@@ -112,9 +125,9 @@ export async function criarRegistro(
   const valores = schemaDeValores(campos).parse(valoresBrutos);
 
   const linhas = await tx<LinhaRegistro[]>`
-    insert into registros (colecao_id, valores, criado_por)
-    values (${colecaoId}, ${tx.json(valores)}, 'dono')
-    returning id, colecao_id, valores, criado_em, atualizado_em`;
+    insert into registros (colecao_id, valores, criado_por, criado_por_id)
+    values (${colecaoId}, ${tx.json(valores)}, ${ator.nome}, ${ator.id})
+    returning id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) throw new Error('insert de registro não retornou linha');
   return mapRegistro(linha);
@@ -148,7 +161,7 @@ export async function editarRegistro(
   const linhas = await tx<LinhaRegistro[]>`
     update registros set valores = valores || ${tx.json(patch)}, atualizado_em = now()
     where id = ${id}
-    returning id, colecao_id, valores, criado_em, atualizado_em`;
+    returning id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) return null;
 
@@ -157,10 +170,16 @@ export async function editarRegistro(
 }
 
 // Apagar o registro órfã todas as suas fotos (ver 6.4): senão os objetos ficariam no
-// bucket pra sempre, sem key que aponte pra eles.
-export async function apagarRegistro(tx: Tx, id: string): Promise<boolean> {
+// bucket pra sempre, sem key que aponte pra eles. Só o dono ou quem criou pode apagar.
+export type ResultadoApagar = 'ok' | 'nao-encontrado' | 'proibido';
+
+export async function apagarRegistro(tx: Tx, id: string, ator: Ator): Promise<ResultadoApagar> {
   const atual = await lerRegistro(tx, id);
-  if (atual === null) return false;
+  if (atual === null) return 'nao-encontrado';
+
+  const ehDono = ator.papel === 'dono';
+  const ehCriador = atual.criado_por_id === ator.id;
+  if (!ehDono && !ehCriador) return 'proibido';
 
   const campos = await camposDaColecao(tx, atual.colecao_id);
   const valores = atual.valores ?? {};
@@ -170,5 +189,5 @@ export async function apagarRegistro(tx: Tx, id: string): Promise<boolean> {
 
   await tx`delete from registros where id = ${id}`;
   await marcarLixo(tx, orfas, 'registro-apagado');
-  return true;
+  return 'ok';
 }

@@ -2,51 +2,63 @@ import type { FastifyInstance } from 'fastify';
 import { sql } from '../db/client';
 import { gerarHash, conferirSenha } from '../auth/senha';
 import { NOME_COOKIE_SESSAO, opcoesLimpar, opcoesSessao } from '../auth/cookies';
-import { exigeDono, contaObrigatoria } from '../auth/exigeDono';
+import { exigeDono, usuarioObrigatorio } from '../auth/exigeDono';
 import { criarSessao, revogarSessao } from '../auth/sessoes';
-import { credenciaisSchema } from '../validacao/credenciais';
+import { workspaceContaId, workspaceCodigoHash } from '../auth/workspace';
+import { credenciaisSchema, registrarSchema } from '../validacao/credenciais';
 
-// `contas` não tem RLS (ver migration 002): a lógica de auth media o acesso aqui,
-// então falamos direto com `sql`, fora do `comConta`.
-// Aperto por IP nas rotas que fazem argon2. Deixa pronto pro convite (Fase 6),
-// onde a chave do limiter será o token, não o IP (ver 2.5.4).
+// `contas`/`usuarios`/`sessoes` não têm RLS (ver migration 002): a auth media o
+// acesso aqui, então falamos direto com `sql`, fora do `comConta`.
+// Aperto por IP nas rotas que fazem argon2, que é memory-hard (ver 2.5.4).
 const limiteAuth = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
 
 export async function rotasAuth(app: FastifyInstance): Promise<void> {
+  // Cadastro: entra no workspace compartilhado como 'membro', exige código de convite.
   app.post('/api/auth/registrar', limiteAuth, async (req, reply) => {
-    const { email, senha } = credenciaisSchema.parse(req.body);
+    const { nome, email, senha, codigo } = registrarSchema.parse(req.body);
 
-    const existentes = await sql<{ id: string }[]>`select id from contas where email = ${email}`;
+    const codigoHash = await workspaceCodigoHash();
+    if (codigoHash === null) {
+      return reply.code(503).send({ erro: 'cadastro indisponível: código de convite não configurado' });
+    }
+    if (!(await conferirSenha(codigoHash, codigo))) {
+      return reply.code(403).send({ erro: 'código de convite inválido' });
+    }
+
+    const existentes = await sql<{ id: string }[]>`select id from usuarios where email = ${email}`;
     if (existentes.length > 0) {
       return reply.code(409).send({ erro: 'e-mail já cadastrado' });
     }
 
+    const contaId = await workspaceContaId();
     const senhaHash = await gerarHash(senha);
     const linhas = await sql<{ id: string }[]>`
-      insert into contas (email, senha_hash) values (${email}, ${senhaHash}) returning id`;
-    const conta = linhas[0];
-    if (conta === undefined) throw new Error('insert de conta não retornou linha');
+      insert into usuarios (conta_id, nome, email, senha_hash, papel)
+      values (${contaId}, ${nome}, ${email}, ${senhaHash}, 'membro') returning id`;
+    const usuario = linhas[0];
+    if (usuario === undefined) throw new Error('insert de usuario não retornou linha');
 
-    const sessaoId = await criarSessao(conta.id);
+    const sessaoId = await criarSessao(usuario.id, contaId);
     reply.setCookie(NOME_COOKIE_SESSAO, sessaoId, opcoesSessao());
-    return reply.code(201).send({ id: conta.id, email });
+    return reply.code(201).send({ id: usuario.id, nome, email, papel: 'membro' });
   });
 
   app.post('/api/auth/entrar', limiteAuth, async (req, reply) => {
     const { email, senha } = credenciaisSchema.parse(req.body);
 
-    const linhas = await sql<{ id: string; senha_hash: string }[]>`
-      select id, senha_hash from contas where email = ${email}`;
-    const conta = linhas[0];
+    const linhas = await sql<
+      { id: string; conta_id: string; nome: string; senha_hash: string; papel: string }[]
+    >`select id, conta_id, nome, senha_hash, papel from usuarios where email = ${email}`;
+    const usuario = linhas[0];
 
     // Mensagem única pra não revelar se o e-mail existe.
-    if (conta === undefined || !(await conferirSenha(conta.senha_hash, senha))) {
+    if (usuario === undefined || !(await conferirSenha(usuario.senha_hash, senha))) {
       return reply.code(401).send({ erro: 'credenciais inválidas' });
     }
 
-    const sessaoId = await criarSessao(conta.id);
+    const sessaoId = await criarSessao(usuario.id, usuario.conta_id);
     reply.setCookie(NOME_COOKIE_SESSAO, sessaoId, opcoesSessao());
-    return reply.send({ id: conta.id, email });
+    return reply.send({ id: usuario.id, nome: usuario.nome, email, papel: usuario.papel });
   });
 
   // Revoga a sessão no servidor, não só no cliente: o valor assinado deixa de ser
@@ -64,10 +76,7 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/auth/eu', { preHandler: exigeDono }, async (req, reply) => {
-    const contaId = contaObrigatoria(req);
-    const linhas = await sql<{ email: string }[]>`select email from contas where id = ${contaId}`;
-    const conta = linhas[0];
-    if (conta === undefined) return reply.code(401).send({ erro: 'sessão inválida' });
-    return reply.send({ id: contaId, email: conta.email });
+    const u = usuarioObrigatorio(req);
+    return reply.send({ id: u.id, nome: u.nome, email: u.email, papel: u.papel });
   });
 }

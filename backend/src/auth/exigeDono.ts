@@ -1,9 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { NOME_COOKIE_SESSAO } from './cookies';
-import { contaDaSessao, FORMATO_ID_SESSAO } from './sessoes';
+import { usuarioDaSessao, FORMATO_ID_SESSAO } from './sessoes';
 
-// preHandler do CAMINHO DONO. Único que habilita mexer em ESTRUTURA.
-// Não compartilha código com o caminho de convite (ver seção 6.1) — de propósito.
+// preHandler de autenticação: valida a sessão e resolve o usuário logado. Todos os
+// usuarios do workspace compartilham a mesma conta (contaId), então a RLS por conta
+// continua funcionando; a distinção de quem é quem vem de req.usuario.
 export async function exigeDono(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const assinado = req.cookies[NOME_COOKIE_SESSAO];
   if (assinado === undefined) {
@@ -18,13 +19,14 @@ export async function exigeDono(req: FastifyRequest, reply: FastifyReply): Promi
   }
 
   // A sessão precisa existir, não estar revogada e não ter expirado.
-  const contaId = await contaDaSessao(conferido.value);
-  if (contaId === null) {
+  const u = await usuarioDaSessao(conferido.value);
+  if (u === null) {
     await reply.code(401).send({ erro: 'sessão inválida' });
     return;
   }
 
-  req.contaId = contaId;
+  req.contaId = u.contaId;
+  req.usuario = { id: u.usuarioId, nome: u.nome, email: u.email, papel: u.papel };
 }
 
 // Lê a conta já validada pelo preHandler. Evita `!` non-null nos handlers.
@@ -34,4 +36,18 @@ export function contaObrigatoria(req: FastifyRequest): string {
     throw new Error('contaObrigatoria chamada sem exigeDono no preHandler');
   }
   return id;
+}
+
+// Lê o usuário logado já resolvido pelo preHandler.
+export function usuarioObrigatorio(req: FastifyRequest): {
+  id: string;
+  nome: string;
+  email: string;
+  papel: 'dono' | 'membro';
+} {
+  const u = req.usuario;
+  if (u === undefined) {
+    throw new Error('usuarioObrigatorio chamado sem exigeDono no preHandler');
+  }
+  return u;
 }
