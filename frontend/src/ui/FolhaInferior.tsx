@@ -8,12 +8,13 @@ import './ui.css';
 
 interface Props {
   titulo: string;
+  subtitulo?: ReactNode;
   onFechar: () => void;
   children: ReactNode;
   acaoTopo?: ReactNode;
 }
 
-export function FolhaInferior({ titulo, onFechar, children, acaoTopo }: Props): JSX.Element {
+export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo }: Props): JSX.Element {
   const folhaRef = useRef<HTMLDivElement>(null);
   // onFechar é recriado a cada render do pai (Ficha). Guardamos numa ref para o
   // efeito de montagem NÃO depender dele — senão ele re-executava a cada tecla,
@@ -54,7 +55,10 @@ export function FolhaInferior({ titulo, onFechar, children, acaoTopo }: Props): 
         ref={folhaRef}
       >
         <div className="folha__topo">
-          <h2 className="folha__titulo">{titulo}</h2>
+          <div className="folha__tituloArea">
+            <h2 className="folha__titulo">{titulo}</h2>
+            {subtitulo !== undefined && <p className="folha__subtitulo">{subtitulo}</p>}
+          </div>
           {acaoTopo}
           <button type="button" className="btn btn--icone" aria-label="Fechar" onClick={onFechar}>
             <X size={20} />

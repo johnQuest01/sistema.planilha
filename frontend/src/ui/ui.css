@@ -172,10 +172,22 @@ textarea.campo__controle {
   padding: var(--e3) var(--e4);
   border-bottom: 1px solid var(--linha);
 }
-.folha__titulo {
+.folha__tituloArea {
   flex: 1;
+  min-width: 0;
+}
+.folha__titulo {
   font-size: 16px;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folha__subtitulo {
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--tinta-3);
 }
 .folha__corpo {
   padding: var(--e4);

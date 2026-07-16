@@ -93,7 +93,11 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
   const registroLocal: Registro = { ...registro, valores };
 
   return (
-    <FolhaInferior titulo={tituloDoRegistro(colecao.campos, registroLocal)} onFechar={fechar}>
+    <FolhaInferior
+      titulo={tituloDoRegistro(colecao.campos, registroLocal)}
+      subtitulo={`Preenchido em ${fmtPreenchido.format(new Date(registro.atualizadoEm))}`}
+      onFechar={fechar}
+    >
       <div className="ficha">
         {colecao.campos.map((campo) => (
           <div key={campo.id} className="ficha__bloco">
@@ -157,10 +161,6 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
             </Botao>
           )}
         </div>
-
-        <p className="ficha__preenchido">
-          Preenchido em {fmtPreenchido.format(new Date(registro.atualizadoEm))}
-        </p>
       </div>
     </FolhaInferior>
   );
