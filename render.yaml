@@ -8,7 +8,9 @@ services:
     plan: free # cold start no free tier: 1º acesso do dia é lento (ver 7.4). Não resolva com ping.
     rootDir: . # raiz do repo — é workspace npm
     buildCommand: npm ci && npm run build -w backend
-    startCommand: node dist/backend/src/server.js
+    # roda com cwd=backend (workspace), onde `dist/backend/src/server.js` existe.
+    # `node dist/backend/src/server.js` direto da raiz do repo NÃO acha o arquivo.
+    startCommand: npm run start -w backend
     healthCheckPath: /health
     autoDeploy: true
     envVars:

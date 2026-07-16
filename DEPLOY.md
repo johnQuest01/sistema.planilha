@@ -75,7 +75,7 @@ Use `render.yaml` (Blueprint) ou configure à mão:
 | Runtime | Node 20 |
 | Root directory | raiz do repo (workspace npm) |
 | Build | `npm ci && npm run build -w backend` |
-| Start | `node dist/backend/src/server.js` |
+| Start | `npm run start -w backend` (cwd=backend; `node dist/...` da raiz não acha o arquivo) |
 | Health check | `/health` |
 
 Segredos no painel: `DATABASE_URL` (pooled), `DATABASE_URL_DIRECT` (direct),
