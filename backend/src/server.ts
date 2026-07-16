@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import type { FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import cookie from '@fastify/cookie';
@@ -19,11 +20,12 @@ export function buildServer() {
   app.register(cors, { origin: config.corsOrigin, credentials: true });
   app.register(cookie, { secret: config.cookieSecret });
 
-  app.setErrorHandler((err, req, reply) => {
+  app.setErrorHandler((err: FastifyError | ZodError | Error, req, reply) => {
     if (err instanceof ZodError) {
       return reply.code(400).send({ erro: 'validação', detalhes: err.issues });
     }
-    const codigo = typeof err.statusCode === 'number' && err.statusCode >= 400 ? err.statusCode : 500;
+    const statusCode = 'statusCode' in err && typeof err.statusCode === 'number' ? err.statusCode : undefined;
+    const codigo = statusCode !== undefined && statusCode >= 400 ? statusCode : 500;
     if (codigo >= 500) req.log.error(err);
     return reply.code(codigo).send({ erro: codigo >= 500 ? 'erro interno' : err.message });
   });

@@ -3,10 +3,22 @@ export const TIPOS_CAMPO = [
 ] as const;
 export type TipoCampo = typeof TIPOS_CAMPO[number];
 
+// Valor JSON puro. A index signature de ConfigCampo precisa ser estruturalmente
+// serializável pro driver (postgres.js) aceitar `sql.json(config)` sem cast; `unknown`
+// não satisfaz o JSONValue dele. O .strict() do Zod barra chave desconhecida na entrada.
+export type ValorJson =
+  | null
+  | string
+  | number
+  | boolean
+  | ValorJson[]
+  | { [k: string]: ValorJson | undefined };
+
 export interface ConfigCampo {
   opcoes?: string[];      // selecao
   sufixo?: string;        // numero — "kg", "R$", "g/m²"
   obrigatorio?: boolean;
+  [k: string]: ValorJson | undefined;
 }
 
 export interface Campo {
