@@ -131,9 +131,23 @@ export async function duplicarColecao(
   const origem = await obterColecao(tx, origemId);
   if (origem === null) return null;
 
+  // Nome automático da cópia: "Modelagem <data> <hora>" no fuso do Brasil, definido no
+  // momento em que a planilha é copiada (data/hora preenchidas automaticamente).
+  const dataHora = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date())
+    .replace(',', '');
+  const nomeCopia = `Modelagem ${dataHora}`;
+
   const novas = await tx<LinhaColecao[]>`
     insert into colecoes (conta_id, nome, criado_por)
-    values (${contaId}, ${`${origem.nome} (cópia)`}, ${criadoPor})
+    values (${contaId}, ${nomeCopia}, ${criadoPor})
     returning id, nome, criado_por, criado_em, atualizado_em`;
   const nova = novas[0];
   if (nova === undefined) throw new Error('insert de coleção duplicada não retornou linha');
