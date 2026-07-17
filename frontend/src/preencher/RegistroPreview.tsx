@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { api } from '../api/cliente';
+import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { Visor } from '../imagens/Visor';
 import { urlCheia } from '../imagens/urls';
@@ -137,6 +137,8 @@ export function RegistroPreview({
   const [local, setLocal] = useState(registro);
   const [editando, setEditando] = useState(false);
   const [rascunho, setRascunho] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erroNome, setErroNome] = useState<string | null>(null);
   const [visor, setVisor] = useState<{ keys: string[]; indice: number } | null>(null);
 
   useEffect(() => {
@@ -147,20 +149,33 @@ export function RegistroPreview({
     if (campoTitulo === undefined || aoAtualizar === undefined) return;
     setEditando(true);
     setRascunho(textoDe(local.valores[campoTitulo.id]));
+    setErroNome(null);
+  }
+
+  function cancelarEdicao(): void {
+    setEditando(false);
+    setErroNome(null);
   }
 
   async function salvarNome(): Promise<void> {
-    if (campoTitulo === undefined || aoAtualizar === undefined || !editando) return;
-    setEditando(false);
+    if (campoTitulo === undefined || aoAtualizar === undefined || !editando || salvando) return;
     const atual = textoDe(local.valores[campoTitulo.id]);
     const novo = rascunho.trim();
-    if (novo === atual.trim()) return;
+    if (novo === atual.trim()) {
+      setEditando(false);
+      return;
+    }
+    setSalvando(true);
+    setErroNome(null);
     try {
       const atualizado = await api.editarRegistro(local.id, { [campoTitulo.id]: novo });
       setLocal(atualizado);
       aoAtualizar(atualizado);
-    } catch {
-      /* silencioso */
+      setEditando(false);
+    } catch (e) {
+      setErroNome(e instanceof ErroApi ? e.message : 'não foi possível salvar o nome');
+    } finally {
+      setSalvando(false);
     }
   }
 
@@ -171,7 +186,7 @@ export function RegistroPreview({
     }
     if (e.key === 'Escape') {
       e.preventDefault();
-      setEditando(false);
+      cancelarEdicao();
     }
   }
 
@@ -182,15 +197,38 @@ export function RegistroPreview({
       <div className="preview-registro__cabecalho">
         <div className="preview-registro__cabecalho-linha">
           {editando ? (
-            <input
-              className="campo__controle preview-registro__nome-input"
-              value={rascunho}
-              autoFocus
-              aria-label="Nome do registro"
-              onChange={(e) => setRascunho(e.target.value)}
-              onBlur={() => void salvarNome()}
-              onKeyDown={aoTeclar}
-            />
+            <div className="preview-registro__renomear-box">
+              <input
+                className="campo__controle preview-registro__nome-input"
+                value={rascunho}
+                autoFocus
+                aria-label="Nome do registro"
+                disabled={salvando}
+                onChange={(e) => setRascunho(e.target.value)}
+                onKeyDown={aoTeclar}
+              />
+              <div className="preview-registro__renomear-acoes">
+                <button
+                  type="button"
+                  className="lista-item__salvar"
+                  disabled={salvando}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => void salvarNome()}
+                >
+                  {salvando ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button
+                  type="button"
+                  className="lista-item__cancelar"
+                  disabled={salvando}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={cancelarEdicao}
+                >
+                  Cancelar
+                </button>
+              </div>
+              {erroNome !== null && <p className="aviso-erro">{erroNome}</p>}
+            </div>
           ) : (
             <h3 className="preview-registro__titulo">{tituloAtual}</h3>
           )}
@@ -204,7 +242,7 @@ export function RegistroPreview({
             </button>
           )}
         </div>
-        {aoAbrir !== undefined && (
+        {aoAbrir !== undefined && !editando && (
           <button type="button" className="preview-registro__acao" onClick={aoAbrir}>
             Editar
           </button>
