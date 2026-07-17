@@ -155,7 +155,7 @@
 }
 .ficha__rotulo {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   /* Título de cada bloco destacado: escuro e em negrito para achar rápido o que preencher. */
