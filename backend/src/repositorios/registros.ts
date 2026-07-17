@@ -30,7 +30,7 @@ interface LinhaCampo {
 }
 
 const LIMITE = 50; // por página (ver seção 5)
-const LIMITE_BUSCA = 20;
+const LIMITE_BUSCA = 50;
 
 function mapRegistro(r: LinhaRegistro): Registro {
   return {
@@ -114,8 +114,8 @@ export async function listarRegistros(
   return linhas.map(mapRegistro);
 }
 
-// Busca parcial em QUALQUER dado do registro: texto, número, células de seção,
-// quem criou… (valores jsonb viram texto; "4647" acha número e string).
+// Busca parcial em QUALQUER dado do registro: texto, número, células de seção
+// (aviamentos etc.), quem criou… Vários termos = AND (ex.: "botão 4647").
 export async function buscarRegistros(
   tx: Tx,
   colecaoId: string,
@@ -123,24 +123,34 @@ export async function buscarRegistros(
 ): Promise<Registro[] | null> {
   if (!(await colecaoExiste(tx, colecaoId))) return null;
 
-  const termoLimpo = termo.trim();
-  if (termoLimpo === '') return [];
+  const termos = termo
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 0)
+    .slice(0, 8);
+  const primeiro = termos[0];
+  if (primeiro === undefined) return [];
 
-  // position + lower: busca literal (sem curingas do ILIKE) em todo o jsonb
-  // e no nome de quem criou — acha "4647" em número, texto ou célula de seção.
-  const termoLower = termoLimpo.toLowerCase();
+  // 1º termo no SQL (valores jsonb + criado_por); demais filtrados em memória (AND).
   const linhas = await tx<LinhaRegistro[]>`
     select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
     from registros
     where colecao_id = ${colecaoId}
       and (
-        position(${termoLower} in lower(valores::text)) > 0
-        or position(${termoLower} in lower(coalesce(criado_por, ''))) > 0
+        position(${primeiro} in lower(valores::text)) > 0
+        or position(${primeiro} in lower(coalesce(criado_por, ''))) > 0
       )
     order by criado_em desc
     limit ${LIMITE_BUSCA}`;
 
-  return linhas.map(mapRegistro);
+  const registros = linhas.map(mapRegistro);
+  if (termos.length === 1) return registros;
+
+  return registros.filter((r) => {
+    const hay = `${JSON.stringify(r.valores).toLowerCase()} ${(r.criadoPor ?? '').toLowerCase()}`;
+    return termos.every((t) => hay.includes(t));
+  });
 }
 
 export async function criarRegistro(

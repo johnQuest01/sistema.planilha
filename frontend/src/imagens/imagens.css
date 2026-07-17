@@ -1,4 +1,4 @@
-/* ---- Grade de miniaturas (ficha) ---- */
+/* ---- Grade de miniaturas (ficha / preencher) ---- */
 .grade-fotos {
   display: flex;
   flex-wrap: wrap;
@@ -6,16 +6,26 @@
 }
 .grade-foto {
   position: relative;
-  width: 88px;
-  height: 88px;
+  width: 140px;
+  height: 140px;
   border-radius: var(--raio);
   overflow: hidden;
   border: 1px solid var(--linha);
   background: rgba(23, 32, 28, 0.06);
 }
 .grade-foto--unica {
-  width: 120px;
-  height: 120px;
+  width: 180px;
+  height: 180px;
+}
+@media (min-width: 769px) {
+  .grade-foto {
+    width: 160px;
+    height: 160px;
+  }
+  .grade-foto--unica {
+    width: 220px;
+    height: 220px;
+  }
 }
 .grade-foto__img {
   width: 100%;
@@ -59,8 +69,8 @@
   opacity: 0.3;
 }
 .grade-add {
-  width: 88px;
-  height: 88px;
+  width: 140px;
+  height: 140px;
   display: grid;
   place-items: center;
   gap: 2px;
@@ -68,11 +78,21 @@
   border-radius: var(--raio);
   background: var(--papel);
   color: var(--tinta-3);
-  font-size: 11px;
+  font-size: 12px;
 }
 .grade-add--unica {
-  width: 120px;
-  height: 120px;
+  width: 180px;
+  height: 180px;
+}
+@media (min-width: 769px) {
+  .grade-add {
+    width: 160px;
+    height: 160px;
+  }
+  .grade-add--unica {
+    width: 220px;
+    height: 220px;
+  }
 }
 .grade-foto__enviando {
   position: absolute;

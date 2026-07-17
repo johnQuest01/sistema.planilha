@@ -59,7 +59,7 @@ export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar }: Props): JSX.E
         <input
           type="search"
           className="busca-ref__input"
-          placeholder="Buscar por referência, nome, número…"
+          placeholder="Buscar em qualquer campo (ref., aviamentos, número…)"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           aria-label="Buscar registro"

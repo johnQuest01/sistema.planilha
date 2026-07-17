@@ -93,6 +93,7 @@ function ValorCampo({
             <span className="preview-secao__num">#{i + 1}</span>
             <div className="preview-secao__celulas">
               {subs.map((s) => {
+                // Sempre lista TODOS os subcampos (aviamentos, etc.) — vazio vira "—".
                 if (s.tipo === 'imagem') {
                   const keys = keysDe(linha[s.id]);
                   return (
@@ -103,11 +104,12 @@ function ValorCampo({
                   );
                 }
                 const txt = formatarSubTexto(s, linha[s.id]);
-                if (txt === '') return null;
                 return (
                   <div key={s.id} className="preview-secao__celula">
                     <span className="preview-secao__subnome">{s.nome}</span>
-                    <span className="preview-valor">{txt}</span>
+                    <span className={`preview-valor${txt === '' ? ' preview-valor--vazio' : ''}`}>
+                      {txt === '' ? '—' : txt}
+                    </span>
                   </div>
                 );
               })}
