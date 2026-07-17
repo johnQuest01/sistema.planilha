@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
-import { urlMini } from '../imagens/urls';
+import { Visor } from '../imagens/Visor';
+import { urlCheia } from '../imagens/urls';
 import {
   campoTituloDoRegistro,
   formatarValor,
@@ -19,11 +20,39 @@ interface Props {
   aoAtualizar?: (r: Registro) => void;
 }
 
-function formatarSub(sub: SubCampo, valor: unknown): string {
-  if (sub.tipo === 'imagem') {
-    const n = Array.isArray(valor) ? valor.length : 0;
-    return n === 0 ? '' : `${n} ${n === 1 ? 'foto' : 'fotos'}`;
+function keysDe(valor: unknown): string[] {
+  return Array.isArray(valor) ? valor.filter((k): k is string => typeof k === 'string') : [];
+}
+
+function GradeFotos({
+  keys,
+  aoAbrirVisor,
+}: {
+  keys: string[];
+  aoAbrirVisor: (indice: number) => void;
+}): JSX.Element {
+  if (keys.length === 0) {
+    return <span className="preview-valor preview-valor--vazio">—</span>;
   }
+  return (
+    <div className="preview-imagens">
+      {keys.map((k, i) => (
+        <button
+          key={k}
+          type="button"
+          className="preview-imagens__botao"
+          onClick={() => aoAbrirVisor(i)}
+          aria-label={`Ver foto ${i + 1} de ${keys.length}`}
+        >
+          <img className="preview-imagens__foto" src={urlCheia(k)} alt="" loading="lazy" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function formatarSubTexto(sub: SubCampo, valor: unknown): string {
+  if (sub.tipo === 'imagem') return '';
   const fake: Campo = {
     id: sub.id,
     colecaoId: '',
@@ -35,21 +64,20 @@ function formatarSub(sub: SubCampo, valor: unknown): string {
   return formatarValor(fake, valor).trim();
 }
 
-function ValorCampo({ campo, registro }: { campo: Campo; registro: Registro }): JSX.Element {
+function ValorCampo({
+  campo,
+  registro,
+  aoAbrirVisor,
+}: {
+  campo: Campo;
+  registro: Registro;
+  aoAbrirVisor: (keys: string[], indice: number) => void;
+}): JSX.Element {
   const valor = registro.valores[campo.id];
 
   if (campo.tipo === 'imagem') {
     const keys = keysDoCampo(registro, campo.id);
-    if (keys.length === 0) {
-      return <span className="preview-valor preview-valor--vazio">—</span>;
-    }
-    return (
-      <div className="preview-imagens">
-        {keys.map((k) => (
-          <img key={k} className="capa" src={urlMini(k)} alt="" loading="lazy" width={56} height={56} />
-        ))}
-      </div>
-    );
+    return <GradeFotos keys={keys} aoAbrirVisor={(i) => aoAbrirVisor(keys, i)} />;
   }
 
   if (campo.tipo === 'secao') {
@@ -62,10 +90,19 @@ function ValorCampo({ campo, registro }: { campo: Campo; registro: Registro }): 
       <div className="preview-secao">
         {linhas.map((linha, i) => (
           <div key={i} className="preview-secao__linha">
-            <span className="preview-secao__num">{i + 1}</span>
+            <span className="preview-secao__num">#{i + 1}</span>
             <div className="preview-secao__celulas">
               {subs.map((s) => {
-                const txt = formatarSub(s, linha[s.id]);
+                if (s.tipo === 'imagem') {
+                  const keys = keysDe(linha[s.id]);
+                  return (
+                    <div key={s.id} className="preview-secao__celula preview-secao__celula--foto">
+                      <span className="preview-secao__subnome">{s.nome}</span>
+                      <GradeFotos keys={keys} aoAbrirVisor={(idx) => aoAbrirVisor(keys, idx)} />
+                    </div>
+                  );
+                }
+                const txt = formatarSubTexto(s, linha[s.id]);
                 if (txt === '') return null;
                 return (
                   <div key={s.id} className="preview-secao__celula">
@@ -98,6 +135,7 @@ export function RegistroPreview({
   const [local, setLocal] = useState(registro);
   const [editando, setEditando] = useState(false);
   const [rascunho, setRascunho] = useState('');
+  const [visor, setVisor] = useState<{ keys: string[]; indice: number } | null>(null);
 
   useEffect(() => {
     setLocal(registro);
@@ -137,35 +175,40 @@ export function RegistroPreview({
 
   const tituloAtual = tituloDoRegistro(colecao.campos, local);
 
-  const cabecalho = (
-    <div className="preview-registro__cabecalho-linha">
-      {editando ? (
-        <input
-          className="campo__controle preview-registro__nome-input"
-          value={rascunho}
-          autoFocus
-          aria-label="Nome do registro"
-          onChange={(e) => setRascunho(e.target.value)}
-          onBlur={() => void salvarNome()}
-          onKeyDown={aoTeclar}
-        />
-      ) : (
-        <h3 className="preview-registro__titulo">{tituloAtual}</h3>
-      )}
-      {campoTitulo !== undefined && aoAtualizar !== undefined && !editando && (
-        <button
-          type="button"
-          className="preview-registro__renomear"
-          onClick={iniciarEdicao}
-        >
-          Renomear
-        </button>
-      )}
-    </div>
-  );
+  return (
+    <article className="preview-registro preview-registro--completo">
+      <div className="preview-registro__cabecalho">
+        <div className="preview-registro__cabecalho-linha">
+          {editando ? (
+            <input
+              className="campo__controle preview-registro__nome-input"
+              value={rascunho}
+              autoFocus
+              aria-label="Nome do registro"
+              onChange={(e) => setRascunho(e.target.value)}
+              onBlur={() => void salvarNome()}
+              onKeyDown={aoTeclar}
+            />
+          ) : (
+            <h3 className="preview-registro__titulo">{tituloAtual}</h3>
+          )}
+          {campoTitulo !== undefined && aoAtualizar !== undefined && !editando && (
+            <button
+              type="button"
+              className="preview-registro__renomear"
+              onClick={iniciarEdicao}
+            >
+              Renomear
+            </button>
+          )}
+        </div>
+        {aoAbrir !== undefined && (
+          <button type="button" className="preview-registro__acao" onClick={aoAbrir}>
+            Editar
+          </button>
+        )}
+      </div>
 
-  const conteudo = (
-    <>
       <div className="preview-campos">
         {colecao.campos.map((campo) => (
           <div key={campo.id} className="preview-campo">
@@ -173,34 +216,26 @@ export function RegistroPreview({
               <span className="preview-campo__titulo-bloco">{campo.config.titulo}</span>
             )}
             <span className="preview-campo__nome">{campo.nome}</span>
-            <ValorCampo campo={campo} registro={local} />
+            <ValorCampo
+              campo={campo}
+              registro={local}
+              aoAbrirVisor={(keys, indice) => setVisor({ keys, indice })}
+            />
           </div>
         ))}
       </div>
+
       {local.criadoPor !== null && local.criadoPor !== '' && (
         <p className="preview-meta">Preenchido por {local.criadoPor}</p>
       )}
-    </>
-  );
 
-  if (aoAbrir === undefined) {
-    return (
-      <article className="preview-registro">
-        {cabecalho}
-        {conteudo}
-      </article>
-    );
-  }
-
-  return (
-    <article className="preview-registro">
-      <div className="preview-registro__cabecalho">
-        {cabecalho}
-        <button type="button" className="preview-registro__acao" onClick={aoAbrir}>
-          Abrir registro
-        </button>
-      </div>
-      {conteudo}
+      {visor !== null && (
+        <Visor
+          keys={visor.keys}
+          indiceInicial={visor.indice}
+          aoFechar={() => setVisor(null)}
+        />
+      )}
     </article>
   );
 }
