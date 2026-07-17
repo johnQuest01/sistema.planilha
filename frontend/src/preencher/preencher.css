@@ -359,8 +359,16 @@
 }
 .preview-imagens {
   display: grid;
+  /* Celular: quadros generosos (já pequenos o bastante na tela estreita). */
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--e2);
+}
+@media (min-width: 769px) {
+  /* Computador: grade densa — evita foto enorme ocupando a largura toda. */
+  .preview-imagens {
+    grid-template-columns: repeat(auto-fill, 120px);
+    gap: var(--e2);
+  }
 }
 .preview-imagens__botao {
   display: block;
@@ -371,6 +379,7 @@
   overflow: hidden;
   cursor: zoom-in;
   aspect-ratio: 1;
+  width: 100%;
 }
 .preview-imagens__botao:hover {
   border-color: var(--fita);
