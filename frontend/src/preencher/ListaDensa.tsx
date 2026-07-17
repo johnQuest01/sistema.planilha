@@ -18,7 +18,7 @@ interface Props {
 
 export function ListaDensa({ colecao, registros, solto, aoAbrir }: Props): JSX.Element {
   const comImagem = temCampoImagem(colecao.campos);
-  const lado = solto ? 52 : 42;
+  const lado = solto ? 72 : 56;
   return (
     <div className={`lista${solto ? ' lista--solto' : ''}`}>
       {registros.map((r) => {
@@ -37,7 +37,7 @@ export function ListaDensa({ colecao, registros, solto, aoAbrir }: Props): JSX.E
                 />
               ) : (
                 <span className="capa capa--vazia" style={{ width: lado, height: lado }}>
-                  <ImageOff size={16} />
+                  <ImageOff size={20} />
                 </span>
               ))}
             <span className="lista-item__corpo">

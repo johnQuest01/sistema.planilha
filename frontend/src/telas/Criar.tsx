@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import { IconeTipo, ROTULO_TIPO } from '../ui/IconeTipo';
 import { Botao } from '../ui/Botao';
@@ -181,6 +181,28 @@ export function Criar({
     }
   }
 
+  // Duplica o bloco com o mesmo tipo e config (inclui imagem: copia maxFotos; e seção:
+  // copia os subcampos). Vai pro fim da lista; o dono reordena com as setas se quiser.
+  // Mesmo padrão otimista do adicionar: aparece na hora, o POST corre atrás.
+  async function duplicar(campo: Campo): Promise<void> {
+    setErroGlobal(null);
+    const nomeCopia = `${campo.nome} (cópia)`.slice(0, 60);
+    const dados = { nome: nomeCopia, tipo: campo.tipo, config: campo.config };
+    const tmpId = `tmp_${crypto.randomUUID()}`;
+    const ordemBase = campos.length === 0 ? 0 : Math.max(...campos.map((c) => c.ordem)) + 100;
+    const tmp: Campo = { ...campo, id: tmpId, nome: nomeCopia, ordem: ordemBase };
+    aoMudarCampos((cs) => [...cs, tmp]);
+    void (async () => {
+      try {
+        const criado = await api.criarCampo(colecao.id, dados);
+        aoMudarCampos((cs) => cs.map((c) => (c.id === tmpId ? criado : c)));
+      } catch (e) {
+        aoMudarCampos((cs) => cs.filter((c) => c.id !== tmpId));
+        setErroGlobal(e instanceof ErroApi ? e.message : 'não foi possível duplicar o bloco');
+      }
+    })();
+  }
+
   return (
     <div className="criar">
       <section className="painel">
@@ -256,6 +278,14 @@ export function Criar({
                   <div className="etiqueta bloco__sub">{subtitulo(campo)}</div>
                 </div>
                 <div className="bloco__acoes">
+                  <button
+                    type="button"
+                    className="btn btn--icone"
+                    aria-label={`Duplicar ${campo.nome}`}
+                    onClick={() => void duplicar(campo)}
+                  >
+                    <Copy size={16} />
+                  </button>
                   <button
                     type="button"
                     className="btn btn--icone"

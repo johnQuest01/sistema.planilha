@@ -69,14 +69,14 @@ export function Tabela({ colecao, registros, aoAtualizar, aoAbrirFicha }: Props)
                       {capa !== null ? (
                         <img
                           className="capa"
-                          style={{ width: 52, height: 52 }}
+                          style={{ width: 72, height: 72 }}
                           src={urlMini(capa)}
                           alt=""
                           loading="lazy"
                         />
                       ) : (
-                        <span className="capa capa--vazia" style={{ width: 52, height: 52 }}>
-                          <ImageOff size={18} />
+                        <span className="capa capa--vazia" style={{ width: 72, height: 72 }}>
+                          <ImageOff size={22} />
                         </span>
                       )}
                     </button>
