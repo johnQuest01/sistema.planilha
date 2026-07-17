@@ -131,7 +131,7 @@ export async function duplicarColecao(
   const origem = await obterColecao(tx, origemId);
   if (origem === null) return null;
 
-  // Nome automático da cópia: "Modelagem <data> <hora>" no fuso do Brasil, definido no
+  // Nome automático da cópia: "Corte <data> <hora>" no fuso do Brasil, definido no
   // momento em que a planilha é copiada (data/hora preenchidas automaticamente).
   const dataHora = new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo',
@@ -143,7 +143,7 @@ export async function duplicarColecao(
   })
     .format(new Date())
     .replace(',', '');
-  const nomeCopia = `Modelagem ${dataHora}`;
+  const nomeCopia = `Corte ${dataHora}`;
 
   const novas = await tx<LinhaColecao[]>`
     insert into colecoes (conta_id, nome, criado_por)
