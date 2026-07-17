@@ -1,12 +1,22 @@
+import { useEffect, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { api } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { urlMini } from '../imagens/urls';
-import { formatarValor, keysDoCampo, tituloDoRegistro } from './derivarResumo';
+import {
+  campoTituloDoRegistro,
+  formatarValor,
+  keysDoCampo,
+  textoDe,
+  tituloDoRegistro,
+} from './derivarResumo';
 import { linhasDe } from './SecaoEditor';
 
 interface Props {
   colecao: Colecao;
   registro: Registro;
   aoAbrir?: () => void;
+  aoAtualizar?: (r: Registro) => void;
 }
 
 function formatarSub(sub: SubCampo, valor: unknown): string {
@@ -78,8 +88,82 @@ function ValorCampo({ campo, registro }: { campo: Campo; registro: Registro }): 
   return <span className="preview-valor">{txt}</span>;
 }
 
-export function RegistroPreview({ colecao, registro, aoAbrir }: Props): JSX.Element {
-  const titulo = tituloDoRegistro(colecao.campos, registro);
+export function RegistroPreview({
+  colecao,
+  registro,
+  aoAbrir,
+  aoAtualizar,
+}: Props): JSX.Element {
+  const campoTitulo = campoTituloDoRegistro(colecao.campos);
+  const [local, setLocal] = useState(registro);
+  const [editando, setEditando] = useState(false);
+  const [rascunho, setRascunho] = useState('');
+
+  useEffect(() => {
+    setLocal(registro);
+  }, [registro]);
+
+  function iniciarEdicao(): void {
+    if (campoTitulo === undefined || aoAtualizar === undefined) return;
+    setEditando(true);
+    setRascunho(textoDe(local.valores[campoTitulo.id]));
+  }
+
+  async function salvarNome(): Promise<void> {
+    if (campoTitulo === undefined || aoAtualizar === undefined || !editando) return;
+    setEditando(false);
+    const atual = textoDe(local.valores[campoTitulo.id]);
+    const novo = rascunho.trim();
+    if (novo === atual.trim()) return;
+    try {
+      const atualizado = await api.editarRegistro(local.id, { [campoTitulo.id]: novo });
+      setLocal(atualizado);
+      aoAtualizar(atualizado);
+    } catch {
+      /* silencioso */
+    }
+  }
+
+  function aoTeclar(e: ReactKeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void salvarNome();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditando(false);
+    }
+  }
+
+  const tituloAtual = tituloDoRegistro(colecao.campos, local);
+
+  const cabecalho = (
+    <div className="preview-registro__cabecalho-linha">
+      {editando ? (
+        <input
+          className="campo__controle preview-registro__nome-input"
+          value={rascunho}
+          autoFocus
+          aria-label="Nome do registro"
+          onChange={(e) => setRascunho(e.target.value)}
+          onBlur={() => void salvarNome()}
+          onKeyDown={aoTeclar}
+        />
+      ) : (
+        <h3 className="preview-registro__titulo">{tituloAtual}</h3>
+      )}
+      {campoTitulo !== undefined && aoAtualizar !== undefined && !editando && (
+        <button
+          type="button"
+          className="preview-registro__renomear"
+          onClick={iniciarEdicao}
+        >
+          Renomear
+        </button>
+      )}
+    </div>
+  );
+
   const conteudo = (
     <>
       <div className="preview-campos">
@@ -89,12 +173,12 @@ export function RegistroPreview({ colecao, registro, aoAbrir }: Props): JSX.Elem
               <span className="preview-campo__titulo-bloco">{campo.config.titulo}</span>
             )}
             <span className="preview-campo__nome">{campo.nome}</span>
-            <ValorCampo campo={campo} registro={registro} />
+            <ValorCampo campo={campo} registro={local} />
           </div>
         ))}
       </div>
-      {registro.criadoPor !== null && registro.criadoPor !== '' && (
-        <p className="preview-meta">Preenchido por {registro.criadoPor}</p>
+      {local.criadoPor !== null && local.criadoPor !== '' && (
+        <p className="preview-meta">Preenchido por {local.criadoPor}</p>
       )}
     </>
   );
@@ -102,7 +186,7 @@ export function RegistroPreview({ colecao, registro, aoAbrir }: Props): JSX.Elem
   if (aoAbrir === undefined) {
     return (
       <article className="preview-registro">
-        <h3 className="preview-registro__titulo">{titulo}</h3>
+        {cabecalho}
         {conteudo}
       </article>
     );
@@ -110,10 +194,12 @@ export function RegistroPreview({ colecao, registro, aoAbrir }: Props): JSX.Elem
 
   return (
     <article className="preview-registro">
-      <button type="button" className="preview-registro__cabecalho" onClick={aoAbrir}>
-        <h3 className="preview-registro__titulo">{titulo}</h3>
-        <span className="preview-registro__acao">Abrir registro</span>
-      </button>
+      <div className="preview-registro__cabecalho">
+        {cabecalho}
+        <button type="button" className="preview-registro__acao" onClick={aoAbrir}>
+          Abrir registro
+        </button>
+      </div>
       {conteudo}
     </article>
   );

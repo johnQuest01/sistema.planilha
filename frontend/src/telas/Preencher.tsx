@@ -159,7 +159,11 @@ export function Preencher({
 
       {erro !== null && <p className="aviso-erro">{erro}</p>}
 
-      <BuscaReferencia colecao={colecao} aoAbrir={setAberta} />
+      <BuscaReferencia
+        colecao={colecao}
+        aoAbrir={setAberta}
+        aoAtualizar={aoAtualizar}
+      />
 
       {adicionandoCampo && (
         <div className="add-campo-inline">
@@ -177,7 +181,13 @@ export function Preencher({
       {registros.length === 0 ? (
         <div className="preencher-vazio">Nenhum registro ainda. Toque em “Novo registro”.</div>
       ) : ehMobile ? (
-        <ListaDensa colecao={colecao} registros={registros} solto={solto} aoAbrir={setAberta} />
+        <ListaDensa
+          colecao={colecao}
+          registros={registros}
+          solto={solto}
+          aoAbrir={setAberta}
+          aoAtualizar={aoAtualizar}
+        />
       ) : (
         <Tabela
           colecao={colecao}

@@ -2,7 +2,6 @@ import { Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, ErroApi } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
-import { campoReferencia } from './derivarResumo';
 import { RegistroPreview } from './RegistroPreview';
 
 const DEBOUNCE_MS = 300;
@@ -10,10 +9,10 @@ const DEBOUNCE_MS = 300;
 interface Props {
   colecao: Colecao;
   aoAbrir: (r: Registro) => void;
+  aoAtualizar?: (r: Registro) => void;
 }
 
-export function BuscaReferencia({ colecao, aoAbrir }: Props): JSX.Element {
-  const ref = campoReferencia(colecao.campos);
+export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar }: Props): JSX.Element {
   const [q, setQ] = useState('');
   const [resultados, setResultados] = useState<Registro[] | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -21,7 +20,7 @@ export function BuscaReferencia({ colecao, aoAbrir }: Props): JSX.Element {
 
   useEffect(() => {
     const termo = q.trim();
-    if (termo === '' || ref === undefined) {
+    if (termo === '') {
       setResultados(null);
       setErro(null);
       setBuscando(false);
@@ -51,14 +50,7 @@ export function BuscaReferencia({ colecao, aoAbrir }: Props): JSX.Element {
       vivo = false;
       clearTimeout(timer);
     };
-  }, [q, colecao.id, ref]);
-
-  if (ref === undefined) return <></>;
-
-  const placeholder =
-    ref.nome.toLowerCase().includes('referencia') || ref.nome.toLowerCase().includes('referência')
-      ? `Buscar por ${ref.nome.toLowerCase()}…`
-      : 'Buscar por referência…';
+  }, [q, colecao.id]);
 
   return (
     <div className="busca-ref">
@@ -67,10 +59,12 @@ export function BuscaReferencia({ colecao, aoAbrir }: Props): JSX.Element {
         <input
           type="search"
           className="busca-ref__input"
-          placeholder={placeholder}
+          placeholder="Buscar por referência, nome, número…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          aria-label="Buscar registro por referência"
+          aria-label="Buscar registro"
+          autoComplete="off"
+          enterKeyHint="search"
         />
         {q !== '' && (
           <button
@@ -89,12 +83,18 @@ export function BuscaReferencia({ colecao, aoAbrir }: Props): JSX.Element {
           {buscando && <p className="busca-ref__status">Buscando…</p>}
           {!buscando && erro !== null && <p className="aviso-erro">{erro}</p>}
           {!buscando && erro === null && resultados !== null && resultados.length === 0 && (
-            <p className="busca-ref__status">Nenhum registro com essa referência.</p>
+            <p className="busca-ref__status">Nenhum registro com esses dados.</p>
           )}
           {!buscando &&
             resultados !== null &&
             resultados.map((r) => (
-              <RegistroPreview key={r.id} colecao={colecao} registro={r} aoAbrir={() => aoAbrir(r)} />
+              <RegistroPreview
+                key={r.id}
+                colecao={colecao}
+                registro={r}
+                aoAbrir={() => aoAbrir(r)}
+                aoAtualizar={aoAtualizar}
+              />
             ))}
         </div>
       )}

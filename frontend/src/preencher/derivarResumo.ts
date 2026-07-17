@@ -48,13 +48,6 @@ export function formatarValor(campo: Campo, valor: unknown): string {
   }
 }
 
-// Título = primeiro campo texto/parágrafo (na ordem). Sem valor -> "Sem nome".
-export function tituloDoRegistro(campos: Campo[], registro: Registro): string {
-  const ref = campoReferencia(campos);
-  const bruto = ref === undefined ? '' : textoDe(registro.valores[ref.id]).trim();
-  return bruto === '' ? 'Sem nome' : bruto;
-}
-
 function nomeEhReferencia(nome: string): boolean {
   const n = nome
     .normalize('NFD')
@@ -63,7 +56,7 @@ function nomeEhReferencia(nome: string): boolean {
   return n.includes('referencia');
 }
 
-// Campo usado como referência na busca: bloco cujo nome contém "referência",
+// Campo usado como "nome"/referência na lista: bloco cujo nome contém "referência",
 // ou o primeiro texto/parágrafo da planilha.
 export function campoReferencia(campos: Campo[]): Campo | undefined {
   const marcado = campos.find(
@@ -71,6 +64,18 @@ export function campoReferencia(campos: Campo[]): Campo | undefined {
   );
   if (marcado !== undefined) return marcado;
   return campos.find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
+}
+
+// Alias: o "nome" editável na lista é o mesmo campo de referência/título.
+export function campoTituloDoRegistro(campos: Campo[]): Campo | undefined {
+  return campoReferencia(campos);
+}
+
+// Título = campo de referência (ou 1º texto). Sem valor -> "Sem nome".
+export function tituloDoRegistro(campos: Campo[], registro: Registro): string {
+  const ref = campoReferencia(campos);
+  const bruto = ref === undefined ? '' : textoDe(registro.valores[ref.id]).trim();
+  return bruto === '' ? 'Sem nome' : bruto;
 }
 
 // Resumo = próximos até 3 campos de texto/número/data/seleção (fora o do título),
