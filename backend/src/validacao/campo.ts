@@ -8,6 +8,8 @@ const subConfigSchema = z
     sufixo: z.string().trim().max(16).optional(),
     obrigatorio: z.boolean().optional(),
     autoAgora: z.boolean().optional(),
+    // maxFotos: só para subcampo de imagem. Mesmo teto do bloco de imagem (1..10).
+    maxFotos: z.number().int().min(1).max(10).optional(),
   })
   .strict();
 
@@ -25,6 +27,13 @@ const subCampoSchema = z
         code: z.ZodIssueCode.custom,
         message: 'seleção exige ao menos uma opção',
         path: ['config', 'opcoes'],
+      });
+    }
+    if (s.tipo !== 'imagem' && s.config.maxFotos !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'maxFotos só se aplica a subcampo de imagem',
+        path: ['config', 'maxFotos'],
       });
     }
   });

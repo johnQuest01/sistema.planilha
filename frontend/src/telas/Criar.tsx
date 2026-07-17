@@ -344,19 +344,25 @@ export function Criar({
                       {(campo.config.subcampos ?? []).map((s) => (
                         <label key={s.id} className="campo previa-secao__campo">
                           <span className="campo__rotulo">{s.nome}</span>
-                          <CampoValor
-                            campo={{
-                              id: s.id,
-                              colecaoId: campo.colecaoId,
-                              nome: s.nome,
-                              tipo: s.tipo,
-                              ordem: 0,
-                              config: s.config,
-                            }}
-                            valor={undefined}
-                            aoMudar={() => undefined}
-                            desabilitado
-                          />
+                          {s.tipo === 'imagem' ? (
+                            <span className="previa__mat">
+                              <Plus size={20} />
+                            </span>
+                          ) : (
+                            <CampoValor
+                              campo={{
+                                id: s.id,
+                                colecaoId: campo.colecaoId,
+                                nome: s.nome,
+                                tipo: s.tipo,
+                                ordem: 0,
+                                config: s.config,
+                              }}
+                              valor={undefined}
+                              aoMudar={() => undefined}
+                              desabilitado
+                            />
+                          )}
                         </label>
                       ))}
                     </div>

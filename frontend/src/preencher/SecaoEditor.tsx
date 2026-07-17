@@ -3,13 +3,19 @@ import { Copy, Plus, Trash2 } from 'lucide-react';
 import type { Campo, SubCampo } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import { CampoValor } from './CampoValor';
+import { Grade } from '../imagens/Grade';
 import './secao.css';
 
 type Linha = Record<string, unknown>;
 
-// Um subcampo vira um "Campo" mínimo só para o CampoValor renderizar o input certo.
+// Um subcampo vira um "Campo" mínimo só para o CampoValor/Grade renderizar o controle certo.
 function comoCampo(sub: SubCampo, pai: Campo): Campo {
   return { id: sub.id, colecaoId: pai.colecaoId, nome: sub.nome, tipo: sub.tipo, ordem: 0, config: sub.config };
+}
+
+// Keys de imagem guardadas na célula (mesmo formato do campo de imagem: string[]).
+function keysDe(valor: unknown): string[] {
+  return Array.isArray(valor) ? valor.filter((k): k is string => typeof k === 'string') : [];
 }
 
 export function linhasDe(valor: unknown): Linha[] {
@@ -20,10 +26,12 @@ export function linhasDe(valor: unknown): Linha[] {
 // (subcampos). Dá pra adicionar uma linha ou várias de uma vez, e remover.
 export function SecaoEditor({
   campo,
+  registroId,
   linhas,
   aoMudar,
 }: {
   campo: Campo;
+  registroId: string;
   linhas: Linha[];
   aoMudar: (linhas: Linha[]) => void;
 }): JSX.Element {
@@ -79,16 +87,30 @@ export function SecaoEditor({
             </div>
           </div>
           <div className="secao__campos">
-            {subs.map((s) => (
-              <label key={s.id} className="campo secao__campo">
-                <span className="campo__rotulo">{s.nome}</span>
-                <CampoValor
-                  campo={comoCampo(s, campo)}
-                  valor={linha[s.id]}
-                  aoMudar={(v) => alterarCelula(i, s.id, v)}
-                />
-              </label>
-            ))}
+            {subs.map((s) =>
+              s.tipo === 'imagem' ? (
+                // Grade tem seus próprios controles clicáveis; não pode ficar dentro de
+                // <label> (o clique abriria o seletor de arquivo por associação).
+                <div key={s.id} className="campo secao__campo">
+                  <span className="campo__rotulo">{s.nome}</span>
+                  <Grade
+                    registroId={registroId}
+                    campo={comoCampo(s, campo)}
+                    keys={keysDe(linha[s.id])}
+                    aoMudar={(keys) => alterarCelula(i, s.id, keys)}
+                  />
+                </div>
+              ) : (
+                <label key={s.id} className="campo secao__campo">
+                  <span className="campo__rotulo">{s.nome}</span>
+                  <CampoValor
+                    campo={comoCampo(s, campo)}
+                    valor={linha[s.id]}
+                    aoMudar={(v) => alterarCelula(i, s.id, v)}
+                  />
+                </label>
+              ),
+            )}
           </div>
         </div>
       ))}

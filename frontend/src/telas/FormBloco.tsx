@@ -21,6 +21,7 @@ interface RascunhoSub {
   tipo: TipoSubCampo;
   sufixo: string;
   opcoesTexto: string;
+  maxFotos: number;
 }
 
 function subDeCampo(s?: SubCampo): RascunhoSub {
@@ -30,6 +31,7 @@ function subDeCampo(s?: SubCampo): RascunhoSub {
     tipo: s?.tipo ?? 'texto',
     sufixo: s?.config.sufixo ?? '',
     opcoesTexto: (s?.config.opcoes ?? []).join(', '),
+    maxFotos: s?.config.maxFotos ?? 1,
   };
 }
 
@@ -88,6 +90,7 @@ export function FormBloco({
             .map((o) => o.trim())
             .filter((o) => o !== '');
         }
+        if (s.tipo === 'imagem') cfg.maxFotos = s.maxFotos;
         return { id: s.id, nome: s.nome.trim(), tipo: s.tipo, config: cfg };
       });
     }
@@ -282,6 +285,23 @@ export function FormBloco({
                   value={s.opcoesTexto}
                   onChange={(e) => alterarSub(s.id, { opcoesTexto: e.target.value })}
                 />
+              )}
+              {s.tipo === 'imagem' && (
+                <label className="campo">
+                  <span className="campo__rotulo">Máximo de fotos por linha</span>
+                  <input
+                    className="campo__controle"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={s.maxFotos}
+                    onChange={(e) =>
+                      alterarSub(s.id, {
+                        maxFotos: Math.min(10, Math.max(1, Number(e.target.value) || 1)),
+                      })
+                    }
+                  />
+                </label>
               )}
             </div>
           ))}

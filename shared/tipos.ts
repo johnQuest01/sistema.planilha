@@ -3,9 +3,10 @@ export const TIPOS_CAMPO = [
 ] as const;
 export type TipoCampo = typeof TIPOS_CAMPO[number];
 
-// Tipos permitidos DENTRO de uma seção (sem imagem nem seção aninhada).
+// Tipos permitidos DENTRO de uma seção. Inclui imagem (foto por linha); só não
+// permite seção aninhada.
 export const TIPOS_SUBCAMPO = [
-  'texto', 'numero', 'selecao', 'data', 'datahora', 'booleano'
+  'texto', 'numero', 'selecao', 'data', 'datahora', 'booleano', 'imagem'
 ] as const;
 export type TipoSubCampo = typeof TIPOS_SUBCAMPO[number];
 

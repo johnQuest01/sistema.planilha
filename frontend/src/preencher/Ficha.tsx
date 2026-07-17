@@ -164,6 +164,7 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
             ) : campo.tipo === 'secao' ? (
               <SecaoEditor
                 campo={campo}
+                registroId={registro.id}
                 linhas={linhasDe(valores[campo.id])}
                 aoMudar={(linhas) => {
                   marcar(campo.id, linhas);
