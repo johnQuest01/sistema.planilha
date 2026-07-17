@@ -30,6 +30,23 @@ interface LinhaCampo {
 }
 
 const LIMITE = 50; // por página (ver seção 5)
+const LIMITE_BUSCA = 20;
+
+function nomeEhReferencia(nome: string): boolean {
+  const n = nome
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase();
+  return n.includes('referencia');
+}
+
+function escolherCampoReferencia(campos: Campo[]): Campo | undefined {
+  const marcado = campos.find(
+    (c) => (c.tipo === 'texto' || c.tipo === 'paragrafo') && nomeEhReferencia(c.nome),
+  );
+  if (marcado !== undefined) return marcado;
+  return campos.find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
+}
 
 function mapRegistro(r: LinhaRegistro): Registro {
   return {
@@ -109,6 +126,33 @@ export async function listarRegistros(
           select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
           from registros where colecao_id = ${colecaoId} and criado_em < ${before}
           order by criado_em desc limit ${LIMITE}`;
+
+  return linhas.map(mapRegistro);
+}
+
+// Busca parcial no campo de referência (nome "Referência" ou 1º texto/parágrafo).
+export async function buscarRegistros(
+  tx: Tx,
+  colecaoId: string,
+  termo: string,
+): Promise<Registro[] | null> {
+  if (!(await colecaoExiste(tx, colecaoId))) return null;
+
+  const termoLimpo = termo.trim();
+  if (termoLimpo === '') return [];
+
+  const campos = await camposDaColecao(tx, colecaoId);
+  const ref = escolherCampoReferencia(campos);
+  if (ref === undefined) return [];
+
+  const padrao = `%${termoLimpo}%`;
+  const linhas = await tx<LinhaRegistro[]>`
+    select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
+    from registros
+    where colecao_id = ${colecaoId}
+      and valores->>${ref.id} ilike ${padrao}
+    order by criado_em desc
+    limit ${LIMITE_BUSCA}`;
 
   return linhas.map(mapRegistro);
 }

@@ -5,6 +5,7 @@ import { exigeDono, contaObrigatoria, usuarioObrigatorio } from '../auth/exigeDo
 import { validaIdParam } from '../validacao/params';
 import {
   apagarRegistro,
+  buscarRegistros,
   criarRegistro,
   editarRegistro,
   listarRegistros,
@@ -19,8 +20,21 @@ const corpoRegistroSchema = z
 
 // Cursor de paginação: `before` = criado_em (ISO) do último item da página anterior.
 const listaQuerySchema = z.object({ before: z.string().datetime().optional() }).strict();
+const buscaQuerySchema = z.object({ q: z.string().min(1).max(200) }).strict();
 
 export async function rotasRegistros(app: FastifyInstance): Promise<void> {
+  app.get<{ Params: { id: string }; Querystring: { q: string } }>(
+    '/api/colecoes/:id/registros/busca',
+    { preHandler: [exigeDono, validaIdParam] },
+    async (req, reply) => {
+      const { q } = buscaQuerySchema.parse(req.query);
+      const contaId = contaObrigatoria(req);
+      const registros = await comConta(contaId, (tx) => buscarRegistros(tx, req.params.id, q));
+      if (registros === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
+      return reply.send(registros);
+    },
+  );
+
   app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
     '/api/colecoes/:id/registros',
     { preHandler: [exigeDono, validaIdParam] },

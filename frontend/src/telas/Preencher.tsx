@@ -8,7 +8,8 @@ import { useMedia } from '../ui/useMedia';
 import { Tabela } from '../preencher/Tabela';
 import { ListaDensa } from '../preencher/ListaDensa';
 import { Ficha } from '../preencher/Ficha';
-import { agoraLocal, hojeLocal } from '../preencher/CampoValor';
+import { BuscaReferencia } from '../preencher/BuscaReferencia';
+import { valoresVaziosDe } from '../preencher/valoresVazios';
 import { FormBloco, type DadosBloco } from './FormBloco';
 import '../preencher/preencher.css';
 
@@ -73,21 +74,19 @@ export function Preencher({
     }
   }
 
-  async function novo(): Promise<void> {
+  async function novo(valores?: Record<string, unknown>): Promise<void> {
     try {
-      // Campos data/datahora com "preencher automaticamente" já nascem com o momento atual.
-      const iniciais: Record<string, unknown> = {};
-      for (const c of colecao.campos) {
-        if ((c.tipo === 'data' || c.tipo === 'datahora') && c.config.autoAgora === true) {
-          iniciais[c.id] = c.tipo === 'datahora' ? agoraLocal() : hojeLocal();
-        }
-      }
+      const iniciais = valores ?? valoresVaziosDe(colecao.campos);
       const r = await api.criarRegistro(colecao.id, iniciais);
       setRegistros((atual) => (atual === null ? [r] : [r, ...atual]));
       setAberta(r);
     } catch (e) {
       setErro(e instanceof ErroApi ? e.message : 'não foi possível criar');
     }
+  }
+
+  async function duplicarVazio(): Promise<void> {
+    await novo(valoresVaziosDe(colecao.campos));
   }
 
   function aoAtualizar(r: Registro): void {
@@ -160,6 +159,8 @@ export function Preencher({
 
       {erro !== null && <p className="aviso-erro">{erro}</p>}
 
+      <BuscaReferencia colecao={colecao} aoAbrir={setAberta} />
+
       {adicionandoCampo && (
         <div className="add-campo-inline">
           <FormBloco
@@ -201,6 +202,7 @@ export function Preencher({
           aoFechar={() => setAberta(null)}
           aoAtualizar={aoAtualizar}
           aoApagar={aoApagar}
+          aoDuplicarVazio={() => void duplicarVazio()}
         />
       )}
     </>

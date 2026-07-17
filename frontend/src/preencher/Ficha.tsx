@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, CopyPlus } from 'lucide-react';
 import { api } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
@@ -26,11 +26,12 @@ interface Props {
   aoFechar: () => void;
   aoAtualizar: (r: Registro) => void;
   aoApagar: (id: string) => void;
+  aoDuplicarVazio: () => void;
 }
 
 const DEBOUNCE_MS = 400;
 
-export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Props): JSX.Element {
+export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDuplicarVazio }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   // Só o dono ou quem criou o registro pode apagá-lo (o backend também barra).
@@ -42,7 +43,15 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
   const sujosRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
   const fichaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setValores(registro.valores);
+    valoresRef.current = registro.valores;
+    sujosRef.current.clear();
+    setConfirmando(false);
+  }, [registro.id]);
 
   // Enter (e a seta "próximo" do teclado do iPhone) avança para o próximo campo, para
   // preencher rápido. Em <textarea> (parágrafo) o Enter continua criando nova linha.
@@ -123,6 +132,13 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
     aoFechar();
   }
 
+  async function duplicarVazio(): Promise<void> {
+    setDuplicando(true);
+    await flush();
+    aoDuplicarVazio();
+    setDuplicando(false);
+  }
+
   const registroLocal: Registro = { ...registro, valores };
 
   return (
@@ -142,6 +158,13 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar }: Pr
       onFechar={fechar}
     >
       <div className="ficha" ref={fichaRef} onKeyDown={aoTeclar}>
+        <div className="ficha__bloco">
+          <Botao variante="padrao" onClick={() => void duplicarVazio()} disabled={duplicando}>
+            <CopyPlus size={16} />
+            {duplicando ? 'Criando…' : 'Novo em branco (mesma estrutura)'}
+          </Botao>
+        </div>
+
         {colecao.campos.map((campo) => (
           <div key={campo.id} className="ficha__bloco">
             {campo.config.titulo !== undefined && campo.config.titulo !== '' && (

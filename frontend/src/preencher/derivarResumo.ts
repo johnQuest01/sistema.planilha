@@ -50,19 +50,37 @@ export function formatarValor(campo: Campo, valor: unknown): string {
 
 // Título = primeiro campo texto/parágrafo (na ordem). Sem valor -> "Sem nome".
 export function tituloDoRegistro(campos: Campo[], registro: Registro): string {
-  const campoTitulo = campos.find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
-  const bruto = campoTitulo === undefined ? '' : textoDe(registro.valores[campoTitulo.id]).trim();
+  const ref = campoReferencia(campos);
+  const bruto = ref === undefined ? '' : textoDe(registro.valores[ref.id]).trim();
   return bruto === '' ? 'Sem nome' : bruto;
+}
+
+function nomeEhReferencia(nome: string): boolean {
+  const n = nome
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase();
+  return n.includes('referencia');
+}
+
+// Campo usado como referência na busca: bloco cujo nome contém "referência",
+// ou o primeiro texto/parágrafo da planilha.
+export function campoReferencia(campos: Campo[]): Campo | undefined {
+  const marcado = campos.find(
+    (c) => (c.tipo === 'texto' || c.tipo === 'paragrafo') && nomeEhReferencia(c.nome),
+  );
+  if (marcado !== undefined) return marcado;
+  return campos.find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
 }
 
 // Resumo = próximos até 3 campos de texto/número/data/seleção (fora o do título),
 // com valor preenchido.
 export function resumoDoRegistro(campos: Campo[], registro: Registro): string {
-  const campoTitulo = campos.find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
+  const ref = campoReferencia(campos);
   const tiposResumo: Campo['tipo'][] = ['texto', 'numero', 'data', 'selecao'];
   const partes: string[] = [];
   for (const c of campos) {
-    if (c.id === campoTitulo?.id) continue;
+    if (c.id === ref?.id) continue;
     if (!tiposResumo.includes(c.tipo)) continue;
     const txt = formatarValor(c, registro.valores[c.id]).trim();
     if (txt !== '') partes.push(txt);

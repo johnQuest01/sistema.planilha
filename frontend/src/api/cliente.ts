@@ -121,6 +121,10 @@ export const api = {
     const q = before === undefined ? '' : `?before=${encodeURIComponent(before)}`;
     return pedir<Registro[]>(`/api/colecoes/${colecaoId}/registros${q}`);
   },
+  buscarRegistros: (colecaoId: string, termo: string) =>
+    pedir<Registro[]>(
+      `/api/colecoes/${colecaoId}/registros/busca?q=${encodeURIComponent(termo)}`,
+    ),
   criarRegistro: (colecaoId: string, valores: Record<string, unknown> = {}) =>
     pedir<Registro>(`/api/colecoes/${colecaoId}/registros`, corpoJson({ valores })),
   editarRegistro: (id: string, valores: Record<string, unknown>) =>
