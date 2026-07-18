@@ -9,7 +9,10 @@ import { Tabela } from '../preencher/Tabela';
 import { ListaDensa } from '../preencher/ListaDensa';
 import { Ficha } from '../preencher/Ficha';
 import { BuscaReferencia } from '../preencher/BuscaReferencia';
+import { RegistroPreview } from '../preencher/RegistroPreview';
+import { tituloDoRegistro } from '../preencher/derivarResumo';
 import { valoresVaziosDe } from '../preencher/valoresVazios';
+import { FolhaInferior } from '../ui/FolhaInferior';
 import { FormBloco, type DadosBloco } from './FormBloco';
 import '../preencher/preencher.css';
 
@@ -27,6 +30,7 @@ export function Preencher({
   const [fim, setFim] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [carregandoMais, setCarregandoMais] = useState(false);
+  const [previa, setPrevia] = useState<Registro | null>(null);
   const [aberta, setAberta] = useState<Registro | null>(null);
   const [solto, setSolto] = useState(false);
   const [adicionandoCampo, setAdicionandoCampo] = useState(false);
@@ -92,11 +96,23 @@ export function Preencher({
   function aoAtualizar(r: Registro): void {
     setRegistros((atual) => (atual === null ? atual : atual.map((x) => (x.id === r.id ? r : x))));
     setAberta((a) => (a !== null && a.id === r.id ? r : a));
+    setPrevia((p) => (p !== null && p.id === r.id ? r : p));
   }
 
   function aoApagar(id: string): void {
     setRegistros((atual) => (atual === null ? atual : atual.filter((x) => x.id !== id)));
     setAberta(null);
+    setPrevia(null);
+  }
+
+  function abrirPrevia(r: Registro): void {
+    setAberta(null);
+    setPrevia(r);
+  }
+
+  function abrirEdicao(r: Registro): void {
+    setPrevia(null);
+    setAberta(r);
   }
 
   if (registros === null) return <Carregando />;
@@ -161,7 +177,7 @@ export function Preencher({
 
       <BuscaReferencia
         colecao={colecao}
-        aoAbrir={setAberta}
+        aoAbrir={abrirEdicao}
         aoAtualizar={aoAtualizar}
       />
 
@@ -185,7 +201,7 @@ export function Preencher({
           colecao={colecao}
           registros={registros}
           solto={solto}
-          aoAbrir={setAberta}
+          aoAbrir={abrirPrevia}
           aoAtualizar={aoAtualizar}
         />
       ) : (
@@ -193,7 +209,7 @@ export function Preencher({
           colecao={colecao}
           registros={registros}
           aoAtualizar={aoAtualizar}
-          aoAbrirFicha={setAberta}
+          aoAbrirFicha={abrirPrevia}
         />
       )}
 
@@ -203,6 +219,21 @@ export function Preencher({
             Carregar mais
           </Botao>
         </div>
+      )}
+
+      {previa !== null && (
+        <FolhaInferior
+          titulo={tituloDoRegistro(colecao.campos, previa)}
+          subtitulo="Prévia — toque em Abrir registro para editar"
+          onFechar={() => setPrevia(null)}
+        >
+          <RegistroPreview
+            colecao={colecao}
+            registro={previa}
+            aoAbrir={() => abrirEdicao(previa)}
+            aoAtualizar={aoAtualizar}
+          />
+        </FolhaInferior>
       )}
 
       {aberta !== null && (

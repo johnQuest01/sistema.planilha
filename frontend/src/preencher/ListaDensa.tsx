@@ -84,20 +84,28 @@ export function ListaDensa({ colecao, registros, solto, aoAbrir, aoAtualizar }: 
         const titulo = tituloDoRegistro(colecao.campos, r);
         return (
           <div key={r.id} className="lista-item">
-            {comImagem &&
-              (capa !== null ? (
-                <img
-                  className="capa"
-                  style={{ width: lado, height: lado }}
-                  src={urlMini(capa)}
-                  alt=""
-                  loading="lazy"
-                />
-              ) : (
-                <span className="capa capa--vazia" style={{ width: lado, height: lado }}>
-                  <ImageOff size={20} />
-                </span>
-              ))}
+            {comImagem && (
+              <button
+                type="button"
+                className="lista-item__capa-btn"
+                aria-label={`Ver prévia de ${titulo}`}
+                onClick={() => aoAbrir(r)}
+              >
+                {capa !== null ? (
+                  <img
+                    className="capa"
+                    style={{ width: lado, height: lado }}
+                    src={urlMini(capa)}
+                    alt=""
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="capa capa--vazia" style={{ width: lado, height: lado }}>
+                    <ImageOff size={20} />
+                  </span>
+                )}
+              </button>
+            )}
             <div className="lista-item__corpo">
               {editando ? (
                 <div className="lista-item__renomear-box">

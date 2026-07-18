@@ -175,6 +175,15 @@
 .lista--solto .lista-item {
   padding: var(--e3);
 }
+.lista-item__capa-btn {
+  display: block;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--raio);
+  flex: none;
+}
 .lista-item__corpo {
   flex: 1;
   min-width: 0;
@@ -182,6 +191,18 @@
   flex-direction: column;
   justify-content: center;
   gap: 2px;
+}
+/* Prévia aberta pela lista: sem “cartão dentro do cartão”. */
+.folha__corpo .preview-registro {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.folha__corpo .preview-registro__cabecalho {
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
 }
 .lista-item__titulo-btn {
   display: flex;
