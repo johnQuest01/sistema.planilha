@@ -96,6 +96,17 @@
 .tabela tbody tr:hover {
   background: rgba(23, 32, 28, 0.02);
 }
+.celula-titulo {
+  min-width: 140px;
+  max-width: 240px;
+}
+.tabela-titulo {
+  display: block;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--tinta);
+  word-break: break-word;
+}
 /* ---- lista densa (mobile) ---- */
 .lista {
   display: flex;

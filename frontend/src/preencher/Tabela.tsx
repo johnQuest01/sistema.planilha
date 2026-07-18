@@ -3,7 +3,12 @@ import { ImageOff } from 'lucide-react';
 import { api } from '../api/cliente';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { CampoValor } from './CampoValor';
-import { capaDoRegistro, formatarValor } from './derivarResumo';
+import {
+  campoTituloDoRegistro,
+  capaDoRegistro,
+  formatarValor,
+  tituloDoRegistro,
+} from './derivarResumo';
 import { urlMini } from '../imagens/urls';
 import './preencher.css';
 
@@ -23,6 +28,7 @@ export function Tabela({ colecao, registros, aoAtualizar, aoAbrirFicha }: Props)
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [rascunho, setRascunho] = useState<unknown>(undefined);
   const temImagem = colecao.campos.some((c) => c.tipo === 'imagem');
+  const campoTitulo = campoTituloDoRegistro(colecao.campos);
 
   function iniciar(r: Registro, c: Campo): void {
     setEdicao({ rid: r.id, cid: c.id });
@@ -47,6 +53,7 @@ export function Tabela({ colecao, registros, aoAtualizar, aoAbrirFicha }: Props)
         <thead>
           <tr>
             {temImagem && <th aria-label="Foto" />}
+            <th>Título</th>
             {colecao.campos.map((c) => (
               <th key={c.id}>{c.nome}</th>
             ))}
@@ -55,6 +62,11 @@ export function Tabela({ colecao, registros, aoAtualizar, aoAbrirFicha }: Props)
         <tbody>
           {registros.map((r) => {
             const capa = capaDoRegistro(colecao.campos, r);
+            const titulo = tituloDoRegistro(colecao.campos, r);
+            const editandoTitulo =
+              campoTitulo !== undefined &&
+              edicao?.rid === r.id &&
+              edicao.cid === campoTitulo.id;
             return (
               <tr key={r.id}>
                 {temImagem && (
@@ -82,6 +94,25 @@ export function Tabela({ colecao, registros, aoAtualizar, aoAbrirFicha }: Props)
                     </button>
                   </td>
                 )}
+                <td
+                  className="celula-titulo celula-editavel"
+                  onClick={() => {
+                    if (campoTitulo !== undefined && !editandoTitulo) iniciar(r, campoTitulo);
+                  }}
+                >
+                  {campoTitulo !== undefined && editandoTitulo ? (
+                    <CampoValor
+                      campo={campoTitulo}
+                      valor={rascunho}
+                      aoMudar={setRascunho}
+                      aoConfirmar={() => void comitar()}
+                      aoSairFoco={() => void comitar()}
+                      autoFoco
+                    />
+                  ) : (
+                    <span className="tabela-titulo">{titulo}</span>
+                  )}
+                </td>
                 {colecao.campos.map((c) => {
                   const editando = edicao?.rid === r.id && edicao.cid === c.id;
                   if (c.tipo === 'imagem') {
@@ -94,7 +125,6 @@ export function Tabela({ colecao, registros, aoAtualizar, aoAbrirFicha }: Props)
                     );
                   }
                   if (c.tipo === 'secao') {
-                    // Seção se edita na ficha (linhas repetíveis), não inline na célula.
                     return (
                       <td key={c.id} className="celula-editavel" onClick={() => aoAbrirFicha(r)}>
                         <span className="etiqueta">
