@@ -249,8 +249,8 @@ export function RegistroPreview({
           <div className="preview-registro__acoes">
             {campoTitulo !== undefined && (
               <Botao variante="padrao" onClick={iniciarEdicao}>
-                <Pencil size={16} />
-                Renomear
+                <Pencil size={16} aria-hidden />
+                <span className="preview-registro__btn-txt">Renomear</span>
               </Botao>
             )}
             {aoAbrir !== undefined && (
@@ -259,8 +259,13 @@ export function RegistroPreview({
                 onClick={aoAbrir}
                 aria-label={`Abrir registro ${tituloAtual}`}
               >
-                <ExternalLink size={16} />
-                Abrir registro
+                <ExternalLink size={16} aria-hidden />
+                <span className="preview-registro__btn-txt preview-registro__btn-txt--curto">
+                  Abrir
+                </span>
+                <span className="preview-registro__btn-txt preview-registro__btn-txt--longo">
+                  Abrir registro
+                </span>
               </Botao>
             )}
           </div>
