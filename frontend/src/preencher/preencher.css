@@ -417,15 +417,15 @@
 }
 .preview-imagens {
   display: grid;
-  /* Celular: quadros generosos (já pequenos o bastante na tela estreita). */
+  /* Celular: quadros generosos na tela estreita. */
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--e2);
 }
 @media (min-width: 769px) {
-  /* Computador: grade densa — evita foto enorme ocupando a largura toda. */
+  /* Desktop: fotos maiores para ver na prévia sem precisar abrir o visor. */
   .preview-imagens {
-    grid-template-columns: repeat(auto-fill, 120px);
-    gap: var(--e2);
+    grid-template-columns: repeat(auto-fill, 200px);
+    gap: var(--e3);
   }
 }
 .preview-imagens__botao {
