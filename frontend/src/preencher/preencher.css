@@ -312,9 +312,10 @@
 }
 .preview-registro__cabecalho {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--e3);
+  gap: var(--e2) var(--e3);
   width: 100%;
   padding: var(--e3);
   border-bottom: 1px solid var(--linha);
@@ -377,22 +378,7 @@
 }
 .preview-registro__acao {
   flex: none;
-  border: none;
-  background: transparent;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--tinta-2);
-  font-weight: 600;
-  padding: var(--e2);
-  min-height: var(--toque);
-  cursor: pointer;
-  border-radius: var(--raio);
-}
-.preview-registro__acao:hover {
-  background: rgba(23, 32, 28, 0.06);
-  color: var(--tinta);
+  margin-left: auto;
 }
 .preview-campos {
   display: flex;

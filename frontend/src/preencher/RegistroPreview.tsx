@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { ExternalLink } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { Visor } from '../imagens/Visor';
 import { urlCheia } from '../imagens/urls';
+import { Botao } from '../ui/Botao';
 import {
   campoTituloDoRegistro,
   formatarValor,
@@ -243,9 +245,15 @@ export function RegistroPreview({
           )}
         </div>
         {aoAbrir !== undefined && !editando && (
-          <button type="button" className="preview-registro__acao" onClick={aoAbrir}>
-            Editar
-          </button>
+          <Botao
+            variante="primario"
+            className="preview-registro__acao"
+            onClick={aoAbrir}
+            aria-label={`Abrir registro ${tituloAtual}`}
+          >
+            <ExternalLink size={16} />
+            Abrir registro
+          </Botao>
         )}
       </div>
 
