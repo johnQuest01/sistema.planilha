@@ -97,15 +97,64 @@
   background: rgba(23, 32, 28, 0.02);
 }
 .celula-titulo {
-  min-width: 140px;
-  max-width: 240px;
+  min-width: 160px;
+  max-width: 260px;
+  vertical-align: top;
+}
+.tabela-titulo-bloco {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 .tabela-titulo {
   display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
   font-weight: 700;
   font-size: 14px;
   color: var(--tinta);
   word-break: break-word;
+  cursor: pointer;
+}
+.tabela-titulo:hover {
+  color: var(--fita-forte);
+}
+.tabela-renomear-btn {
+  border: none;
+  background: transparent;
+  color: var(--fita-forte);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 2px 0;
+  cursor: pointer;
+  border-radius: var(--raio);
+}
+.tabela-renomear-btn:hover {
+  text-decoration: underline;
+}
+.tabela-renomear {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  min-width: 160px;
+}
+.tabela-renomear__input {
+  min-height: 36px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.tabela-renomear__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
 }
 /* ---- lista densa (mobile) ---- */
 .lista {
