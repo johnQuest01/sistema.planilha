@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Scissors } from 'lucide-react';
+import { Eye, EyeOff, Scissors } from 'lucide-react';
 import { useAuth } from '../contexto/Auth';
 import { ErroApi } from '../api/cliente';
 import { Botao } from '../ui/Botao';
@@ -12,6 +12,7 @@ export function Entrar(): JSX.Element {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [codigo, setCodigo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -55,15 +56,26 @@ export function Entrar(): JSX.Element {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <Campo
-          rotulo="Senha"
-          type="password"
-          autoComplete={modo === 'entrar' ? 'current-password' : 'new-password'}
-          required
-          minLength={8}
-          value={senha}
-          onChange={(e) => setSenha(e.target.value)}
-        />
+        <div className="entrar__senha">
+          <Campo
+            rotulo="Senha"
+            type={mostrarSenha ? 'text' : 'password'}
+            autoComplete={modo === 'entrar' ? 'current-password' : 'new-password'}
+            required
+            minLength={8}
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+          />
+          <button
+            type="button"
+            className="entrar__olho"
+            aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+            title={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
+            onClick={() => setMostrarSenha((v) => !v)}
+          >
+            {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
         {modo === 'registrar' && (
           <Campo
             rotulo="Código de convite"

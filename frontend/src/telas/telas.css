@@ -88,6 +88,33 @@
   font-size: 14px;
   color: var(--tinta-2);
 }
+.entrar__senha {
+  position: relative;
+}
+.entrar__senha .campo__controle {
+  padding-right: 44px;
+}
+.entrar__olho {
+  position: absolute;
+  right: 6px;
+  bottom: 0;
+  height: var(--toque);
+  width: 40px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--tinta-3);
+  cursor: pointer;
+  border-radius: var(--raio);
+}
+.entrar__olho:hover {
+  color: var(--tinta);
+}
+.entrar__olho:focus-visible {
+  outline: 2px solid var(--fita);
+  outline-offset: 1px;
+}
 .link-texto {
   background: none;
   border: none;
