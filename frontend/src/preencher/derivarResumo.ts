@@ -100,16 +100,61 @@ export function keysDoCampo(registro: Registro, campoId: string): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 }
 
-// Capa = primeira foto do primeiro campo de imagem preenchido.
+function nomeSugereFotoRef(nome: string): boolean {
+  const n = nome
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase();
+  return (
+    n.includes('referencia') ||
+    n.includes('modelagem') ||
+    n.includes('imagem') ||
+    n.includes('foto')
+  );
+}
+
+// Todas as keys de imagem de um campo (topo) ou, se for seção, de subcampos imagem.
+export function keysDeImagensDoCampo(campo: Campo, registro: Registro): string[] {
+  if (campo.tipo === 'imagem') return keysDoCampo(registro, campo.id);
+  if (campo.tipo !== 'secao') return [];
+  const linhas = Array.isArray(registro.valores[campo.id])
+    ? (registro.valores[campo.id] as unknown[])
+    : [];
+  const subs = (campo.config.subcampos ?? []).filter((s) => s.tipo === 'imagem');
+  const out: string[] = [];
+  for (const linha of linhas) {
+    if (typeof linha !== 'object' || linha === null) continue;
+    const obj = linha as Record<string, unknown>;
+    for (const s of subs) {
+      const v = obj[s.id];
+      if (!Array.isArray(v)) continue;
+      for (const k of v) if (typeof k === 'string') out.push(k);
+    }
+  }
+  return out;
+}
+
+// Capa = foto do bloco de referência/modelagem, senão 1ª imagem de qualquer campo/seção.
 export function capaDoRegistro(campos: Campo[], registro: Registro): string | null {
-  for (const c of campos) {
-    if (c.tipo !== 'imagem') continue;
-    const keys = keysDoCampo(registro, c.id);
+  const preferidos = [
+    ...campos.filter((c) => c.tipo === 'imagem' && nomeSugereFotoRef(c.nome)),
+    ...campos.filter((c) => c.tipo === 'imagem'),
+    ...campos.filter((c) => c.tipo === 'secao'),
+  ];
+  const vistos = new Set<string>();
+  for (const c of preferidos) {
+    if (vistos.has(c.id)) continue;
+    vistos.add(c.id);
+    const keys = keysDeImagensDoCampo(c, registro);
     if (keys.length > 0) return keys[0] ?? null;
   }
   return null;
 }
 
 export function temCampoImagem(campos: Campo[]): boolean {
-  return campos.some((c) => c.tipo === 'imagem');
+  return campos.some(
+    (c) =>
+      c.tipo === 'imagem' ||
+      (c.tipo === 'secao' && (c.config.subcampos ?? []).some((s) => s.tipo === 'imagem')),
+  );
 }
