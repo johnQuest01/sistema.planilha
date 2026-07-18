@@ -14,6 +14,7 @@ import { rotasRegistros } from './rotas/registros';
 import { rotasUpload } from './rotas/upload';
 import { rotasConfig } from './rotas/config';
 import { rotasPresenca } from './rotas/presenca';
+import { rotasLixeira } from './rotas/lixeira';
 
 export function buildServer() {
   const app = Fastify({
@@ -50,6 +51,7 @@ export function buildServer() {
   app.register(rotasRegistros);
   app.register(rotasUpload);
   app.register(rotasPresenca);
+  app.register(rotasLixeira);
 
   return app;
 }

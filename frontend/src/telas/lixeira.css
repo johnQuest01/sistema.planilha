@@ -1,0 +1,89 @@
+.lixeira {
+  padding-bottom: var(--e6);
+}
+.lixeira__cabeca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e3);
+  margin-bottom: var(--e4);
+}
+.lixeira__titulo {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--giz);
+}
+.lixeira__sub {
+  margin: 6px 0 0;
+  max-width: 42rem;
+  color: rgba(238, 243, 236, 0.75);
+  font-size: 14px;
+}
+.lixeira__vazia {
+  padding: var(--e6) var(--e4);
+  text-align: center;
+  color: rgba(238, 243, 236, 0.75);
+  border: 1px dashed rgba(238, 243, 236, 0.2);
+  border-radius: var(--raio-2);
+}
+.lixeira__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+.lixeira__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e3);
+  padding: var(--e3);
+  background: var(--papel);
+  color: var(--tinta);
+  border-radius: var(--raio-2);
+  box-shadow: var(--sombra);
+}
+.lixeira__fotos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+}
+.lixeira__fotos img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--linha);
+}
+.lixeira__sem-foto {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+  align-self: center;
+}
+.lixeira__corpo {
+  flex: 1;
+  min-width: 160px;
+}
+.lixeira__nome {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.lixeira__meta {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--tinta-2);
+  line-height: 1.4;
+}
+.lixeira__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e2);
+  margin-left: auto;
+}

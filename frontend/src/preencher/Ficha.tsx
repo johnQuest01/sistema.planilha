@@ -212,14 +212,16 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDu
           <div className="ficha__bloco">
             {confirmando ? (
               <div className="confirma-inline">
-                <span className="confirma-inline__texto">Apagar este registro?</span>
+                <span className="confirma-inline__texto">
+                  Mover para a lixeira? Dados e fotos ficam salvos até apagar definitivo.
+                </span>
                 <Botao
                   variante="perigo"
                   onClick={() => {
                     void api.apagarRegistro(registro.id).then(() => aoApagar(registro.id));
                   }}
                 >
-                  Apagar
+                  Mover para lixeira
                 </Botao>
                 <Botao variante="fantasma" onClick={() => setConfirmando(false)}>
                   Cancelar
@@ -228,7 +230,7 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDu
             ) : (
               <Botao variante="perigo" onClick={() => setConfirmando(true)}>
                 <Trash2 size={16} />
-                Apagar registro
+                Enviar para lixeira
               </Botao>
             )}
           </div>

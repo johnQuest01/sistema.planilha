@@ -4,6 +4,7 @@ import { Entrar } from './telas/Entrar';
 import { Inicio } from './telas/Inicio';
 import { Colecao } from './telas/Colecao';
 import { Config } from './telas/Config';
+import { Lixeira } from './telas/Lixeira';
 import { Carregando } from './ui/Carregando';
 import { InstalarApp } from './ui/InstalarApp';
 import { Presenca } from './ui/Presenca';
@@ -44,6 +45,14 @@ function Rotas(): JSX.Element {
         element={
           <Protegida>
             <Config />
+          </Protegida>
+        }
+      />
+      <Route
+        path="/lixeira"
+        element={
+          <Protegida>
+            <Lixeira />
           </Protegida>
         }
       />

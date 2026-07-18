@@ -8,3 +8,15 @@ export async function marcarLixo(tx: Tx, keys: string[], motivo: string): Promis
     await tx`insert into lixo_r2 (key, motivo) values (${key}, ${motivo}) on conflict (key) do nothing`;
   }
 }
+
+// Já limpou do bucket agora: registra na fila com limpo_em preenchido (auditoria).
+export async function marcarLixoLimpo(tx: Tx, keys: string[], motivo: string): Promise<void> {
+  for (const key of keys) {
+    await tx`
+      insert into lixo_r2 (key, motivo, limpo_em)
+      values (${key}, ${motivo}, now())
+      on conflict (key) do update
+        set limpo_em = coalesce(lixo_r2.limpo_em, now()),
+            motivo = excluded.motivo`;
+  }
+}

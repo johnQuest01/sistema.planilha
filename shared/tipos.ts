@@ -60,6 +60,21 @@ export interface Registro {
   atualizadoEm: string;
 }
 
+// Snapshot na lixeira (soft-delete). Fotos ficam no R2 até apagar definitivo.
+export interface ItemLixeira {
+  id: string;
+  colecaoId: string;
+  colecaoNome: string;
+  registroId: string;
+  valores: Record<string, unknown>;
+  criadoPor: string | null;
+  criadoPorId: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+  apagadoEm: string;
+  apagadoPorNome: string | null;
+}
+
 export interface Colecao {
   id: string;
   nome: string;

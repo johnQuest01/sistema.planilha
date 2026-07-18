@@ -2,6 +2,7 @@ import type { Tx } from '../db/comConta';
 import type { Campo, ConfigCampo, Registro, TipoCampo } from '../../../shared/tipos';
 import { schemaDeValores } from '../validacao/valores';
 import { marcarLixo } from './lixo';
+import { moverRegistroParaLixeira } from './lixeira';
 
 interface LinhaRegistro {
   id: string;
@@ -209,25 +210,10 @@ export async function editarRegistro(
   return mapRegistro(linha);
 }
 
-// Apagar o registro órfã todas as suas fotos (ver 6.4): senão os objetos ficariam no
-// bucket pra sempre, sem key que aponte pra eles. Só o dono ou quem criou pode apagar.
+// Soft-delete: vai pra lixeira (snapshot + fotos preservadas no R2).
+// Apagar definitivo (Neon + R2) é na rota da lixeira.
 export type ResultadoApagar = 'ok' | 'nao-encontrado' | 'proibido';
 
 export async function apagarRegistro(tx: Tx, id: string, ator: Ator): Promise<ResultadoApagar> {
-  const atual = await lerRegistro(tx, id);
-  if (atual === null) return 'nao-encontrado';
-
-  const ehDono = ator.papel === 'dono';
-  const ehCriador = atual.criado_por_id === ator.id;
-  if (!ehDono && !ehCriador) return 'proibido';
-
-  const campos = await camposDaColecao(tx, atual.colecao_id);
-  const valores = atual.valores ?? {};
-  const orfas = campos
-    .filter((c) => c.tipo === 'imagem')
-    .flatMap((c) => keysDeImagem(valores, c.id));
-
-  await tx`delete from registros where id = ${id}`;
-  await marcarLixo(tx, orfas, 'registro-apagado');
-  return 'ok';
+  return moverRegistroParaLixeira(tx, id, ator);
 }

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { LogOut, Scissors, Settings } from 'lucide-react';
+import { LogOut, Scissors, Settings, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexto/Auth';
 import './telas.css';
 
@@ -15,6 +15,15 @@ export function TopoApp(): JSX.Element {
       </Link>
       <span className="topo-app__espaco" />
       {nome !== '' && <span className="topo-app__email">{nome}</span>}
+      <Link
+        to="/lixeira"
+        className="btn btn--icone"
+        style={{ color: 'var(--giz)' }}
+        aria-label="Lixeira"
+        title="Lixeira"
+      >
+        <Trash2 size={18} />
+      </Link>
       {ehDono && (
         <Link
           to="/config"

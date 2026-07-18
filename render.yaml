@@ -10,9 +10,9 @@ services:
     # --include=dev: com NODE_ENV=production o npm omite devDependencies (tsc, @types/node).
     # Sem isso o Render cai num tsc GLOBAL da imagem (versão nova) e o build quebra.
     buildCommand: npm ci --include=dev && npm run build -w backend
-    # roda com cwd=backend (workspace), onde `dist/backend/src/server.js` existe.
-    # `node dist/backend/src/server.js` direto da raiz do repo NÃO acha o arquivo.
-    startCommand: npm run start -w backend
+    # Migra o Neon (DIRECT) antes de subir — lixeira e schemas novos precisam disso.
+    # Depois sobe com cwd=backend (workspace), onde `dist/backend/src/server.js` existe.
+    startCommand: npm run migrate -w backend && npm run start -w backend
     healthCheckPath: /health
     autoDeploy: true
     envVars:

@@ -2,12 +2,13 @@ import type {
   Campo,
   Colecao,
   ConfigCampo,
+  ItemLixeira,
   Registro,
   TipoCampo,
   Usuario,
 } from '../../../shared/tipos';
 
-export type { Usuario } from '../../../shared/tipos';
+export type { Usuario, ItemLixeira } from '../../../shared/tipos';
 
 // Resumo devolvido por GET /api/colecoes (sem campos). O detalhe (com campos) vem
 // por GET /api/colecoes/:id como Colecao.
@@ -134,6 +135,13 @@ export const api = {
     }),
   apagarRegistro: (id: string) =>
     pedir<void>(`/api/registros/${id}`, { method: 'DELETE' }),
+
+  // --- lixeira ---
+  listarLixeira: () => pedir<ItemLixeira[]>('/api/lixeira'),
+  restaurarLixeira: (id: string) =>
+    pedir<Registro>(`/api/lixeira/${id}/restaurar`, { method: 'POST' }),
+  apagarLixeiraDefinitivo: (id: string) =>
+    pedir<void>(`/api/lixeira/${id}`, { method: 'DELETE' }),
 
   // --- presença ao vivo ---
   presenca: () =>
