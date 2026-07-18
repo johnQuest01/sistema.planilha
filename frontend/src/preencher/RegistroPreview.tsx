@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Pencil } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { Visor } from '../imagens/Visor';
@@ -148,7 +148,7 @@ export function RegistroPreview({
   }, [registro]);
 
   function iniciarEdicao(): void {
-    if (campoTitulo === undefined || aoAtualizar === undefined) return;
+    if (campoTitulo === undefined) return;
     setEditando(true);
     setRascunho(textoDe(local.valores[campoTitulo.id]));
     setErroNome(null);
@@ -160,7 +160,7 @@ export function RegistroPreview({
   }
 
   async function salvarNome(): Promise<void> {
-    if (campoTitulo === undefined || aoAtualizar === undefined || !editando || salvando) return;
+    if (campoTitulo === undefined || !editando || salvando) return;
     const atual = textoDe(local.valores[campoTitulo.id]);
     const novo = rascunho.trim();
     if (novo === atual.trim()) {
@@ -172,7 +172,7 @@ export function RegistroPreview({
     try {
       const atualizado = await api.editarRegistro(local.id, { [campoTitulo.id]: novo });
       setLocal(atualizado);
-      aoAtualizar(atualizado);
+      aoAtualizar?.(atualizado);
       setEditando(false);
     } catch (e) {
       setErroNome(e instanceof ErroApi ? e.message : 'não foi possível salvar o nome');
@@ -205,6 +205,7 @@ export function RegistroPreview({
                 value={rascunho}
                 autoFocus
                 aria-label="Nome do registro"
+                placeholder="Nome do registro"
                 disabled={salvando}
                 onChange={(e) => setRascunho(e.target.value)}
                 onKeyDown={aoTeclar}
@@ -231,29 +232,38 @@ export function RegistroPreview({
               </div>
               {erroNome !== null && <p className="aviso-erro">{erroNome}</p>}
             </div>
+          ) : campoTitulo !== undefined ? (
+            <button
+              type="button"
+              className="preview-registro__titulo-btn"
+              onClick={iniciarEdicao}
+              title="Clique para renomear"
+            >
+              <h3 className="preview-registro__titulo">{tituloAtual}</h3>
+            </button>
           ) : (
             <h3 className="preview-registro__titulo">{tituloAtual}</h3>
           )}
-          {campoTitulo !== undefined && aoAtualizar !== undefined && !editando && (
-            <button
-              type="button"
-              className="preview-registro__renomear"
-              onClick={iniciarEdicao}
-            >
-              Renomear
-            </button>
-          )}
         </div>
-        {aoAbrir !== undefined && !editando && (
-          <Botao
-            variante="primario"
-            className="preview-registro__acao"
-            onClick={aoAbrir}
-            aria-label={`Abrir registro ${tituloAtual}`}
-          >
-            <ExternalLink size={16} />
-            Abrir registro
-          </Botao>
+        {!editando && (
+          <div className="preview-registro__acoes">
+            {campoTitulo !== undefined && (
+              <Botao variante="padrao" onClick={iniciarEdicao}>
+                <Pencil size={16} />
+                Renomear
+              </Botao>
+            )}
+            {aoAbrir !== undefined && (
+              <Botao
+                variante="primario"
+                onClick={aoAbrir}
+                aria-label={`Abrir registro ${tituloAtual}`}
+              >
+                <ExternalLink size={16} />
+                Abrir registro
+              </Botao>
+            )}
+          </div>
         )}
       </div>
 

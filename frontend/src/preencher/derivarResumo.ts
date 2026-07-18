@@ -48,22 +48,31 @@ export function formatarValor(campo: Campo, valor: unknown): string {
   }
 }
 
-function nomeEhReferencia(nome: string): boolean {
-  const n = nome
+function nomeNormalizado(nome: string): string {
+  return nome
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
     .toLowerCase();
-  return n.includes('referencia');
 }
 
-// Campo usado como "nome"/referência na lista: bloco cujo nome contém "referência",
+function nomeEhTitulo(nome: string): boolean {
+  const n = nomeNormalizado(nome);
+  return (
+    n.includes('referencia') ||
+    n.includes('titulo') ||
+    n === 'nome' ||
+    n.startsWith('nome ') ||
+    n.includes('ref.')
+  );
+}
+
+// Campo usado como "nome"/referência na lista: bloco cujo nome sugere título/ref.,
 // ou o primeiro texto/parágrafo da planilha.
 export function campoReferencia(campos: Campo[]): Campo | undefined {
-  const marcado = campos.find(
-    (c) => (c.tipo === 'texto' || c.tipo === 'paragrafo') && nomeEhReferencia(c.nome),
-  );
+  const textois = campos.filter((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
+  const marcado = textois.find((c) => nomeEhTitulo(c.nome));
   if (marcado !== undefined) return marcado;
-  return campos.find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
+  return textois[0];
 }
 
 // Alias: o "nome" editável na lista é o mesmo campo de referência/título.
