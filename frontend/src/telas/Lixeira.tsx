@@ -9,26 +9,11 @@ import { TopoApp } from './TopoApp';
 import './telas.css';
 import './lixeira.css';
 
-const R2_KEY =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[A-Za-z0-9_-]{21}\.(jpe?g|png|webp)$/;
-
-function coletarKeys(valor: unknown, out: string[] = []): string[] {
-  if (typeof valor === 'string') {
-    if (R2_KEY.test(valor)) out.push(valor);
-    return out;
+function tituloDoItem(item: ItemLixeira): string {
+  if (item.tipo === 'colecao') {
+    return item.colecaoNome.trim() !== '' ? item.colecaoNome : 'Planilha sem nome';
   }
-  if (Array.isArray(valor)) {
-    for (const item of valor) coletarKeys(item, out);
-    return out;
-  }
-  if (valor !== null && typeof valor === 'object') {
-    for (const v of Object.values(valor as Record<string, unknown>)) coletarKeys(v, out);
-  }
-  return out;
-}
-
-function tituloDoSnapshot(valores: Record<string, unknown>): string {
-  for (const v of Object.values(valores)) {
+  for (const v of Object.values(item.valores)) {
     if (typeof v === 'string' && v.trim() !== '') return v.trim();
   }
   return 'Registro sem nome';
@@ -106,8 +91,8 @@ export function Lixeira(): JSX.Element {
           <div>
             <h1 className="lixeira__titulo">Lixeira</h1>
             <p className="lixeira__sub">
-              Registros apagados ficam aqui com fotos e dados. Restaure ou apague de vez
-              (Neon + Cloudflare R2).
+              Compartilhada com o time: planilhas e fichas apagadas ficam aqui. Qualquer um
+              restaura ou apaga de vez. Prévia: só fotos do bloco Referência.
             </p>
           </div>
           <Link to="/" className="btn btn--fantasma">
@@ -118,18 +103,18 @@ export function Lixeira(): JSX.Element {
         {erro !== null && <p className="aviso-erro">{erro}</p>}
 
         {itens.length === 0 ? (
-          <div className="lixeira__vazia">Nenhum registro na lixeira.</div>
+          <div className="lixeira__vazia">Nada na lixeira.</div>
         ) : (
           <ul className="lixeira__lista">
             {itens.map((item) => {
-              const fotos = [...new Set(coletarKeys(item.valores))].slice(0, 6);
-              const titulo = tituloDoSnapshot(item.valores);
+              const fotos = item.fotosReferencia.slice(0, 4);
+              const titulo = tituloDoItem(item);
               const busy = ocupado === item.id;
               return (
                 <li key={item.id} className="lixeira__item">
                   <div className="lixeira__fotos">
                     {fotos.length === 0 ? (
-                      <span className="lixeira__sem-foto">sem foto</span>
+                      <span className="lixeira__sem-foto">sem foto ref.</span>
                     ) : (
                       fotos.map((k) => (
                         <img key={k} src={urlMini(k)} alt="" loading="lazy" />
@@ -137,10 +122,22 @@ export function Lixeira(): JSX.Element {
                     )}
                   </div>
                   <div className="lixeira__corpo">
+                    <p className="lixeira__tipo">
+                      {item.tipo === 'colecao' ? 'Planilha' : 'Ficha'}
+                    </p>
                     <h2 className="lixeira__nome">{titulo}</h2>
                     <p className="lixeira__meta">
-                      Planilha: <strong>{item.colecaoNome || '—'}</strong>
-                      <br />
+                      {item.tipo === 'colecao' ? (
+                        <>
+                          {item.qtdRegistros} ficha{item.qtdRegistros === 1 ? '' : 's'}
+                          <br />
+                        </>
+                      ) : (
+                        <>
+                          Planilha: <strong>{item.colecaoNome || '—'}</strong>
+                          <br />
+                        </>
+                      )}
                       Apagado em {fmt.format(new Date(item.apagadoEm))}
                       {item.apagadoPorNome !== null && item.apagadoPorNome !== ''
                         ? ` por ${item.apagadoPorNome}`

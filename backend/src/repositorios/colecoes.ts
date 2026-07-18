@@ -1,5 +1,6 @@
 import type { Tx } from '../db/comConta';
 import type { Campo, Colecao, ConfigCampo, TipoCampo } from '../../../shared/tipos';
+import { moverColecaoParaLixeira } from './lixeira';
 
 export interface ColecaoResumo {
   id: string;
@@ -96,25 +97,15 @@ export async function renomearColecao(
   return linha === undefined ? null : mapColecao(linha);
 }
 
-// Só o dono ou quem criou a planilha pode apagá-la.
+// Soft-delete: planilha inteira vai para a lixeira (snapshot + fotos no R2).
 export type ResultadoApagarColecao = 'ok' | 'nao-encontrado' | 'proibido';
 
 export async function apagarColecao(
   tx: Tx,
   id: string,
-  ator: { id: string; papel: 'dono' | 'membro' },
+  ator: { id: string; nome: string; papel: 'dono' | 'membro' },
 ): Promise<ResultadoApagarColecao> {
-  const cols = await tx<{ criado_por: string | null }[]>`
-    select criado_por from colecoes where id = ${id}`;
-  const col = cols[0];
-  if (col === undefined) return 'nao-encontrado';
-
-  const ehDono = ator.papel === 'dono';
-  const ehCriador = col.criado_por === ator.id;
-  if (!ehDono && !ehCriador) return 'proibido';
-
-  await tx`delete from colecoes where id = ${id}`;
-  return 'ok';
+  return moverColecaoParaLixeira(tx, id, ator);
 }
 
 // Duplica o FORMATO de uma coleção: mesma configuração de blocos, planilha vazia.

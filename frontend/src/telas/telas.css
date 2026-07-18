@@ -153,6 +153,7 @@
 }
 .cartao-colecao {
   position: relative;
+  overflow: hidden;
   background: var(--cartao);
   border: 1px solid var(--linha);
   border-radius: var(--raio-2);
@@ -196,23 +197,36 @@
 .cartao-colecao__confirma {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: var(--e3);
+  gap: var(--e2);
   padding: var(--e3);
   background: var(--cartao);
   border: 1px solid var(--perigo);
   border-radius: var(--raio-2);
   text-align: center;
+  overflow: auto;
+  box-sizing: border-box;
 }
 .cartao-colecao__confirma-txt {
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.35;
+  word-break: break-word;
 }
 .cartao-colecao__confirma-acoes {
   display: flex;
+  flex-direction: column;
   gap: var(--e2);
+  align-items: stretch;
+  min-width: 0;
+}
+.cartao-colecao__confirma-acoes .btn {
+  width: 100%;
   justify-content: center;
+  min-height: 40px;
+  padding-inline: var(--e2);
 }
 
 /* mensagem de erro inline reaproveitável */

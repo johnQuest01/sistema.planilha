@@ -167,17 +167,22 @@ export function Inicio(): JSX.Element {
                   {confirmando === c.id && (
                     <div className="cartao-colecao__confirma">
                       <span className="cartao-colecao__confirma-txt">
-                        Apagar “{c.nome}” e tudo que ela contém?
+                        Enviar “{c.nome}” para a lixeira?
                       </span>
                       <div className="cartao-colecao__confirma-acoes">
                         <Botao
                           variante="perigo"
+                          bloco
                           disabled={apagandoId === c.id}
                           onClick={() => void apagar(c.id)}
                         >
-                          Apagar
+                          Lixeira
                         </Botao>
-                        <Botao variante="fantasma" onClick={() => setConfirmando(null)}>
+                        <Botao
+                          variante="fantasma"
+                          bloco
+                          onClick={() => setConfirmando(null)}
+                        >
                           Cancelar
                         </Botao>
                       </div>

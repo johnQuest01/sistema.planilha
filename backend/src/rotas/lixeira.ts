@@ -37,7 +37,12 @@ export async function rotasLixeira(app: FastifyInstance): Promise<void> {
           .code(409)
           .send({ erro: 'já existe um registro com este id; não dá para restaurar' });
       }
-      return reply.send(registro);
+      if (resultado === 'colecao-ocupada') {
+        return reply
+          .code(409)
+          .send({ erro: 'já existe uma planilha com este id; não dá para restaurar' });
+      }
+      return reply.send(registro ?? { ok: true });
     },
   );
 
@@ -57,10 +62,7 @@ export async function rotasLixeira(app: FastifyInstance): Promise<void> {
       if (resultado === 'nao-encontrado') {
         return reply.code(404).send({ erro: 'item não encontrado na lixeira' });
       }
-      if (resultado === 'proibido') {
-        return reply.code(403).send({ erro: 'sem permissão para apagar definitivamente' });
-      }
-      // R2 fora da transação: Neon já está limpo; apaga mídia agora.
+      // Qualquer usuário da conta pode; R2 fora da transação (Neon já limpo).
       await apagarKeysNoR2(keys);
       return reply.code(204).send();
     },

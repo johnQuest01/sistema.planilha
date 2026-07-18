@@ -69,6 +69,14 @@
   flex: 1;
   min-width: 160px;
 }
+.lixeira__tipo {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tinta-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .lixeira__nome {
   margin: 0;
   font-size: 16px;

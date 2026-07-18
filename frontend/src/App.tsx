@@ -6,6 +6,7 @@ import { Colecao } from './telas/Colecao';
 import { Config } from './telas/Config';
 import { Lixeira } from './telas/Lixeira';
 import { Carregando } from './ui/Carregando';
+import { BotaoLixeiraFlutuante } from './ui/BotaoLixeiraFlutuante';
 import { InstalarApp } from './ui/InstalarApp';
 import { Presenca } from './ui/Presenca';
 
@@ -66,6 +67,7 @@ export function App(): JSX.Element {
     <BrowserRouter>
       <ProvedorAuth>
         <Rotas />
+        <BotaoLixeiraFlutuante />
         <Presenca />
         <InstalarApp />
       </ProvedorAuth>

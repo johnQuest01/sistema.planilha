@@ -165,10 +165,10 @@ export function Colecao(): JSX.Element {
         {confirmandoApagar && (
           <div className="colecao-apagar-confirma">
             <span className="colecao-apagar-confirma__txt">
-              Apagar “{colecao.nome}” e tudo que ela contém? Isso não pode ser desfeito.
+              Enviar “{colecao.nome}” e tudo que ela contém para a lixeira?
             </span>
             <Botao variante="perigo" disabled={apagando} onClick={() => void apagar()}>
-              Apagar planilha
+              Enviar para lixeira
             </Botao>
             <Botao variante="fantasma" onClick={() => setConfirmandoApagar(false)}>
               Cancelar

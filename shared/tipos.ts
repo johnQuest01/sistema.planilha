@@ -63,10 +63,13 @@ export interface Registro {
 // Snapshot na lixeira (soft-delete). Fotos ficam no R2 até apagar definitivo.
 export interface ItemLixeira {
   id: string;
+  tipo: 'registro' | 'colecao';
   colecaoId: string;
   colecaoNome: string;
-  registroId: string;
+  registroId: string | null; // null quando tipo === 'colecao'
   valores: Record<string, unknown>;
+  fotosReferencia: string[]; // só do bloco "Referência" (prévia)
+  qtdRegistros: number;
   criadoPor: string | null;
   criadoPorId: string | null;
   criadoEm: string;
