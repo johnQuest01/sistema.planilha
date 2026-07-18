@@ -26,6 +26,14 @@
   color: rgba(238, 243, 236, 0.75);
   border: 1px dashed rgba(238, 243, 236, 0.2);
   border-radius: var(--raio-2);
+  line-height: 1.5;
+}
+.lixeira__vazia-dica {
+  display: inline-block;
+  margin-top: 8px;
+  max-width: 28rem;
+  font-size: 13px;
+  color: rgba(238, 243, 236, 0.55);
 }
 .lixeira__lista {
   list-style: none;

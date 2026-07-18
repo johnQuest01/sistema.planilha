@@ -1,15 +1,15 @@
 .lixeira-fab {
   position: fixed;
-  z-index: 70;
+  z-index: 90;
   width: 56px;
   height: 56px;
-  border: none;
+  border: 2px solid rgba(255, 255, 255, 0.35);
   border-radius: 999px;
   display: grid;
   place-items: center;
   background: var(--fita);
   color: #fff;
-  box-shadow: 0 4px 16px rgba(23, 32, 28, 0.28);
+  box-shadow: 0 4px 18px rgba(23, 32, 28, 0.35);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -20,7 +20,7 @@
 }
 .lixeira-fab--ativo {
   outline: 2px solid var(--giz);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 .lixeira-fab:hover {
   background: var(--fita-forte);

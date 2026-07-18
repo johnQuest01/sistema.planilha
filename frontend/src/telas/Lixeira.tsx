@@ -91,8 +91,8 @@ export function Lixeira(): JSX.Element {
           <div>
             <h1 className="lixeira__titulo">Lixeira</h1>
             <p className="lixeira__sub">
-              Compartilhada com o time: planilhas e fichas apagadas ficam aqui. Qualquer um
-              restaura ou apaga de vez. Prévia: só fotos do bloco Referência.
+              Aqui entram planilhas e fichas apagadas (com tudo que foi preenchido). Qualquer
+              pessoa do time pode restaurar ou apagar de vez. Prévia: fotos do bloco Referência.
             </p>
           </div>
           <Link to="/" className="btn btn--fantasma">
@@ -103,11 +103,18 @@ export function Lixeira(): JSX.Element {
         {erro !== null && <p className="aviso-erro">{erro}</p>}
 
         {itens.length === 0 ? (
-          <div className="lixeira__vazia">Nada na lixeira.</div>
+          <div className="lixeira__vazia">
+            Nada na lixeira.
+            <br />
+            <span className="lixeira__vazia-dica">
+              Ao apagar uma planilha ou ficha, ela aparece aqui para restaurar com os dados e
+              fotos.
+            </span>
+          </div>
         ) : (
           <ul className="lixeira__lista">
             {itens.map((item) => {
-              const fotos = item.fotosReferencia.slice(0, 4);
+              const fotos = (item.fotosReferencia ?? []).slice(0, 4);
               const titulo = tituloDoItem(item);
               const busy = ocupado === item.id;
               return (

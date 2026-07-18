@@ -43,9 +43,10 @@ function limitar(pos: Pos): Pos {
 }
 
 function posPadrao(): Pos {
+  // Canto inferior direito, acima da barra de presença / instalar app.
   return limitar({
-    x: window.innerWidth - TAM - 20,
-    y: window.innerHeight - TAM - 88,
+    x: window.innerWidth - TAM - 24,
+    y: window.innerHeight - TAM - 96,
   });
 }
 
