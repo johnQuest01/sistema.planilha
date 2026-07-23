@@ -188,32 +188,36 @@ export function Inicio(): JSX.Element {
               {colecoes.map((c) => (
                 <div key={c.id} className="cartao-colecao">
                   <Link to={`/c/${c.id}`} className="cartao-colecao__link">
-                    <span className="cartao-colecao__nome">
-                      {c.protegida && (
-                        <Lock
-                          size={14}
-                          className="cartao-colecao__cadeado"
-                          aria-label="Protegida por senha"
-                        />
-                      )}
-                      {c.nome}
-                    </span>
+                    <span className="cartao-colecao__nome">{c.nome}</span>
                     <span className="etiqueta cartao-colecao__meta">
                       {c.bloqueada
                         ? 'senha necessária'
                         : fmtData.format(new Date(c.atualizadoEm))}
                     </span>
                   </Link>
-                  {podeApagar(c) && !c.bloqueada && (
-                    <button
-                      type="button"
-                      className="btn btn--icone cartao-colecao__apagar"
-                      aria-label={`Apagar planilha ${c.nome}`}
-                      title="Apagar planilha"
-                      onClick={() => setConfirmando(c.id)}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                  {(c.protegida || (podeApagar(c) && !c.bloqueada)) && (
+                    <div className="cartao-colecao__acoes">
+                      {c.protegida && (
+                        <span
+                          className="cartao-colecao__cadeado"
+                          title="Protegida por senha"
+                          aria-label="Protegida por senha"
+                        >
+                          <Lock size={16} aria-hidden />
+                        </span>
+                      )}
+                      {podeApagar(c) && !c.bloqueada && (
+                        <button
+                          type="button"
+                          className="btn btn--icone cartao-colecao__apagar"
+                          aria-label={`Apagar planilha ${c.nome}`}
+                          title="Apagar planilha"
+                          onClick={() => setConfirmando(c.id)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
                   )}
                   {confirmando === c.id && (
                     <div className="cartao-colecao__confirma">

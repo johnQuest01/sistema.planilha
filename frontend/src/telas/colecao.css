@@ -191,6 +191,17 @@
 .colecao-barra .btn--icone:not(:disabled):hover {
   background: rgba(238, 243, 236, 0.12);
 }
+.colecao-barra__acoes {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px; /* cadeado um pouco afastado da lixeira */
+}
+.colecao-barra__cadeado {
+  display: inline-flex;
+  align-items: center;
+  color: var(--giz);
+  opacity: 0.85;
+}
 /* apagar planilha aberta (barra do topo) */
 .colecao-barra__apagar:not(:disabled):hover {
   color: var(--perigo);

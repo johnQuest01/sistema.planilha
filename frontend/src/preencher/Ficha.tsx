@@ -143,11 +143,7 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDu
 
   return (
     <FolhaInferior
-      titulo={
-        registro.criadoPor !== null && registro.criadoPor !== ''
-          ? `Preenchido por ${registro.criadoPor}`
-          : tituloDoRegistro(colecao.campos, registroLocal)
-      }
+      titulo={tituloDoRegistro(colecao.campos, registroLocal)}
       subtitulo={
         <>
           {colecao.nome}

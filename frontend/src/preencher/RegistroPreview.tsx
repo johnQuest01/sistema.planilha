@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ExternalLink, Pencil } from 'lucide-react';
+import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
+import { useAuth } from '../contexto/Auth';
 import { Visor } from '../imagens/Visor';
 import { urlCheia } from '../imagens/urls';
 import { Botao } from '../ui/Botao';
@@ -20,6 +21,7 @@ interface Props {
   registro: Registro;
   aoAbrir?: () => void;
   aoAtualizar?: (r: Registro) => void;
+  aoApagar?: (id: string) => void;
 }
 
 function keysDe(valor: unknown): string[] {
@@ -134,7 +136,15 @@ export function RegistroPreview({
   registro,
   aoAbrir,
   aoAtualizar,
+  aoApagar,
 }: Props): JSX.Element {
+  const { estado } = useAuth();
+  const usuario = estado.fase === 'logado' ? estado.usuario : null;
+  const podeApagar =
+    aoApagar !== undefined &&
+    usuario !== null &&
+    (usuario.papel === 'dono' || registro.criadoPorId === usuario.id);
+
   const campoTitulo = campoTituloDoRegistro(colecao.campos);
   const [local, setLocal] = useState(registro);
   const [editando, setEditando] = useState(false);
@@ -142,6 +152,9 @@ export function RegistroPreview({
   const [salvando, setSalvando] = useState(false);
   const [erroNome, setErroNome] = useState<string | null>(null);
   const [visor, setVisor] = useState<{ keys: string[]; indice: number } | null>(null);
+  const [confirmandoApagar, setConfirmandoApagar] = useState(false);
+  const [apagando, setApagando] = useState(false);
+  const [erroApagar, setErroApagar] = useState<string | null>(null);
 
   useEffect(() => {
     setLocal(registro);
@@ -189,6 +202,19 @@ export function RegistroPreview({
     if (e.key === 'Escape') {
       e.preventDefault();
       cancelarEdicao();
+    }
+  }
+
+  async function apagarRegistro(): Promise<void> {
+    if (!podeApagar || apagando || aoApagar === undefined) return;
+    setApagando(true);
+    setErroApagar(null);
+    try {
+      await api.apagarRegistro(local.id);
+      aoApagar(local.id);
+    } catch (e) {
+      setErroApagar(e instanceof ErroApi ? e.message : 'não foi possível apagar');
+      setApagando(false);
     }
   }
 
@@ -245,7 +271,7 @@ export function RegistroPreview({
             <h3 className="preview-registro__titulo">{tituloAtual}</h3>
           )}
         </div>
-        {!editando && (
+        {!editando && !confirmandoApagar && (
           <div className="preview-registro__acoes">
             {campoTitulo !== undefined && (
               <Botao variante="padrao" onClick={iniciarEdicao}>
@@ -268,6 +294,44 @@ export function RegistroPreview({
                 </span>
               </Botao>
             )}
+            {podeApagar && (
+              <button
+                type="button"
+                className="btn btn--icone preview-registro__lixeira"
+                aria-label={`Apagar registro ${tituloAtual}`}
+                title="Enviar para lixeira"
+                onClick={() => {
+                  setConfirmandoApagar(true);
+                  setErroApagar(null);
+                }}
+              >
+                <Trash2 size={18} aria-hidden />
+              </button>
+            )}
+          </div>
+        )}
+        {confirmandoApagar && (
+          <div className="preview-registro__confirma-apagar">
+            <span className="preview-registro__confirma-txt">
+              Mover para a lixeira? Dados e fotos ficam salvos até apagar definitivo.
+            </span>
+            <div className="preview-registro__confirma-acoes">
+              <Botao
+                variante="perigo"
+                disabled={apagando}
+                onClick={() => void apagarRegistro()}
+              >
+                {apagando ? 'Apagando…' : 'Lixeira'}
+              </Botao>
+              <Botao
+                variante="fantasma"
+                disabled={apagando}
+                onClick={() => setConfirmandoApagar(false)}
+              >
+                Cancelar
+              </Botao>
+            </div>
+            {erroApagar !== null && <p className="aviso-erro">{erroApagar}</p>}
           </div>
         )}
       </div>
@@ -287,10 +351,6 @@ export function RegistroPreview({
           </div>
         ))}
       </div>
-
-      {local.criadoPor !== null && local.criadoPor !== '' && (
-        <p className="preview-meta">Preenchido por {local.criadoPor}</p>
-      )}
 
       {visor !== null && (
         <Visor

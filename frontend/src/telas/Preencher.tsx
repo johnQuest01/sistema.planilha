@@ -182,6 +182,7 @@ export function Preencher({
         colecao={colecao}
         aoAbrir={abrirEdicao}
         aoAtualizar={aoAtualizar}
+        aoApagar={aoApagar}
       />
 
       {adicionandoCampo && (
@@ -235,6 +236,10 @@ export function Preencher({
             registro={previa}
             aoAbrir={() => abrirEdicao(previa)}
             aoAtualizar={aoAtualizar}
+            aoApagar={(id) => {
+              aoApagar(id);
+              setPrevia(null);
+            }}
           />
         </FolhaInferior>
       )}

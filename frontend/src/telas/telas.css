@@ -210,10 +210,15 @@
 .cartao-colecao__meta {
   margin-top: auto;
 }
-.cartao-colecao__apagar {
+.cartao-colecao__acoes {
   position: absolute;
   top: var(--e1);
   right: var(--e1);
+  display: flex;
+  align-items: center;
+  gap: 14px; /* cadeado um pouco afastado da lixeira */
+}
+.cartao-colecao__apagar {
   color: var(--tinta-3);
   opacity: 0.7;
 }
@@ -317,10 +322,11 @@
   margin: var(--e2) 0;
 }
 .cartao-colecao__cadeado {
-  display: inline-block;
-  vertical-align: -2px;
-  margin-right: 6px;
-  opacity: 0.75;
+  display: inline-flex;
+  align-items: center;
+  color: var(--tinta-3);
+  opacity: 0.8;
+  pointer-events: none;
 }
 .desbloquear {
   max-width: 400px;

@@ -10,9 +10,10 @@ interface Props {
   colecao: Colecao;
   aoAbrir: (r: Registro) => void;
   aoAtualizar?: (r: Registro) => void;
+  aoApagar?: (id: string) => void;
 }
 
-export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar }: Props): JSX.Element {
+export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar, aoApagar }: Props): JSX.Element {
   const [q, setQ] = useState('');
   const [resultados, setResultados] = useState<Registro[] | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -94,6 +95,12 @@ export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar }: Props): JSX.E
                 registro={r}
                 aoAbrir={() => aoAbrir(r)}
                 aoAtualizar={aoAtualizar}
+                aoApagar={(id) => {
+                  setResultados((atual) =>
+                    atual === null ? atual : atual.filter((x) => x.id !== id),
+                  );
+                  aoApagar?.(id);
+                }}
               />
             ))}
         </div>

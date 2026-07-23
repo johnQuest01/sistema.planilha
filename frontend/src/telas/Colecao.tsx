@@ -243,16 +243,29 @@ export function Colecao(): JSX.Element {
           >
             <Copy size={18} />
           </button>
-          {podeApagar && (
-            <button
-              type="button"
-              className="btn btn--icone colecao-barra__apagar"
-              aria-label="Apagar planilha"
-              title="Apagar planilha"
-              onClick={() => setConfirmandoApagar(true)}
-            >
-              <Trash2 size={18} />
-            </button>
+          {(colecao.protegida || podeApagar) && (
+            <div className="colecao-barra__acoes">
+              {colecao.protegida && (
+                <span
+                  className="colecao-barra__cadeado"
+                  title="Protegida por senha"
+                  aria-label="Protegida por senha"
+                >
+                  <Lock size={18} aria-hidden />
+                </span>
+              )}
+              {podeApagar && (
+                <button
+                  type="button"
+                  className="btn btn--icone colecao-barra__apagar"
+                  aria-label="Apagar planilha"
+                  title="Apagar planilha"
+                  onClick={() => setConfirmandoApagar(true)}
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
+            </div>
           )}
           <Segmentado
             rotuloAria="Modo da planilha"
