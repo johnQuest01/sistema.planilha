@@ -83,6 +83,10 @@ export interface Colecao {
   nome: string;
   criadoPor: string | null;           // id do usuario que criou (permissão de apagar)
   campos: Campo[];
+  /** true quando a planilha tem senha (Oficina). */
+  protegida: boolean;
+  /** true quando o usuário logado ainda precisa digitar a senha. */
+  bloqueada: boolean;
 }
 
 // Usuário logado (pessoa). Papel 'dono' pode apagar tudo; 'membro' preenche e cria.

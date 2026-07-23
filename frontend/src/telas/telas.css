@@ -311,3 +311,42 @@
   gap: var(--e2);
   flex-wrap: wrap;
 }
+.config__sep {
+  border: none;
+  border-top: 1px solid var(--linha);
+  margin: var(--e2) 0;
+}
+.cartao-colecao__cadeado {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 6px;
+  opacity: 0.75;
+}
+.desbloquear {
+  max-width: 400px;
+  margin: var(--e5) auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding: var(--e5);
+  background: var(--papel);
+  border-radius: var(--raio-2);
+  box-shadow: var(--sombra);
+}
+.desbloquear__icone {
+  color: var(--tinta-3);
+}
+.desbloquear__titulo {
+  font-size: 22px;
+  font-weight: 700;
+}
+.desbloquear__ajuda {
+  color: var(--tinta-3);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.desbloquear__forma {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}

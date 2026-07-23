@@ -29,5 +29,14 @@ export const config = {
   // E-mail do dono cuja conta é o "workspace" compartilhado: todo cadastro novo
   // cai nessa conta. Configurável por env; default é a conta do Bruno.
   workspaceOwnerEmail: opcional('WORKSPACE_OWNER_EMAIL', 'brunoacre07@gmail.com').toLowerCase(),
+  // E-mails com acesso livre à planilha Oficina (sem digitar a senha da planilha).
+  // Lista separada por vírgula em PLANILHA_ACESSO_LIVRE_EMAILS, se quiser sobrescrever.
+  planilhaAcessoLivreEmails: opcional(
+    'PLANILHA_ACESSO_LIVRE_EMAILS',
+    'brunoacre07@gmail.com,jurandirsilvadesena123@gmail.com',
+  )
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.length > 0),
   isProd,
 } as const;

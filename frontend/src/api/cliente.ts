@@ -18,6 +18,8 @@ export interface ColecaoResumo {
   criadoPor: string | null;
   criadoEm: string;
   atualizadoEm: string;
+  protegida: boolean;
+  bloqueada: boolean;
 }
 
 export interface RespostaUpload {
@@ -28,10 +30,12 @@ export interface RespostaUpload {
 
 export class ErroApi extends Error {
   readonly status: number;
-  constructor(status: number, mensagem: string) {
+  readonly corpo: unknown;
+  constructor(status: number, mensagem: string, corpo?: unknown) {
     super(mensagem);
     this.name = 'ErroApi';
     this.status = status;
+    this.corpo = corpo;
   }
 }
 
@@ -59,7 +63,7 @@ async function pedir<T>(caminho: string, init?: RequestInit): Promise<T> {
       typeof (corpo as { erro: unknown }).erro === 'string'
         ? (corpo as { erro: string }).erro
         : `erro ${resp.status}`;
-    throw new ErroApi(resp.status, msg);
+    throw new ErroApi(resp.status, msg, corpo);
   }
 
   return corpo as T;
@@ -89,6 +93,13 @@ export const api = {
   criarColecao: (nome: string) =>
     pedir<ColecaoResumo>('/api/colecoes', corpoJson({ nome })),
   obterColecao: (id: string) => pedir<Colecao>(`/api/colecoes/${id}`),
+  desbloquearColecao: (id: string, senha: string) =>
+    pedir<Colecao>(`/api/colecoes/${id}/desbloquear`, corpoJson({ senha })),
+  definirSenhaColecao: (id: string, senha: string) =>
+    pedir<{ ok: boolean }>(`/api/colecoes/${id}/senha`, {
+      method: 'PATCH',
+      body: JSON.stringify({ senha }),
+    }),
   renomearColecao: (id: string, nome: string) =>
     pedir<ColecaoResumo>(`/api/colecoes/${id}`, {
       method: 'PATCH',

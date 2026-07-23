@@ -1,18 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Copy, Trash2 } from 'lucide-react';
+import { Copy, Lock, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao as TColecao } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
 import { Segmentado } from '../ui/Segmentado';
 import { Botao } from '../ui/Botao';
+import { Campo as CampoUi } from '../ui/Campo';
 import { Carregando } from '../ui/Carregando';
 import { TopoApp } from './TopoApp';
 import { Criar } from './Criar';
 import { Preencher } from './Preencher';
 import './colecao.css';
+import './telas.css';
 
 type Modo = 'criar' | 'preencher';
+
+function nomeDoErroBloqueio(e: ErroApi): string {
+  const c = e.corpo;
+  if (
+    c !== undefined &&
+    typeof c === 'object' &&
+    c !== null &&
+    'nome' in c &&
+    typeof (c as { nome: unknown }).nome === 'string'
+  ) {
+    return (c as { nome: string }).nome;
+  }
+  return 'Oficina';
+}
 
 export function Colecao(): JSX.Element {
   const { id = '' } = useParams();
@@ -20,6 +36,10 @@ export function Colecao(): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   const [colecao, setColecao] = useState<TColecao | null>(null);
+  const [bloqueada, setBloqueada] = useState<{ nome: string } | null>(null);
+  const [senha, setSenha] = useState('');
+  const [erroSenha, setErroSenha] = useState<string | null>(null);
+  const [desbloqueando, setDesbloqueando] = useState(false);
   const [modo, setModo] = useState<Modo>('criar');
   const [nomeEdit, setNomeEdit] = useState('');
   const [duplicando, setDuplicando] = useState(false);
@@ -27,21 +47,22 @@ export function Colecao(): JSX.Element {
   const [apagando, setApagando] = useState(false);
   const nomeSalvo = useRef('');
 
-  const recarregar = useCallback(async () => {
+  const recarregar = async (): Promise<void> => {
     const col = await api.obterColecao(id);
+    setBloqueada(null);
     setColecao(col);
     setNomeEdit(col.nome);
     nomeSalvo.current = col.nome;
-  }, [id]);
+  };
 
-  // Atualização local dos blocos (UI otimista). Nenhum write refaz o GET da coleção:
-  // quem escreve reflete a mudança aqui na hora, sem round-trip pra desenhar.
-  const atualizarCampos = useCallback((fn: (campos: Campo[]) => Campo[]) => {
+  const atualizarCampos = (fn: (campos: Campo[]) => Campo[]): void => {
     setColecao((c) => (c === null ? c : { ...c, campos: fn(c.campos) }));
-  }, []);
+  };
 
   useEffect(() => {
     let vivo = true;
+    setColecao(null);
+    setBloqueada(null);
     void api
       .obterColecao(id)
       .then((col) => {
@@ -49,10 +70,14 @@ export function Colecao(): JSX.Element {
         setColecao(col);
         setNomeEdit(col.nome);
         nomeSalvo.current = col.nome;
-        // planilha nova (sem campos) abre em Criar; já povoada abre em Preencher
         setModo(col.campos.length === 0 ? 'criar' : 'preencher');
       })
       .catch((e: unknown) => {
+        if (!vivo) return;
+        if (e instanceof ErroApi && e.status === 403) {
+          setBloqueada({ nome: nomeDoErroBloqueio(e) });
+          return;
+        }
         if (e instanceof ErroApi && e.status === 404) navegar('/', { replace: true });
       });
     return () => {
@@ -60,10 +85,30 @@ export function Colecao(): JSX.Element {
     };
   }, [id, navegar]);
 
-  // Nome da planilha também é o título da aba.
   useEffect(() => {
     if (colecao !== null) document.title = `${colecao.nome} · Mostruário`;
-  }, [colecao]);
+    else if (bloqueada !== null) document.title = `${bloqueada.nome} · Mostruário`;
+  }, [colecao, bloqueada]);
+
+  async function desbloquear(e: FormEvent): Promise<void> {
+    e.preventDefault();
+    if (senha.trim().length < 4 || desbloqueando) return;
+    setDesbloqueando(true);
+    setErroSenha(null);
+    try {
+      const col = await api.desbloquearColecao(id, senha);
+      setBloqueada(null);
+      setSenha('');
+      setColecao(col);
+      setNomeEdit(col.nome);
+      nomeSalvo.current = col.nome;
+      setModo(col.campos.length === 0 ? 'criar' : 'preencher');
+    } catch (err) {
+      setErroSenha(err instanceof ErroApi ? err.message : 'senha inválida');
+    } finally {
+      setDesbloqueando(false);
+    }
+  }
 
   async function salvarNome(): Promise<void> {
     const limpo = nomeEdit.trim();
@@ -103,10 +148,46 @@ export function Colecao(): JSX.Element {
     }
   }
 
+  if (bloqueada !== null) {
+    return (
+      <div className="pagina">
+        <TopoApp />
+        <div className="faixa">
+          <div className="desbloquear">
+            <div className="desbloquear__icone" aria-hidden="true">
+              <Lock size={28} />
+            </div>
+            <h1 className="desbloquear__titulo">{bloqueada.nome}</h1>
+            <p className="desbloquear__ajuda">
+              Esta planilha é protegida por senha. Digite a senha para continuar.
+            </p>
+            <form className="desbloquear__forma" onSubmit={(e) => void desbloquear(e)}>
+              <CampoUi
+                rotulo="Senha da planilha"
+                type="password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                autoFocus
+              />
+              <Botao
+                variante="primario"
+                type="submit"
+                bloco
+                disabled={desbloqueando || senha.trim().length < 4}
+              >
+                Desbloquear
+              </Botao>
+              {erroSenha !== null && <p className="aviso-erro">{erroSenha}</p>}
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (colecao === null) return <Carregando />;
 
   const ehPreencher = modo === 'preencher';
-  // Só o dono ou quem criou a planilha pode apagá-la (o backend também barra com 403).
   const podeApagar =
     usuario !== null && (usuario.papel === 'dono' || colecao.criadoPor === usuario.id);
 
@@ -177,7 +258,11 @@ export function Colecao(): JSX.Element {
         )}
 
         {modo === 'criar' ? (
-          <Criar colecao={colecao} aoMudarCampos={atualizarCampos} recarregar={() => void recarregar()} />
+          <Criar
+            colecao={colecao}
+            aoMudarCampos={atualizarCampos}
+            recarregar={() => void recarregar()}
+          />
         ) : (
           <Preencher colecao={colecao} aoMudarCampos={atualizarCampos} />
         )}

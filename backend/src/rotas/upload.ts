@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { comConta } from '../db/comConta';
-import { exigeDono, contaObrigatoria } from '../auth/exigeDono';
+import { exigeDono, contaObrigatoria, usuarioObrigatorio } from '../auth/exigeDono';
+import { verificarAcessoColecao } from '../auth/acessoColecao';
 import { validaIdParam } from '../validacao/params';
 import { uploadSchema } from '../validacao/upload';
 import { obterColecaoIdDoRegistro } from '../repositorios/registros';
@@ -16,12 +17,20 @@ export async function rotasUpload(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const { mime, tamanhoCheia, tamanhoMini } = uploadSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
+      const u = usuarioObrigatorio(req);
 
       // RLS garante que o registro é do dono; senão vem null → 404.
       const colecaoId = await comConta(contaId, (tx) =>
         obterColecaoIdDoRegistro(tx, req.params.id),
       );
       if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
+
+      const acesso = await comConta(contaId, (tx) =>
+        verificarAcessoColecao(tx, colecaoId, { id: u.id, email: u.email }),
+      );
+      if (acesso === 'bloqueado') {
+        return reply.code(403).send({ erro: 'senha necessária', bloqueada: true });
+      }
 
       const ext = extDoMime(mime);
       if (ext === null) return reply.code(400).send({ erro: 'mime não suportado' });

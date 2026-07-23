@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Lock, Plus, Trash2 } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo } from '../api/cliente';
 import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
@@ -22,7 +22,6 @@ export function Inicio(): JSX.Element {
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
 
-  // Só o dono ou quem criou a planilha pode apagá-la (o backend também barra com 403).
   function podeApagar(c: ColecaoResumo): boolean {
     return usuario !== null && (usuario.papel === 'dono' || c.criadoPor === usuario.id);
   }
@@ -67,6 +66,7 @@ export function Inicio(): JSX.Element {
       navegar(`/c/${col.id}`);
     } catch (err) {
       setErro(err instanceof ErroApi ? err.message : 'não foi possível criar');
+    } finally {
       setCriando(false);
     }
   }
@@ -148,12 +148,23 @@ export function Inicio(): JSX.Element {
               {colecoes.map((c) => (
                 <div key={c.id} className="cartao-colecao">
                   <Link to={`/c/${c.id}`} className="cartao-colecao__link">
-                    <span className="cartao-colecao__nome">{c.nome}</span>
+                    <span className="cartao-colecao__nome">
+                      {c.protegida && (
+                        <Lock
+                          size={14}
+                          className="cartao-colecao__cadeado"
+                          aria-label="Protegida por senha"
+                        />
+                      )}
+                      {c.nome}
+                    </span>
                     <span className="etiqueta cartao-colecao__meta">
-                      {fmtData.format(new Date(c.atualizadoEm))}
+                      {c.bloqueada
+                        ? 'senha necessária'
+                        : fmtData.format(new Date(c.atualizadoEm))}
                     </span>
                   </Link>
-                  {podeApagar(c) && (
+                  {podeApagar(c) && !c.bloqueada && (
                     <button
                       type="button"
                       className="btn btn--icone cartao-colecao__apagar"

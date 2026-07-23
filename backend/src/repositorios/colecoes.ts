@@ -1,5 +1,10 @@
 import type { Tx } from '../db/comConta';
 import type { Campo, Colecao, ConfigCampo, TipoCampo } from '../../../shared/tipos';
+import {
+  emailComAcessoLivre,
+  limparSenhaSeNaoOficina,
+  usuarioJaDesbloqueou,
+} from '../auth/acessoColecao';
 import { moverColecaoParaLixeira } from './lixeira';
 
 export interface ColecaoResumo {
@@ -8,6 +13,8 @@ export interface ColecaoResumo {
   criadoPor: string | null;
   criadoEm: string;
   atualizadoEm: string;
+  protegida: boolean;
+  bloqueada: boolean;
 }
 
 interface LinhaColecao {
@@ -16,6 +23,7 @@ interface LinhaColecao {
   criado_por: string | null;
   criado_em: Date;
   atualizado_em: Date;
+  senha_hash: string | null;
 }
 
 interface LinhaCampo {
@@ -27,13 +35,21 @@ interface LinhaCampo {
   config: ConfigCampo | null;
 }
 
-function mapColecao(r: LinhaColecao): ColecaoResumo {
+function mapColecao(
+  r: LinhaColecao,
+  acesso: { email: string; usuarioId: string; jaDesbloqueou: boolean },
+): ColecaoResumo {
+  const protegida = r.senha_hash !== null;
+  const bloqueada =
+    protegida && !emailComAcessoLivre(acesso.email) && !acesso.jaDesbloqueou;
   return {
     id: r.id,
     nome: r.nome,
     criadoPor: r.criado_por,
     criadoEm: r.criado_em.toISOString(),
     atualizadoEm: r.atualizado_em.toISOString(),
+    protegida,
+    bloqueada,
   };
 }
 
@@ -53,48 +69,98 @@ export async function criarColecao(
   contaId: string,
   nome: string,
   criadoPor: string,
+  acesso: { email: string; usuarioId: string },
 ): Promise<ColecaoResumo> {
   const linhas = await tx<LinhaColecao[]>`
     insert into colecoes (conta_id, nome, criado_por) values (${contaId}, ${nome}, ${criadoPor})
-    returning id, nome, criado_por, criado_em, atualizado_em`;
+    returning id, nome, criado_por, criado_em, atualizado_em, senha_hash`;
   const linha = linhas[0];
   if (linha === undefined) throw new Error('insert de coleção não retornou linha');
-  return mapColecao(linha);
+  return mapColecao(linha, { ...acesso, jaDesbloqueou: false });
 }
 
-export async function listarColecoes(tx: Tx, contaId: string): Promise<ColecaoResumo[]> {
+export async function listarColecoes(
+  tx: Tx,
+  contaId: string,
+  acesso: { email: string; usuarioId: string },
+): Promise<ColecaoResumo[]> {
   const linhas = await tx<LinhaColecao[]>`
-    select id, nome, criado_por, criado_em, atualizado_em
+    select id, nome, criado_por, criado_em, atualizado_em, senha_hash
     from colecoes where conta_id = ${contaId}
     order by criado_em desc`;
-  return linhas.map(mapColecao);
+
+  const resultado: ColecaoResumo[] = [];
+  for (const linha of linhas) {
+    const jaDesbloqueou =
+      linha.senha_hash === null
+        ? false
+        : await usuarioJaDesbloqueou(tx, linha.id, acesso.usuarioId);
+    resultado.push(mapColecao(linha, { ...acesso, jaDesbloqueou }));
+  }
+  return resultado;
 }
 
-export async function obterColecao(tx: Tx, id: string): Promise<Colecao | null> {
-  const cols = await tx<{ id: string; nome: string; criado_por: string | null }[]>`
-    select id, nome, criado_por from colecoes where id = ${id}`;
+export async function obterColecao(
+  tx: Tx,
+  id: string,
+  acesso: { email: string; usuarioId: string },
+): Promise<Colecao | null> {
+  const cols = await tx<
+    { id: string; nome: string; criado_por: string | null; senha_hash: string | null }[]
+  >`select id, nome, criado_por, senha_hash from colecoes where id = ${id}`;
   const col = cols[0];
   if (col === undefined) return null;
+
+  const protegida = col.senha_hash !== null;
+  const jaDesbloqueou =
+    protegida ? await usuarioJaDesbloqueou(tx, id, acesso.usuarioId) : false;
+  const bloqueada =
+    protegida && !emailComAcessoLivre(acesso.email) && !jaDesbloqueou;
+
+  if (bloqueada) {
+    return {
+      id: col.id,
+      nome: col.nome,
+      criadoPor: col.criado_por,
+      campos: [],
+      protegida: true,
+      bloqueada: true,
+    };
+  }
 
   const campos = await tx<LinhaCampo[]>`
     select id, colecao_id, nome, tipo, ordem, config
     from campos where colecao_id = ${id}
     order by ordem, criado_em`;
 
-  return { id: col.id, nome: col.nome, criadoPor: col.criado_por, campos: campos.map(mapCampo) };
+  return {
+    id: col.id,
+    nome: col.nome,
+    criadoPor: col.criado_por,
+    campos: campos.map(mapCampo),
+    protegida,
+    bloqueada: false,
+  };
 }
 
 export async function renomearColecao(
   tx: Tx,
   id: string,
   nome: string,
+  acesso: { email: string; usuarioId: string },
 ): Promise<ColecaoResumo | null> {
+  await limparSenhaSeNaoOficina(tx, id, nome);
   const linhas = await tx<LinhaColecao[]>`
     update colecoes set nome = ${nome}, atualizado_em = now()
     where id = ${id}
-    returning id, nome, criado_por, criado_em, atualizado_em`;
+    returning id, nome, criado_por, criado_em, atualizado_em, senha_hash`;
   const linha = linhas[0];
-  return linha === undefined ? null : mapColecao(linha);
+  if (linha === undefined) return null;
+  const jaDesbloqueou =
+    linha.senha_hash === null
+      ? false
+      : await usuarioJaDesbloqueou(tx, id, acesso.usuarioId);
+  return mapColecao(linha, { ...acesso, jaDesbloqueou });
 }
 
 // Soft-delete: planilha inteira vai para a lixeira (snapshot + fotos no R2).
@@ -118,9 +184,11 @@ export async function duplicarColecao(
   contaId: string,
   origemId: string,
   criadoPor: string,
+  acesso: { email: string; usuarioId: string },
 ): Promise<Colecao | null> {
-  const origem = await obterColecao(tx, origemId);
+  const origem = await obterColecao(tx, origemId, acesso);
   if (origem === null) return null;
+  if (origem.bloqueada) return null;
 
   // Nome automático da cópia: "Corte <data> <hora>" no fuso do Brasil, definido no
   // momento em que a planilha é copiada (data/hora preenchidas automaticamente).
@@ -136,10 +204,10 @@ export async function duplicarColecao(
     .replace(',', '');
   const nomeCopia = `Corte ${dataHora}`;
 
-  const novas = await tx<LinhaColecao[]>`
+  const novas = await tx<{ id: string; nome: string; criado_por: string | null }[]>`
     insert into colecoes (conta_id, nome, criado_por)
     values (${contaId}, ${nomeCopia}, ${criadoPor})
-    returning id, nome, criado_por, criado_em, atualizado_em`;
+    returning id, nome, criado_por`;
   const nova = novas[0];
   if (nova === undefined) throw new Error('insert de coleção duplicada não retornou linha');
 
@@ -154,5 +222,12 @@ export async function duplicarColecao(
     camposCopiados.push(mapCampo(linha));
   }
 
-  return { id: nova.id, nome: nova.nome, criadoPor, campos: camposCopiados };
+  return {
+    id: nova.id,
+    nome: nova.nome,
+    criadoPor,
+    campos: camposCopiados,
+    protegida: false,
+    bloqueada: false,
+  };
 }
