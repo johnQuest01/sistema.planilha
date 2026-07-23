@@ -203,24 +203,33 @@
   color: inherit;
 }
 .cartao-colecao__nome {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 16px;
   font-weight: 700;
-  padding-right: var(--e4); /* espaço pro botão de apagar não cobrir o nome */
+  padding-right: 72px; /* espaço pro cadeado + lixeira no canto */
+}
+.cartao-colecao__cadeado-inline {
+  flex: none;
+  color: var(--tinta);
+  opacity: 0.9;
 }
 .cartao-colecao__meta {
   margin-top: auto;
 }
 .cartao-colecao__acoes {
   position: absolute;
-  top: var(--e1);
-  right: var(--e1);
+  top: var(--e2);
+  right: var(--e2);
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 14px; /* cadeado um pouco afastado da lixeira */
 }
 .cartao-colecao__apagar {
   color: var(--tinta-3);
-  opacity: 0.7;
+  opacity: 0.85;
 }
 .cartao-colecao__apagar:hover {
   color: var(--perigo);
@@ -324,8 +333,9 @@
 .cartao-colecao__cadeado {
   display: inline-flex;
   align-items: center;
-  color: var(--tinta-3);
-  opacity: 0.8;
+  justify-content: center;
+  color: var(--tinta);
+  opacity: 1;
   pointer-events: none;
 }
 .desbloquear {

@@ -11,6 +11,10 @@ import './telas.css';
 
 const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
+function ehOficina(nome: string): boolean {
+  return nome.trim().toLowerCase() === 'oficina';
+}
+
 export function Inicio(): JSX.Element {
   const navegar = useNavigate();
   const { estado } = useAuth();
@@ -185,28 +189,48 @@ export function Inicio(): JSX.Element {
             </div>
             {erro !== null && <p className="aviso-erro">{erro}</p>}
             <div className="grade-cartoes">
-              {colecoes.map((c) => (
+              {colecoes.map((c) => {
+                const mostrarCadeado = c.protegida || ehOficina(c.nome);
+                const mostrarLixeira = podeApagar(c) && !c.bloqueada;
+                return (
                 <div key={c.id} className="cartao-colecao">
                   <Link to={`/c/${c.id}`} className="cartao-colecao__link">
-                    <span className="cartao-colecao__nome">{c.nome}</span>
+                    <span className="cartao-colecao__nome">
+                      {mostrarCadeado && (
+                        <Lock
+                          size={15}
+                          className="cartao-colecao__cadeado-inline"
+                          aria-hidden
+                        />
+                      )}
+                      {c.nome}
+                    </span>
                     <span className="etiqueta cartao-colecao__meta">
                       {c.bloqueada
                         ? 'senha necessária'
                         : fmtData.format(new Date(c.atualizadoEm))}
                     </span>
                   </Link>
-                  {(c.protegida || (podeApagar(c) && !c.bloqueada)) && (
+                  {(mostrarCadeado || mostrarLixeira) && (
                     <div className="cartao-colecao__acoes">
-                      {c.protegida && (
+                      {mostrarCadeado && (
                         <span
                           className="cartao-colecao__cadeado"
-                          title="Protegida por senha"
-                          aria-label="Protegida por senha"
+                          title={
+                            c.protegida
+                              ? 'Protegida por senha'
+                              : 'Planilha Oficina (pode ter senha)'
+                          }
+                          aria-label={
+                            c.protegida
+                              ? 'Protegida por senha'
+                              : 'Planilha Oficina'
+                          }
                         >
-                          <Lock size={16} aria-hidden />
+                          <Lock size={18} aria-hidden />
                         </span>
                       )}
-                      {podeApagar(c) && !c.bloqueada && (
+                      {mostrarLixeira && (
                         <button
                           type="button"
                           className="btn btn--icone cartao-colecao__apagar"
@@ -244,7 +268,8 @@ export function Inicio(): JSX.Element {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
