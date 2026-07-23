@@ -48,7 +48,9 @@ export function Inicio(): JSX.Element {
         if (vivo) setColecoes(cs);
       })
       .catch((e: unknown) => {
-        if (vivo) setErro(e instanceof ErroApi ? e.message : 'falha ao carregar');
+        if (!vivo) return;
+        setErro(e instanceof ErroApi ? e.message : 'falha ao carregar');
+        setColecoes([]);
       });
     return () => {
       vivo = false;

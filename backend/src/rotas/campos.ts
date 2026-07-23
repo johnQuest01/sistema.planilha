@@ -9,7 +9,7 @@ import { apagarCampo, criarCampo, editarCampo, reordenarCampos } from '../reposi
 async function barrarSeBloqueado(
   contaId: string,
   colecaoId: string,
-  usuario: { id: string; email: string },
+  usuario: { id: string; email: string; papel: 'dono' | 'membro' },
   reply: { code: (n: number) => { send: (b: unknown) => unknown } },
 ): Promise<boolean> {
   const acesso = await comConta(contaId, (tx) =>
@@ -34,7 +34,7 @@ export async function rotasCampos(app: FastifyInstance): Promise<void> {
       const dados = criarCampoSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const campo = await comConta(contaId, (tx) => criarCampo(tx, req.params.id, dados));
@@ -52,7 +52,7 @@ export async function rotasCampos(app: FastifyInstance): Promise<void> {
       const u = usuarioObrigatorio(req);
       const colecaoId = await comConta(contaId, (tx) => obterColecaoIdPorCampo(tx, req.params.id));
       if (colecaoId === null) return reply.code(404).send({ erro: 'campo não encontrado' });
-      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const campo = await comConta(contaId, (tx) => editarCampo(tx, req.params.id, patch));
@@ -68,7 +68,7 @@ export async function rotasCampos(app: FastifyInstance): Promise<void> {
       const { ids } = reordenarCamposSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const campos = await comConta(contaId, (tx) => reordenarCampos(tx, req.params.id, ids));
@@ -85,7 +85,7 @@ export async function rotasCampos(app: FastifyInstance): Promise<void> {
       const u = usuarioObrigatorio(req);
       const colecaoId = await comConta(contaId, (tx) => obterColecaoIdPorCampo(tx, req.params.id));
       if (colecaoId === null) return reply.code(404).send({ erro: 'campo não encontrado' });
-      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const ok = await comConta(contaId, (tx) => apagarCampo(tx, req.params.id));

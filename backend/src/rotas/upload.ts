@@ -26,7 +26,7 @@ export async function rotasUpload(app: FastifyInstance): Promise<void> {
       if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
 
       const acesso = await comConta(contaId, (tx) =>
-        verificarAcessoColecao(tx, colecaoId, { id: u.id, email: u.email }),
+        verificarAcessoColecao(tx, colecaoId, { id: u.id, email: u.email, papel: u.papel }),
       );
       if (acesso === 'bloqueado') {
         return reply.code(403).send({ erro: 'senha necessária', bloqueada: true });

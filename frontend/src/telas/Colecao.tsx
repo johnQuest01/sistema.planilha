@@ -37,6 +37,7 @@ export function Colecao(): JSX.Element {
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   const [colecao, setColecao] = useState<TColecao | null>(null);
   const [bloqueada, setBloqueada] = useState<{ nome: string } | null>(null);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [senha, setSenha] = useState('');
   const [erroSenha, setErroSenha] = useState<string | null>(null);
   const [desbloqueando, setDesbloqueando] = useState(false);
@@ -50,6 +51,7 @@ export function Colecao(): JSX.Element {
   const recarregar = async (): Promise<void> => {
     const col = await api.obterColecao(id);
     setBloqueada(null);
+    setErroCarga(null);
     setColecao(col);
     setNomeEdit(col.nome);
     nomeSalvo.current = col.nome;
@@ -63,6 +65,7 @@ export function Colecao(): JSX.Element {
     let vivo = true;
     setColecao(null);
     setBloqueada(null);
+    setErroCarga(null);
     void api
       .obterColecao(id)
       .then((col) => {
@@ -78,7 +81,11 @@ export function Colecao(): JSX.Element {
           setBloqueada({ nome: nomeDoErroBloqueio(e) });
           return;
         }
-        if (e instanceof ErroApi && e.status === 404) navegar('/', { replace: true });
+        if (e instanceof ErroApi && e.status === 404) {
+          navegar('/', { replace: true });
+          return;
+        }
+        setErroCarga(e instanceof ErroApi ? e.message : 'falha ao carregar a planilha');
       });
     return () => {
       vivo = false;
@@ -98,6 +105,7 @@ export function Colecao(): JSX.Element {
     try {
       const col = await api.desbloquearColecao(id, senha);
       setBloqueada(null);
+      setErroCarga(null);
       setSenha('');
       setColecao(col);
       setNomeEdit(col.nome);
@@ -180,6 +188,20 @@ export function Colecao(): JSX.Element {
               {erroSenha !== null && <p className="aviso-erro">{erroSenha}</p>}
             </form>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (erroCarga !== null) {
+    return (
+      <div className="pagina">
+        <TopoApp />
+        <div className="faixa">
+          <p className="aviso-erro">{erroCarga}</p>
+          <Botao variante="primario" onClick={() => window.location.reload()}>
+            Tentar de novo
+          </Botao>
         </div>
       </div>
     );

@@ -23,7 +23,7 @@ const buscaQuerySchema = z.object({ q: z.string().min(1).max(200) }).strict();
 async function barrarSeBloqueado(
   contaId: string,
   colecaoId: string,
-  usuario: { id: string; email: string },
+  usuario: { id: string; email: string; papel: 'dono' | 'membro' },
   reply: { code: (n: number) => { send: (b: unknown) => unknown } },
 ): Promise<boolean> {
   const acesso = await comConta(contaId, (tx) =>
@@ -48,7 +48,7 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { q } = buscaQuerySchema.parse(req.query);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const registros = await comConta(contaId, (tx) => buscarRegistros(tx, req.params.id, q));
@@ -64,7 +64,7 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { before } = listaQuerySchema.parse(req.query);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const registros = await comConta(contaId, (tx) =>
@@ -82,7 +82,7 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { valores } = corpoRegistroSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const registro = await comConta(contaId, (tx) =>
@@ -104,7 +104,7 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
         obterColecaoIdDoRegistro(tx, req.params.id),
       );
       if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const registro = await comConta(contaId, (tx) =>
@@ -125,7 +125,7 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
         obterColecaoIdDoRegistro(tx, req.params.id),
       );
       if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email }, reply)) {
+      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
         return;
       }
       const resultado = await comConta(contaId, (tx) =>

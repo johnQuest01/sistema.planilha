@@ -47,6 +47,7 @@ export function Preencher({
     let vivo = true;
     setRegistros(null);
     setFim(false);
+    setErro(null);
     void api
       .listarRegistros(colecao.id)
       .then((rs) => {
@@ -55,7 +56,9 @@ export function Preencher({
         setFim(rs.length < PAGINA);
       })
       .catch((e: unknown) => {
-        if (vivo) setErro(e instanceof ErroApi ? e.message : 'falha ao carregar');
+        if (!vivo) return;
+        setErro(e instanceof ErroApi ? e.message : 'falha ao carregar');
+        setRegistros([]);
       });
     return () => {
       vivo = false;

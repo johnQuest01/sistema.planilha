@@ -3,8 +3,12 @@ import { z } from 'zod';
 import { comConta } from '../db/comConta';
 import { exigeDono, contaObrigatoria, usuarioObrigatorio } from '../auth/exigeDono';
 import {
-  desbloquearColecao,
-  definirSenhaOficina,
+  aplicarSenhaOficina,
+  gerarHashSenhaPlanilha,
+  lerHashSenhaColecao,
+  registrarDesbloqueio,
+  senhaColecaoConfere,
+  validarColecaoOficina,
   verificarAcessoColecao,
 } from '../auth/acessoColecao';
 import { validaIdParam } from '../validacao/params';
@@ -24,13 +28,17 @@ const senhaPlanilhaSchema = z
   })
   .strict();
 
+function acessoDe(u: { id: string; email: string; papel: 'dono' | 'membro' }) {
+  return { email: u.email, usuarioId: u.id, papel: u.papel };
+}
+
 export async function rotasColecoes(app: FastifyInstance): Promise<void> {
   app.post('/api/colecoes', { preHandler: exigeDono }, async (req, reply) => {
     const { nome } = criarColecaoSchema.parse(req.body);
     const contaId = contaObrigatoria(req);
     const u = usuarioObrigatorio(req);
     const colecao = await comConta(contaId, (tx) =>
-      criarColecao(tx, contaId, nome, u.id, { email: u.email, usuarioId: u.id }),
+      criarColecao(tx, contaId, nome, u.id, acessoDe(u)),
     );
     return reply.code(201).send(colecao);
   });
@@ -39,7 +47,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
     const contaId = contaObrigatoria(req);
     const u = usuarioObrigatorio(req);
     const colecoes = await comConta(contaId, (tx) =>
-      listarColecoes(tx, contaId, { email: u.email, usuarioId: u.id }),
+      listarColecoes(tx, contaId, acessoDe(u)),
     );
     return reply.send(colecoes);
   });
@@ -51,7 +59,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
       const colecao = await comConta(contaId, (tx) =>
-        obterColecao(tx, req.params.id, { email: u.email, usuarioId: u.id }),
+        obterColecao(tx, req.params.id, acessoDe(u)),
       );
       if (colecao === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       if (colecao.bloqueada) {
@@ -73,21 +81,27 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
       const { senha } = senhaPlanilhaSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      const resultado = await comConta(contaId, (tx) =>
-        desbloquearColecao(tx, req.params.id, u.id, senha),
-      );
-      if (resultado === 'nao-encontrado') {
+
+      // 1) Lê o hash em tx curta — Argon2 NÃO roda com conexão presa.
+      const lido = await comConta(contaId, (tx) => lerHashSenhaColecao(tx, req.params.id));
+      if (lido === 'nao-encontrado') {
         return reply.code(404).send({ erro: 'coleção não encontrada' });
       }
-      if (resultado === 'sem-senha') {
+      if (lido === 'sem-senha') {
         return reply.code(400).send({ erro: 'esta planilha não tem senha' });
       }
-      if (resultado === 'senha-errada') {
+      if (!(await senhaColecaoConfere(lido.hash, senha))) {
         return reply.code(403).send({ erro: 'senha inválida' });
       }
-      const colecao = await comConta(contaId, (tx) =>
-        obterColecao(tx, req.params.id, { email: u.email, usuarioId: u.id }),
-      );
+
+      // 2) Registra acesso + devolve a coleção na mesma tx.
+      const colecao = await comConta(contaId, async (tx) => {
+        await registrarDesbloqueio(tx, req.params.id, u.id);
+        return obterColecao(tx, req.params.id, acessoDe(u));
+      });
+      if (colecao === null || colecao.bloqueada) {
+        return reply.code(500).send({ erro: 'não foi possível abrir a planilha após desbloquear' });
+      }
       return reply.send(colecao);
     },
   );
@@ -103,17 +117,23 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
       }
       const { senha } = senhaPlanilhaSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
-      const resultado = await comConta(contaId, (tx) =>
-        definirSenhaOficina(tx, req.params.id, senha),
+
+      const validacao = await comConta(contaId, (tx) =>
+        validarColecaoOficina(tx, req.params.id),
       );
-      if (resultado === 'nao-encontrado') {
+      if (validacao === 'nao-encontrado') {
         return reply.code(404).send({ erro: 'coleção não encontrada' });
       }
-      if (resultado === 'nao-oficina') {
+      if (validacao === 'nao-oficina') {
         return reply.code(400).send({
           erro: 'só a planilha chamada Oficina pode ter senha',
         });
       }
+
+      // Argon2 fora do banco: senão a tx segura a conexão do pool e o app
+      // inteiro fica em carregamento infinito (lista/coleção esperando conexão).
+      const hash = await gerarHashSenhaPlanilha(senha);
+      await comConta(contaId, (tx) => aplicarSenhaOficina(tx, req.params.id, hash));
       return reply.send({ ok: true });
     },
   );
@@ -126,7 +146,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
       const acesso = await comConta(contaId, (tx) =>
-        verificarAcessoColecao(tx, req.params.id, { id: u.id, email: u.email }),
+        verificarAcessoColecao(tx, req.params.id, { id: u.id, email: u.email, papel: u.papel }),
       );
       if (acesso === 'nao-encontrado') {
         return reply.code(404).send({ erro: 'coleção não encontrada' });
@@ -135,7 +155,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
         return reply.code(403).send({ erro: 'senha necessária', bloqueada: true });
       }
       const colecao = await comConta(contaId, (tx) =>
-        renomearColecao(tx, req.params.id, nome, { email: u.email, usuarioId: u.id }),
+        renomearColecao(tx, req.params.id, nome, acessoDe(u)),
       );
       if (colecao === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       return reply.send(colecao);
@@ -149,7 +169,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
       const acesso = await comConta(contaId, (tx) =>
-        verificarAcessoColecao(tx, req.params.id, { id: u.id, email: u.email }),
+        verificarAcessoColecao(tx, req.params.id, { id: u.id, email: u.email, papel: u.papel }),
       );
       if (acesso === 'nao-encontrado') {
         return reply.code(404).send({ erro: 'coleção não encontrada' });
@@ -158,10 +178,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
         return reply.code(403).send({ erro: 'senha necessária', bloqueada: true });
       }
       const copia = await comConta(contaId, (tx) =>
-        duplicarColecao(tx, contaId, req.params.id, u.id, {
-          email: u.email,
-          usuarioId: u.id,
-        }),
+        duplicarColecao(tx, contaId, req.params.id, u.id, acessoDe(u)),
       );
       if (copia === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       return reply.code(201).send(copia);
@@ -175,7 +192,7 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
       const acesso = await comConta(contaId, (tx) =>
-        verificarAcessoColecao(tx, req.params.id, { id: u.id, email: u.email }),
+        verificarAcessoColecao(tx, req.params.id, { id: u.id, email: u.email, papel: u.papel }),
       );
       if (acesso === 'nao-encontrado') {
         return reply.code(404).send({ erro: 'coleção não encontrada' });
