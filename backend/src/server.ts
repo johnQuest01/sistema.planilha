@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import { ZodError } from 'zod';
 import { config } from './config';
 import { sql } from './db/client';
+import { garantirSchemaPronto } from './db/schemaPronto';
 import { rotasAuth } from './rotas/auth';
 import { rotasColecoes } from './rotas/colecoes';
 import { rotasCampos } from './rotas/campos';
@@ -39,9 +40,20 @@ export function buildServer() {
     return reply.code(codigo).send({ erro: codigo >= 500 ? 'erro interno' : err.message });
   });
 
-  app.get('/health', async () => {
+  app.get('/health', async (_req, reply) => {
     const linhas = await sql<{ ok: number }[]>`select 1 as ok`;
-    return { status: 'ok', db: linhas[0]?.ok === 1 };
+    const db = linhas[0]?.ok === 1;
+    try {
+      await garantirSchemaPronto();
+      return { status: 'ok', db, schema: true };
+    } catch (err) {
+      return reply.code(503).send({
+        status: 'schema_desatualizado',
+        db,
+        schema: false,
+        erro: err instanceof Error ? err.message : 'schema incompleto',
+      });
+    }
   });
 
   app.register(rotasConfig);
@@ -59,6 +71,8 @@ export function buildServer() {
 async function main() {
   const app = buildServer();
   try {
+    // Falha cedo se o Neon não recebeu as migrations (evita planilhas “vazias”).
+    await garantirSchemaPronto();
     await app.listen({ port: config.port, host: '0.0.0.0' });
   } catch (err) {
     app.log.error(err);
