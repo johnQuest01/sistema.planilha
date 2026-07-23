@@ -16,6 +16,7 @@ export function Inicio(): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   const [colecoes, setColecoes] = useState<ColecaoResumo[] | null>(null);
+  const [falhaCarga, setFalhaCarga] = useState(false);
   const [nome, setNome] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
@@ -40,16 +41,36 @@ export function Inicio(): JSX.Element {
     }
   }
 
-  useEffect(() => {
-    let vivo = true;
+  function carregarLista(): void {
+    setColecoes(null);
+    setFalhaCarga(false);
+    setErro(null);
     void api
       .listarColecoes()
       .then((cs) => {
-        if (vivo) setColecoes(cs);
+        setColecoes(cs);
+      })
+      .catch((e: unknown) => {
+        setErro(e instanceof ErroApi ? e.message : 'falha ao carregar');
+        setFalhaCarga(true);
+        setColecoes([]);
+      });
+  }
+
+  useEffect(() => {
+    let vivo = true;
+    setColecoes(null);
+    setFalhaCarga(false);
+    void api
+      .listarColecoes()
+      .then((cs) => {
+        if (!vivo) return;
+        setColecoes(cs);
       })
       .catch((e: unknown) => {
         if (!vivo) return;
         setErro(e instanceof ErroApi ? e.message : 'falha ao carregar');
+        setFalhaCarga(true);
         setColecoes([]);
       });
     return () => {
@@ -95,6 +116,23 @@ export function Inicio(): JSX.Element {
   }
 
   if (colecoes === null) return <Carregando />;
+
+  if (falhaCarga) {
+    return (
+      <div className="pagina">
+        <TopoApp />
+        <div className="faixa">
+          <div className="inicio-vazio">
+            <h1 className="inicio-vazio__titulo">Não foi possível carregar as planilhas</h1>
+            {erro !== null && <p className="aviso-erro">{erro}</p>}
+            <Botao variante="primario" onClick={() => carregarLista()}>
+              Tentar de novo
+            </Botao>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const vazio = colecoes.length === 0;
 

@@ -3,6 +3,7 @@ import type { Campo, Colecao, ConfigCampo, TipoCampo } from '../../../shared/tip
 import {
   limparSenhaSeNaoOficina,
   usuarioComAcessoLivre,
+  usuarioJaDesbloqueou,
 } from '../auth/acessoColecao';
 import { moverColecaoParaLixeira } from './lixeira';
 
@@ -26,10 +27,9 @@ interface LinhaColecao {
   id: string;
   nome: string;
   criado_por: string | null;
-  criado_em: Date;
-  atualizado_em: Date;
+  criado_em: Date | string;
+  atualizado_em: Date | string;
   senha_hash: string | null;
-  ja_desbloqueou?: boolean | null;
 }
 
 interface LinhaCampo {
@@ -39,6 +39,10 @@ interface LinhaCampo {
   tipo: string;
   ordem: number;
   config: ConfigCampo | null;
+}
+
+function iso(d: Date | string): string {
+  return d instanceof Date ? d.toISOString() : new Date(d).toISOString();
 }
 
 function mapColecao(
@@ -54,8 +58,8 @@ function mapColecao(
     id: r.id,
     nome: r.nome,
     criadoPor: r.criado_por,
-    criadoEm: r.criado_em.toISOString(),
-    atualizadoEm: r.atualizado_em.toISOString(),
+    criadoEm: iso(r.criado_em),
+    atualizadoEm: iso(r.atualizado_em),
     protegida,
     bloqueada,
   };
@@ -92,22 +96,22 @@ export async function listarColecoes(
   contaId: string,
   acesso: AcessoUsuario,
 ): Promise<ColecaoResumo[]> {
-  // Um JOIN em vez de N+1 em colecao_acessos (evita segurar a tx por mais tempo).
   const linhas = await tx<LinhaColecao[]>`
-    select c.id, c.nome, c.criado_por, c.criado_em, c.atualizado_em, c.senha_hash,
-           (a.usuario_id is not null) as ja_desbloqueou
-    from colecoes c
-    left join colecao_acessos a
-      on a.colecao_id = c.id and a.usuario_id = ${acesso.usuarioId}
-    where c.conta_id = ${contaId}
-    order by c.criado_em desc`;
+    select id, nome, criado_por, criado_em, atualizado_em, senha_hash
+    from colecoes where conta_id = ${contaId}
+    order by criado_em desc`;
 
-  return linhas.map((linha) =>
-    mapColecao(linha, {
-      ...acesso,
-      jaDesbloqueou: Boolean(linha.ja_desbloqueou),
-    }),
-  );
+  // Dono/whitelist não precisam consultar colecao_acessos.
+  const livre = usuarioComAcessoLivre({ email: acesso.email, papel: acesso.papel });
+  const resultado: ColecaoResumo[] = [];
+  for (const linha of linhas) {
+    const jaDesbloqueou =
+      livre || linha.senha_hash === null
+        ? false
+        : await usuarioJaDesbloqueou(tx, linha.id, acesso.usuarioId);
+    resultado.push(mapColecao(linha, { ...acesso, jaDesbloqueou }));
+  }
+  return resultado;
 }
 
 export async function obterColecao(
@@ -116,29 +120,18 @@ export async function obterColecao(
   acesso: AcessoUsuario,
 ): Promise<Colecao | null> {
   const cols = await tx<
-    {
-      id: string;
-      nome: string;
-      criado_por: string | null;
-      senha_hash: string | null;
-      ja_desbloqueou: boolean | null;
-    }[]
-  >`
-    select c.id, c.nome, c.criado_por, c.senha_hash,
-           (a.usuario_id is not null) as ja_desbloqueou
-    from colecoes c
-    left join colecao_acessos a
-      on a.colecao_id = c.id and a.usuario_id = ${acesso.usuarioId}
-    where c.id = ${id}`;
+    { id: string; nome: string; criado_por: string | null; senha_hash: string | null }[]
+  >`select id, nome, criado_por, senha_hash from colecoes where id = ${id}`;
   const col = cols[0];
   if (col === undefined) return null;
 
   const protegida = col.senha_hash !== null;
-  const jaDesbloqueou = Boolean(col.ja_desbloqueou);
-  const bloqueada =
-    protegida &&
-    !usuarioComAcessoLivre({ email: acesso.email, papel: acesso.papel }) &&
-    !jaDesbloqueou;
+  const livre = usuarioComAcessoLivre({ email: acesso.email, papel: acesso.papel });
+  const jaDesbloqueou =
+    !protegida || livre
+      ? false
+      : await usuarioJaDesbloqueou(tx, id, acesso.usuarioId);
+  const bloqueada = protegida && !livre && !jaDesbloqueou;
 
   if (bloqueada) {
     return {
