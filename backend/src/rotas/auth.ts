@@ -1,17 +1,43 @@
 import type { FastifyInstance } from 'fastify';
 import { sql } from '../db/client';
+import { config } from '../config';
 import { gerarHash, conferirSenha } from '../auth/senha';
 import { NOME_COOKIE_SESSAO, opcoesLimpar, opcoesSessao } from '../auth/cookies';
 import { exigeDono, usuarioObrigatorio, contaObrigatoria } from '../auth/exigeDono';
-import { criarSessao, revogarSessao } from '../auth/sessoes';
+import { criarSessao, revogarSessao, revogarSessoesDoUsuario } from '../auth/sessoes';
 import { registrarEntrada } from '../repositorios/presenca';
 import { workspaceContaId, workspaceCodigoHash } from '../auth/workspace';
-import { credenciaisSchema, registrarSchema, codigoConviteSchema } from '../validacao/credenciais';
+import {
+  credenciaisSchema,
+  registrarSchema,
+  codigoConviteSchema,
+  senhaUsuarioSchema,
+} from '../validacao/credenciais';
+import { paramsIdSchema } from '../validacao/params';
 
 // `contas`/`usuarios`/`sessoes` não têm RLS (ver migration 002): a auth media o
 // acesso aqui, então falamos direto com `sql`, fora do `comConta`.
 // Aperto por IP nas rotas que fazem argon2, que é memory-hard (ver 2.5.4).
 const limiteAuth = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
+
+function podeGerirSenhas(email: string): boolean {
+  return email.trim().toLowerCase() === config.workspaceOwnerEmail;
+}
+
+function corpoUsuario(u: {
+  id: string;
+  nome: string;
+  email: string;
+  papel: string;
+}): { id: string; nome: string; email: string; papel: string; podeGerirSenhas: boolean } {
+  return {
+    id: u.id,
+    nome: u.nome,
+    email: u.email,
+    papel: u.papel,
+    podeGerirSenhas: podeGerirSenhas(u.email),
+  };
+}
 
 export async function rotasAuth(app: FastifyInstance): Promise<void> {
   // Cadastro: entra no workspace compartilhado como 'membro', exige código de convite.
@@ -42,7 +68,7 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
     const sessaoId = await criarSessao(usuario.id, contaId);
     reply.setCookie(NOME_COOKIE_SESSAO, sessaoId, opcoesSessao());
     await registrarEntrada(usuario.id, contaId, nome);
-    return reply.code(201).send({ id: usuario.id, nome, email, papel: 'membro' });
+    return reply.code(201).send(corpoUsuario({ id: usuario.id, nome, email, papel: 'membro' }));
   });
 
   app.post('/api/auth/entrar', limiteAuth, async (req, reply) => {
@@ -61,7 +87,14 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
     const sessaoId = await criarSessao(usuario.id, usuario.conta_id);
     reply.setCookie(NOME_COOKIE_SESSAO, sessaoId, opcoesSessao());
     await registrarEntrada(usuario.id, usuario.conta_id, usuario.nome);
-    return reply.send({ id: usuario.id, nome: usuario.nome, email, papel: usuario.papel });
+    return reply.send(
+      corpoUsuario({
+        id: usuario.id,
+        nome: usuario.nome,
+        email,
+        papel: usuario.papel,
+      }),
+    );
   });
 
   // Revoga a sessão no servidor, não só no cliente: o valor assinado deixa de ser
@@ -80,7 +113,58 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
 
   app.get('/api/auth/eu', { preHandler: exigeDono }, async (req, reply) => {
     const u = usuarioObrigatorio(req);
-    return reply.send({ id: u.id, nome: u.nome, email: u.email, papel: u.papel });
+    return reply.send(corpoUsuario(u));
+  });
+
+  // Lista todos os usuários do workspace. Só o dono do workspace (brunoacre07).
+  app.get('/api/auth/usuarios', { preHandler: exigeDono }, async (req, reply) => {
+    const u = usuarioObrigatorio(req);
+    if (!podeGerirSenhas(u.email)) {
+      return reply.code(403).send({ erro: 'só o dono do workspace pode listar usuários' });
+    }
+    const wsId = await workspaceContaId();
+    const linhas = await sql<
+      { id: string; nome: string; email: string; papel: string; criado_em: Date }[]
+    >`
+      select id, nome, email, papel, criado_em
+      from usuarios
+      where conta_id = ${wsId}
+      order by lower(nome), email`;
+    return reply.send(
+      linhas.map((l) => ({
+        id: l.id,
+        nome: l.nome,
+        email: l.email,
+        papel: l.papel === 'dono' ? 'dono' : 'membro',
+        criadoEm: l.criado_em.toISOString(),
+      })),
+    );
+  });
+
+  // Define/troca a senha de login de qualquer usuário (inclui Jurandir). Só brunoacre07.
+  app.patch('/api/auth/usuarios/:id/senha', { preHandler: exigeDono, ...limiteAuth }, async (req, reply) => {
+    const u = usuarioObrigatorio(req);
+    if (!podeGerirSenhas(u.email)) {
+      return reply.code(403).send({ erro: 'só o dono do workspace pode definir senhas' });
+    }
+    const { id } = paramsIdSchema.parse(req.params);
+    const { senha } = senhaUsuarioSchema.parse(req.body);
+    const wsId = await workspaceContaId();
+
+    const alvos = await sql<{ id: string; email: string }[]>`
+      select id, email from usuarios where id = ${id} and conta_id = ${wsId}`;
+    const alvo = alvos[0];
+    if (alvo === undefined) {
+      return reply.code(404).send({ erro: 'usuário não encontrado' });
+    }
+
+    const senhaHash = await gerarHash(senha);
+    await sql`update usuarios set senha_hash = ${senhaHash} where id = ${alvo.id}`;
+    // Força re-login do alvo (não derruba o admin se ele estiver editando a própria).
+    if (alvo.id !== u.id) {
+      await revogarSessoesDoUsuario(alvo.id);
+    }
+    return reply.send({ ok: true, email: alvo.email });
   });
 
   // Troca o código de convite do workspace. Só o dono DO workspace (não dono de

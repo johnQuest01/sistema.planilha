@@ -28,3 +28,10 @@ export const codigoConviteSchema = z
     codigo: z.string().trim().min(4, 'mínimo 4 caracteres').max(200),
   })
   .strict();
+
+// Admin define/troca a senha de login de qualquer usuário do workspace.
+export const senhaUsuarioSchema = z
+  .object({
+    senha: z.string().min(8, 'mínimo 8 caracteres').max(200),
+  })
+  .strict();

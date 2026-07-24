@@ -95,4 +95,15 @@ export interface Usuario {
   nome: string;
   email: string;
   papel: 'dono' | 'membro';
+  /** Só o dono do workspace (brunoacre07) gerencia senhas de login dos outros. */
+  podeGerirSenhas?: boolean;
+}
+
+/** Linha da lista de usuários no painel do dono do workspace. */
+export interface UsuarioResumo {
+  id: string;
+  nome: string;
+  email: string;
+  papel: 'dono' | 'membro';
+  criadoEm: string;
 }

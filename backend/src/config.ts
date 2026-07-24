@@ -33,7 +33,13 @@ export const config = {
   // Lista separada por vírgula em PLANILHA_ACESSO_LIVRE_EMAILS, se quiser sobrescrever.
   planilhaAcessoLivreEmails: opcional(
     'PLANILHA_ACESSO_LIVRE_EMAILS',
-    'brunoacre07@gmail.com,jurandirsilvadesena123@gmail.com',
+    [
+      'brunoacre07@gmail.com',
+      'jurandirsilvadesena123@gmail.com',
+      'auriceliodossantos1977@gmail.com', // Célio
+      'kakaalfa2006@gmail.com', // Kauan
+      'aleblackdog@gmail.com', // Alex
+    ].join(','),
   )
     .split(',')
     .map((e) => e.trim().toLowerCase())

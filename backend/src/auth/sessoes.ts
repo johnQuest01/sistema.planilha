@@ -57,3 +57,10 @@ export async function revogarSessoesDaConta(contaId: string): Promise<void> {
     update sessoes set revogado_em = now()
     where conta_id = ${contaId} and revogado_em is null`;
 }
+
+/** Derruba só as sessões de um usuário (ex.: admin trocou a senha dele). */
+export async function revogarSessoesDoUsuario(usuarioId: string): Promise<void> {
+  await sql`
+    update sessoes set revogado_em = now()
+    where usuario_id = ${usuarioId} and revogado_em is null`;
+}

@@ -330,6 +330,38 @@
   border-top: 1px solid var(--linha);
   margin: var(--e2) 0;
 }
+.config__usuarios {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+}
+.config__usuario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  padding: var(--e3);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-2);
+  background: var(--cartao);
+}
+.config__usuario-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.config__usuario-info code {
+  font-size: 13px;
+  word-break: break-all;
+}
+.config__usuario-papel {
+  font-size: 12px;
+  color: var(--tinta-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .cartao-colecao__cadeado {
   display: inline-flex;
   align-items: center;

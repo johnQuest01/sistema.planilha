@@ -6,9 +6,10 @@ import type {
   Registro,
   TipoCampo,
   Usuario,
+  UsuarioResumo,
 } from '../../../shared/tipos';
 
-export type { Usuario, ItemLixeira } from '../../../shared/tipos';
+export type { Usuario, UsuarioResumo, ItemLixeira } from '../../../shared/tipos';
 
 // Resumo devolvido por GET /api/colecoes (sem campos). O detalhe (com campos) vem
 // por GET /api/colecoes/:id como Colecao.
@@ -86,6 +87,12 @@ export const api = {
     pedir<{ ok: boolean }>('/api/auth/codigo-convite', {
       method: 'PATCH',
       body: JSON.stringify({ codigo }),
+    }),
+  listarUsuarios: () => pedir<UsuarioResumo[]>('/api/auth/usuarios'),
+  definirSenhaUsuario: (id: string, senha: string) =>
+    pedir<{ ok: boolean; email: string }>(`/api/auth/usuarios/${id}/senha`, {
+      method: 'PATCH',
+      body: JSON.stringify({ senha }),
     }),
 
   // --- coleções ---
