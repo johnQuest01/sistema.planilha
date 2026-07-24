@@ -2,22 +2,16 @@ import type { Tx } from '../db/comConta';
 import { config } from '../config';
 import { conferirSenha, gerarHash } from './senha';
 
-export const NOME_PLANILHA_PROTEGIDA = 'oficina';
-
 export type UsuarioAcesso = { id: string; email: string; papel?: 'dono' | 'membro' };
 
 export function emailComAcessoLivre(email: string): boolean {
   return config.planilhaAcessoLivreEmails.includes(email.trim().toLowerCase());
 }
 
-/** Whitelist de e-mails ou papel dono: entram na Oficina sem digitar a senha. */
+/** Whitelist de e-mails ou papel dono: entram em planilha protegida sem digitar a senha. */
 export function usuarioComAcessoLivre(usuario: { email: string; papel?: 'dono' | 'membro' }): boolean {
   if (usuario.papel === 'dono') return true;
   return emailComAcessoLivre(usuario.email);
-}
-
-export function nomeEhOficina(nome: string): boolean {
-  return nome.trim().toLowerCase() === NOME_PLANILHA_PROTEGIDA;
 }
 
 export type ResultadoAcesso = 'ok' | 'nao-encontrado' | 'bloqueado';
@@ -95,23 +89,20 @@ export async function senhaColecaoConfere(hash: string, senha: string): Promise<
 }
 
 /**
- * Valida se a coleção é a Oficina (transação curta). O hash Argon2 é gerado
+ * Confirma que a coleção existe (transação curta). O hash Argon2 é gerado
  * FORA de comConta — ver rota PATCH /senha.
  */
-export async function validarColecaoOficina(
+export async function colecaoExiste(
   tx: Tx,
   colecaoId: string,
-): Promise<'ok' | 'nao-encontrado' | 'nao-oficina'> {
-  const linhas = await tx<{ nome: string }[]>`
-    select nome from colecoes where id = ${colecaoId}`;
-  const col = linhas[0];
-  if (col === undefined) return 'nao-encontrado';
-  if (!nomeEhOficina(col.nome)) return 'nao-oficina';
-  return 'ok';
+): Promise<boolean> {
+  const linhas = await tx<{ ok: number }[]>`
+    select 1 as ok from colecoes where id = ${colecaoId} limit 1`;
+  return linhas.length > 0;
 }
 
 /** Aplica hash já calculado e invalida desbloqueios anteriores. */
-export async function aplicarSenhaOficina(
+export async function aplicarSenhaColecao(
   tx: Tx,
   colecaoId: string,
   senhaHash: string,
@@ -120,15 +111,20 @@ export async function aplicarSenhaOficina(
   await tx`delete from colecao_acessos where colecao_id = ${colecaoId}`;
 }
 
-/** Hash Argon2 fora do banco — usar antes de aplicarSenhaOficina. */
+/** Hash Argon2 fora do banco — usar antes de aplicarSenhaColecao. */
 export function gerarHashSenhaPlanilha(senha: string): Promise<string> {
   return gerarHash(senha);
 }
 
-export async function limparSenhaSeNaoOficina(tx: Tx, colecaoId: string, nomeNovo: string): Promise<void> {
-  if (nomeEhOficina(nomeNovo)) return;
-  await tx`update colecoes set senha_hash = null where id = ${colecaoId} and senha_hash is not null`;
+/** Remove a senha da planilha e limpa desbloqueios. */
+export async function removerSenhaColecao(tx: Tx, colecaoId: string): Promise<'ok' | 'nao-encontrado'> {
+  const linhas = await tx<{ id: string }[]>`
+    update colecoes set senha_hash = null, atualizado_em = now()
+    where id = ${colecaoId}
+    returning id`;
+  if (linhas[0] === undefined) return 'nao-encontrado';
   await tx`delete from colecao_acessos where colecao_id = ${colecaoId}`;
+  return 'ok';
 }
 
 export async function obterColecaoIdPorCampo(tx: Tx, campoId: string): Promise<string | null> {

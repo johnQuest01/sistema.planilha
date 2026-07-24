@@ -1,14 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { comConta } from '../db/comConta';
+import { config } from '../config';
 import { exigeDono, contaObrigatoria, usuarioObrigatorio } from '../auth/exigeDono';
 import {
-  aplicarSenhaOficina,
+  aplicarSenhaColecao,
+  colecaoExiste,
   gerarHashSenhaPlanilha,
   lerHashSenhaColecao,
   registrarDesbloqueio,
+  removerSenhaColecao,
   senhaColecaoConfere,
-  validarColecaoOficina,
   verificarAcessoColecao,
 } from '../auth/acessoColecao';
 import { validaIdParam } from '../validacao/params';
@@ -30,6 +32,10 @@ const senhaPlanilhaSchema = z
 
 function acessoDe(u: { id: string; email: string; papel: 'dono' | 'membro' }) {
   return { email: u.email, usuarioId: u.id, papel: u.papel };
+}
+
+function podeGerirSenhaPlanilha(email: string): boolean {
+  return email.trim().toLowerCase() === config.workspaceOwnerEmail;
 }
 
 export async function rotasColecoes(app: FastifyInstance): Promise<void> {
@@ -106,34 +112,45 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // Só o dono define/troca a senha da Oficina.
+  // Só brunoacre07 define/troca a senha de qualquer planilha.
   app.patch<{ Params: { id: string } }>(
     '/api/colecoes/:id/senha',
     { preHandler: [exigeDono, validaIdParam], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (req, reply) => {
       const u = usuarioObrigatorio(req);
-      if (u.papel !== 'dono') {
-        return reply.code(403).send({ erro: 'só o dono pode definir a senha da Oficina' });
+      if (!podeGerirSenhaPlanilha(u.email)) {
+        return reply.code(403).send({ erro: 'só o dono do workspace pode definir senha de planilha' });
       }
       const { senha } = senhaPlanilhaSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
 
-      const validacao = await comConta(contaId, (tx) =>
-        validarColecaoOficina(tx, req.params.id),
-      );
-      if (validacao === 'nao-encontrado') {
+      const existe = await comConta(contaId, (tx) => colecaoExiste(tx, req.params.id));
+      if (!existe) {
         return reply.code(404).send({ erro: 'coleção não encontrada' });
-      }
-      if (validacao === 'nao-oficina') {
-        return reply.code(400).send({
-          erro: 'só a planilha chamada Oficina pode ter senha',
-        });
       }
 
       // Argon2 fora do banco: senão a tx segura a conexão do pool e o app
       // inteiro fica em carregamento infinito (lista/coleção esperando conexão).
       const hash = await gerarHashSenhaPlanilha(senha);
-      await comConta(contaId, (tx) => aplicarSenhaOficina(tx, req.params.id, hash));
+      await comConta(contaId, (tx) => aplicarSenhaColecao(tx, req.params.id, hash));
+      return reply.send({ ok: true });
+    },
+  );
+
+  // Só brunoacre07 remove a senha de qualquer planilha.
+  app.delete<{ Params: { id: string } }>(
+    '/api/colecoes/:id/senha',
+    { preHandler: [exigeDono, validaIdParam] },
+    async (req, reply) => {
+      const u = usuarioObrigatorio(req);
+      if (!podeGerirSenhaPlanilha(u.email)) {
+        return reply.code(403).send({ erro: 'só o dono do workspace pode remover senha de planilha' });
+      }
+      const contaId = contaObrigatoria(req);
+      const resultado = await comConta(contaId, (tx) => removerSenhaColecao(tx, req.params.id));
+      if (resultado === 'nao-encontrado') {
+        return reply.code(404).send({ erro: 'coleção não encontrada' });
+      }
       return reply.send({ ok: true });
     },
   );

@@ -107,6 +107,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ senha }),
     }),
+  removerSenhaColecao: (id: string) =>
+    pedir<{ ok: boolean }>(`/api/colecoes/${id}/senha`, { method: 'DELETE' }),
   renomearColecao: (id: string, nome: string) =>
     pedir<ColecaoResumo>(`/api/colecoes/${id}`, {
       method: 'PATCH',

@@ -1,7 +1,6 @@
 import type { Tx } from '../db/comConta';
 import type { Campo, Colecao, ConfigCampo, TipoCampo } from '../../../shared/tipos';
 import {
-  limparSenhaSeNaoOficina,
   usuarioComAcessoLivre,
   usuarioJaDesbloqueou,
 } from '../auth/acessoColecao';
@@ -165,7 +164,6 @@ export async function renomearColecao(
   nome: string,
   acesso: AcessoUsuario,
 ): Promise<ColecaoResumo | null> {
-  await limparSenhaSeNaoOficina(tx, id, nome);
   const linhas = await tx<LinhaColecao[]>`
     update colecoes set nome = ${nome}, atualizado_em = now()
     where id = ${id}

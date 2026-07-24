@@ -11,10 +11,6 @@ import './telas.css';
 
 const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
 
-function ehOficina(nome: string): boolean {
-  return nome.trim().toLowerCase() === 'oficina';
-}
-
 export function Inicio(): JSX.Element {
   const navegar = useNavigate();
   const { estado } = useAuth();
@@ -190,7 +186,7 @@ export function Inicio(): JSX.Element {
             {erro !== null && <p className="aviso-erro">{erro}</p>}
             <div className="grade-cartoes">
               {colecoes.map((c) => {
-                const mostrarCadeado = c.protegida || ehOficina(c.nome);
+                const mostrarCadeado = c.protegida;
                 const mostrarLixeira = podeApagar(c) && !c.bloqueada;
                 return (
                 <div key={c.id} className="cartao-colecao">
@@ -216,16 +212,8 @@ export function Inicio(): JSX.Element {
                       {mostrarCadeado && (
                         <span
                           className="cartao-colecao__cadeado"
-                          title={
-                            c.protegida
-                              ? 'Protegida por senha'
-                              : 'Planilha Oficina (pode ter senha)'
-                          }
-                          aria-label={
-                            c.protegida
-                              ? 'Protegida por senha'
-                              : 'Planilha Oficina'
-                          }
+                          title="Protegida por senha"
+                          aria-label="Protegida por senha"
                         >
                           <Lock size={18} aria-hidden />
                         </span>

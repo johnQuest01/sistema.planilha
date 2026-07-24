@@ -35,11 +35,14 @@ export function Config(): JSX.Element {
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  const [oficina, setOficina] = useState<ColecaoResumo | null | undefined>(undefined);
-  const [senhaOficina, setSenhaOficina] = useState('');
-  const [senhaSalva, setSenhaSalva] = useState<string | null>(null);
-  const [erroSenha, setErroSenha] = useState<string | null>(null);
-  const [salvandoSenha, setSalvandoSenha] = useState(false);
+  const [planilhas, setPlanilhas] = useState<ColecaoResumo[] | null>(null);
+  const [senhasPlanilha, setSenhasPlanilha] = useState<Record<string, string>>({});
+  const [senhaPlanilhaSalva, setSenhaPlanilhaSalva] = useState<{
+    nome: string;
+    senha: string;
+  } | null>(null);
+  const [erroSenhaPlanilha, setErroSenhaPlanilha] = useState<string | null>(null);
+  const [salvandoPlanilhaId, setSalvandoPlanilhaId] = useState<string | null>(null);
 
   const [usuarios, setUsuarios] = useState<UsuarioResumo[] | null>(null);
   const [senhasDraft, setSenhasDraft] = useState<Record<string, string>>({});
@@ -53,23 +56,20 @@ export function Config(): JSX.Element {
     estado.fase === 'logado' && estado.usuario.podeGerirSenhas === true;
 
   useEffect(() => {
-    if (estado.fase !== 'logado' || estado.usuario.papel !== 'dono') return;
+    if (!podeGerirSenhas) return;
     let vivo = true;
     void api
       .listarColecoes()
       .then((cs) => {
-        if (!vivo) return;
-        const achada =
-          cs.find((c) => c.nome.trim().toLowerCase() === 'oficina') ?? null;
-        setOficina(achada);
+        if (vivo) setPlanilhas(cs);
       })
       .catch(() => {
-        if (vivo) setOficina(null);
+        if (vivo) setPlanilhas([]);
       });
     return () => {
       vivo = false;
     };
-  }, [estado]);
+  }, [podeGerirSenhas]);
 
   useEffect(() => {
     if (!podeGerirSenhas) return;
@@ -114,24 +114,53 @@ export function Config(): JSX.Element {
     }
   }
 
-  async function salvarSenhaOficina(): Promise<void> {
-    if (oficina === null || oficina === undefined) return;
-    const limpo = senhaOficina.trim();
+  async function salvarSenhaPlanilha(planilha: ColecaoResumo): Promise<void> {
+    const limpo = (senhasPlanilha[planilha.id] ?? '').trim();
     if (limpo.length < 4) {
-      setErroSenha('a senha precisa ter ao menos 4 caracteres');
+      setErroSenhaPlanilha('a senha precisa ter ao menos 4 caracteres');
       return;
     }
-    setSalvandoSenha(true);
-    setErroSenha(null);
+    setSalvandoPlanilhaId(planilha.id);
+    setErroSenhaPlanilha(null);
     try {
-      await api.definirSenhaColecao(oficina.id, limpo);
-      setSenhaSalva(limpo);
-      setSenhaOficina('');
-      setOficina({ ...oficina, protegida: true, bloqueada: false });
+      await api.definirSenhaColecao(planilha.id, limpo);
+      setSenhaPlanilhaSalva({ nome: planilha.nome, senha: limpo });
+      setSenhasPlanilha((prev) => {
+        const next = { ...prev };
+        delete next[planilha.id];
+        return next;
+      });
+      setPlanilhas((lista) =>
+        (lista ?? []).map((c) =>
+          c.id === planilha.id ? { ...c, protegida: true, bloqueada: false } : c,
+        ),
+      );
     } catch (e) {
-      setErroSenha(e instanceof ErroApi ? e.message : 'não foi possível salvar a senha');
+      setErroSenhaPlanilha(
+        e instanceof ErroApi ? e.message : 'não foi possível salvar a senha',
+      );
     } finally {
-      setSalvandoSenha(false);
+      setSalvandoPlanilhaId(null);
+    }
+  }
+
+  async function tirarSenhaPlanilha(planilha: ColecaoResumo): Promise<void> {
+    setSalvandoPlanilhaId(planilha.id);
+    setErroSenhaPlanilha(null);
+    try {
+      await api.removerSenhaColecao(planilha.id);
+      setSenhaPlanilhaSalva(null);
+      setPlanilhas((lista) =>
+        (lista ?? []).map((c) =>
+          c.id === planilha.id ? { ...c, protegida: false, bloqueada: false } : c,
+        ),
+      );
+    } catch (e) {
+      setErroSenhaPlanilha(
+        e instanceof ErroApi ? e.message : 'não foi possível remover a senha',
+      );
+    } finally {
+      setSalvandoPlanilhaId(null);
     }
   }
 
@@ -213,75 +242,105 @@ export function Config(): JSX.Element {
             {erro !== null && <p className="aviso-erro">{erro}</p>}
           </div>
 
-          <hr className="config__sep" />
+          {podeGerirSenhas && (
+            <>
+              <hr className="config__sep" />
 
-          <h2 className="config__titulo">
-            <Lock size={20} />
-            Senha da Oficina
-          </h2>
-          <p className="config__ajuda">
-            Só a planilha chamada <strong>Oficina</strong> pode ter senha. Depois de definir,
-            demais usuários precisam digitar essa senha uma vez. Acesso automático (sem digitar):
-            você, Jurandir, Célio, Kauan e Alex.
-          </p>
+              <h2 className="config__titulo">
+                <Lock size={20} />
+                Senhas das planilhas
+              </h2>
+              <p className="config__ajuda">
+                Só você (<code>brunoacre07@gmail.com</code>) pode colocar ou tirar senha de
+                qualquer planilha, na hora que quiser. Quem não tem acesso automático precisa
+                digitar a senha uma vez para abrir.
+              </p>
 
-          {oficina === undefined && <p className="config__ajuda">Carregando planilhas…</p>}
-          {oficina === null && (
-            <p className="aviso-erro">
-              Nenhuma planilha chamada “Oficina” encontrada. Crie ou renomeie uma planilha para
-              “Oficina” e volte aqui.
-            </p>
-          )}
-          {oficina !== null && oficina !== undefined && (
-            <div className="config__forma">
-              {senhaSalva !== null && (
+              {senhaPlanilhaSalva !== null && (
                 <div className="config__salvo">
-                  <span className="config__salvo-rotulo">Senha da Oficina salva:</span>
-                  <code className="config__salvo-codigo">{senhaSalva}</code>
+                  <span className="config__salvo-rotulo">
+                    Senha de <strong>{senhaPlanilhaSalva.nome}</strong>:
+                  </span>
+                  <code className="config__salvo-codigo">{senhaPlanilhaSalva.senha}</code>
                   <button
                     type="button"
                     className="link-texto"
-                    onClick={() => void navigator.clipboard?.writeText(senhaSalva)}
+                    onClick={() =>
+                      void navigator.clipboard?.writeText(senhaPlanilhaSalva.senha)
+                    }
                   >
                     copiar
                   </button>
                 </div>
               )}
-              <Campo
-                rotulo={oficina.protegida ? 'Nova senha da Oficina' : 'Definir senha da Oficina'}
-                type="password"
-                placeholder="mínimo 4 caracteres"
-                value={senhaOficina}
-                onChange={(e) => setSenhaOficina(e.target.value)}
-              />
-              <div className="config__acoes">
-                <Botao
-                  variante="fantasma"
-                  onClick={() => setSenhaOficina(gerarCodigo())}
-                >
-                  <Shuffle size={16} />
-                  Gerar aleatória
-                </Botao>
-                <Botao
-                  variante="primario"
-                  onClick={() => void salvarSenhaOficina()}
-                  disabled={salvandoSenha || senhaOficina.trim().length < 4}
-                >
-                  Salvar senha
-                </Botao>
-              </div>
-              {erroSenha !== null && <p className="aviso-erro">{erroSenha}</p>}
-              {oficina.protegida && senhaSalva === null && (
-                <p className="config__ajuda">
-                  Já existe senha nesta planilha. Salvar uma nova invalida os desbloqueios
-                  anteriores (exceto o acesso automático).
-                </p>
-              )}
-            </div>
-          )}
 
-          {podeGerirSenhas && (
-            <>
+              {planilhas === null && <p className="config__ajuda">Carregando planilhas…</p>}
+              {planilhas !== null && planilhas.length === 0 && (
+                <p className="config__ajuda">Nenhuma planilha criada ainda.</p>
+              )}
+              {planilhas !== null && planilhas.length > 0 && (
+                <ul className="config__usuarios">
+                  {planilhas.map((p) => {
+                    const draft = senhasPlanilha[p.id] ?? '';
+                    const salvandoEsta = salvandoPlanilhaId === p.id;
+                    return (
+                      <li key={p.id} className="config__usuario">
+                        <div className="config__usuario-info">
+                          <strong>{p.nome}</strong>
+                          <span className="config__usuario-papel">
+                            {p.protegida ? 'com senha' : 'sem senha'}
+                          </span>
+                        </div>
+                        <Campo
+                          rotulo={p.protegida ? 'Nova senha' : 'Definir senha'}
+                          placeholder="mínimo 4 caracteres"
+                          value={draft}
+                          onChange={(e) =>
+                            setSenhasPlanilha((prev) => ({
+                              ...prev,
+                              [p.id]: e.target.value,
+                            }))
+                          }
+                        />
+                        <div className="config__acoes">
+                          <Botao
+                            variante="fantasma"
+                            onClick={() =>
+                              setSenhasPlanilha((prev) => ({
+                                ...prev,
+                                [p.id]: gerarCodigo(),
+                              }))
+                            }
+                          >
+                            <Shuffle size={16} />
+                            Gerar
+                          </Botao>
+                          <Botao
+                            variante="primario"
+                            onClick={() => void salvarSenhaPlanilha(p)}
+                            disabled={salvandoEsta || draft.trim().length < 4}
+                          >
+                            Salvar senha
+                          </Botao>
+                          {p.protegida && (
+                            <Botao
+                              variante="fantasma"
+                              onClick={() => void tirarSenhaPlanilha(p)}
+                              disabled={salvandoEsta}
+                            >
+                              Tirar senha
+                            </Botao>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {erroSenhaPlanilha !== null && (
+                <p className="aviso-erro">{erroSenhaPlanilha}</p>
+              )}
+
               <hr className="config__sep" />
 
               <h2 className="config__titulo">

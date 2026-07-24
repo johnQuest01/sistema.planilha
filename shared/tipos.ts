@@ -83,7 +83,7 @@ export interface Colecao {
   nome: string;
   criadoPor: string | null;           // id do usuario que criou (permissão de apagar)
   campos: Campo[];
-  /** true quando a planilha tem senha (Oficina). */
+  /** true quando a planilha tem senha. */
   protegida: boolean;
   /** true quando o usuário logado ainda precisa digitar a senha. */
   bloqueada: boolean;
@@ -95,7 +95,7 @@ export interface Usuario {
   nome: string;
   email: string;
   papel: 'dono' | 'membro';
-  /** Só o dono do workspace (brunoacre07) gerencia senhas de login dos outros. */
+  /** Só o dono do workspace (brunoacre07) gerencia senhas de login e de planilhas. */
   podeGerirSenhas?: boolean;
 }
 

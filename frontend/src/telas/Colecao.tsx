@@ -243,22 +243,13 @@ export function Colecao(): JSX.Element {
           >
             <Copy size={18} />
           </button>
-          {(colecao.protegida ||
-            colecao.nome.trim().toLowerCase() === 'oficina' ||
-            podeApagar) && (
+          {(colecao.protegida || podeApagar) && (
             <div className="colecao-barra__acoes">
-              {(colecao.protegida ||
-                colecao.nome.trim().toLowerCase() === 'oficina') && (
+              {colecao.protegida && (
                 <span
                   className="colecao-barra__cadeado"
-                  title={
-                    colecao.protegida
-                      ? 'Protegida por senha'
-                      : 'Planilha Oficina (pode ter senha)'
-                  }
-                  aria-label={
-                    colecao.protegida ? 'Protegida por senha' : 'Planilha Oficina'
-                  }
+                  title="Protegida por senha"
+                  aria-label="Protegida por senha"
                 >
                   <Lock size={18} aria-hidden />
                 </span>
