@@ -147,7 +147,7 @@
   /* Altura limitada → virtualização monta só as linhas visíveis */
   max-height: min(70vh, calc(100dvh - 220px));
   /* folga no fim p/ o botão "Ver mais" não colar na borda */
-  padding-bottom: var(--e4);
+  padding-bottom: var(--e2);
 }
 .tabela {
   border-collapse: collapse;
@@ -255,7 +255,7 @@
   overflow: auto;
   /* Altura da área útil + folga pro FAB/presença/safe-area no fim do scroll */
   max-height: min(70vh, calc(100dvh - 220px));
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -481,11 +481,10 @@
   flex-direction: column;
   gap: var(--e3);
   margin-top: var(--e3);
-  /* Folga grande: o último dos ~100 resultados rola inteiro (prévia completa) */
-  padding-bottom: max(40vh, calc(180px + env(safe-area-inset-bottom, 0px)));
 }
 .busca-ref__resultados > .preview-registro:last-child {
-  scroll-margin-bottom: max(32vh, 120px);
+  /* rola o último resultado inteiro para cima sem exigir folga vazia embaixo */
+  scroll-margin-bottom: var(--e4);
 }
 .busca-ref__status {
   font-size: 14px;
@@ -499,7 +498,7 @@
 .ver-mais-rodape {
   display: flex;
   justify-content: flex-end;
-  padding: var(--e3) calc(72px + var(--e2)) var(--e4) var(--e2);
+  padding: var(--e2) calc(72px + var(--e2)) var(--e2) var(--e2);
 }
 .btn-ver-mais {
   border: 1px solid rgba(20, 24, 26, 0.18);
