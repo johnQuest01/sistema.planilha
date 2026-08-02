@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { exigeDono, contaObrigatoria, usuarioObrigatorio } from '../auth/exigeDono';
 import { marcarVisto, online, entradasRecentes } from '../repositorios/presenca';
-import { emitirTicketPresenca } from '../ws/presencaHub';
+import { emitirTicketPresenca, onlineAoVivo } from '../ws/presencaHub';
 
 // REST permanece como fallback. O caminho rápido é WebSocket (/ws/presenca + ticket).
 export async function rotasPresenca(app: FastifyInstance): Promise<void> {
@@ -9,10 +9,16 @@ export async function rotasPresenca(app: FastifyInstance): Promise<void> {
     const contaId = contaObrigatoria(req);
     const u = usuarioObrigatorio(req);
     await marcarVisto(u.id);
-    const [agora, entradas] = await Promise.all([
+    const [doBanco, entradas] = await Promise.all([
       online(contaId, 2),
       entradasRecentes(contaId, 10),
     ]);
+    // Une quem tem WebSocket aberto agora (instantâneo) com o heartbeat do banco
+    // (cobre quem está só no fallback REST). Dedup por id.
+    const porId = new Map<string, { id: string; nome: string }>();
+    for (const usuario of onlineAoVivo(contaId)) porId.set(usuario.id, usuario);
+    for (const usuario of doBanco) if (!porId.has(usuario.id)) porId.set(usuario.id, usuario);
+    const agora = [...porId.values()].sort((a, b) => a.nome.localeCompare(b.nome));
     return reply.send({ online: agora, entradas });
   });
 
