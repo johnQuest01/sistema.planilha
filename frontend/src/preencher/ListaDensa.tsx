@@ -1,5 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ImageOff } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
@@ -21,6 +21,7 @@ interface Props {
   solto: boolean;
   aoAbrir: (r: Registro) => void;
   aoAtualizar: (r: Registro) => void;
+  rodape?: ReactNode;
 }
 
 interface ItemProps {
@@ -156,6 +157,7 @@ export function ListaDensa({
   solto,
   aoAbrir,
   aoAtualizar,
+  rodape,
 }: Props): JSX.Element {
   const comImagem = temCampoImagem(colecao.campos);
   const campoTitulo = campoTituloDoRegistro(colecao.campos);
@@ -275,6 +277,7 @@ export function ListaDensa({
           );
         })}
       </div>
+      {rodape}
     </div>
   );
 }

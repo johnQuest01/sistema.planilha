@@ -491,12 +491,11 @@
   padding: var(--e2) 0;
 }
 
-/* Botão "Ver mais" — rodapé, um pouco à direita */
+/* Botão "Ver mais" — no fim da rolagem da lista/tabela, à direita */
 .ver-mais-rodape {
   display: flex;
   justify-content: flex-end;
-  padding: var(--e3) var(--e2) calc(var(--e4) + env(safe-area-inset-bottom, 0px));
-  margin-top: var(--e2);
+  padding: var(--e3) var(--e2) var(--e3);
 }
 .btn-ver-mais {
   border: 1px solid rgba(20, 24, 26, 0.18);

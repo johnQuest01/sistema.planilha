@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ImageOff } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
@@ -20,6 +20,7 @@ interface Props {
   registros: Registro[];
   aoAtualizar: (r: Registro) => void;
   aoAbrirFicha: (r: Registro) => void;
+  rodape?: ReactNode;
 }
 
 interface Edicao {
@@ -200,6 +201,7 @@ export function Tabela({
   registros,
   aoAtualizar,
   aoAbrirFicha,
+  rodape,
 }: Props): JSX.Element {
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [rascunho, setRascunho] = useState<unknown>(undefined);
@@ -353,6 +355,7 @@ export function Tabela({
           )}
         </tbody>
       </table>
+      {rodape}
     </div>
   );
 }

@@ -189,6 +189,21 @@ export function Preencher({
     );
   }
 
+  // Botão "Ver mais" fica DENTRO da área de rolagem da lista/tabela (no fim),
+  // senão some abaixo do contêiner que tem scroll e altura próprios.
+  const rodapeVerMais = !fim ? (
+    <div className="ver-mais-rodape">
+      <button
+        type="button"
+        className="btn-ver-mais"
+        disabled={carregandoMais}
+        onClick={() => void carregarMais()}
+      >
+        {carregandoMais ? 'Carregando…' : 'Ver mais'}
+      </button>
+    </div>
+  ) : null;
+
   return (
     <>
       <div className="preencher-barra">
@@ -256,6 +271,7 @@ export function Preencher({
           solto={solto}
           aoAbrir={abrirPrevia}
           aoAtualizar={aoAtualizar}
+          rodape={rodapeVerMais}
         />
       ) : (
         <Tabela
@@ -263,20 +279,8 @@ export function Preencher({
           registros={registros}
           aoAtualizar={aoAtualizar}
           aoAbrirFicha={abrirPrevia}
+          rodape={rodapeVerMais}
         />
-      )}
-
-      {!fim && registros !== null && registros.length > 0 && (
-        <div className="ver-mais-rodape">
-          <button
-            type="button"
-            className="btn-ver-mais"
-            disabled={carregandoMais}
-            onClick={() => void carregarMais()}
-          >
-            {carregandoMais ? 'Carregando…' : 'Ver mais'}
-          </button>
-        </div>
       )}
 
       {previa !== null && (
