@@ -239,9 +239,9 @@ export async function moverRegistroParaLixeira(
   const atual = regs[0];
   if (atual === undefined) return 'nao-encontrado';
 
-  const ehDono = ator.papel === 'dono';
-  const ehCriador = atual.criado_por_id === ator.id;
-  if (!ehDono && !ehCriador) return 'proibido';
+  // Qualquer usuário logado da conta pode mover um REGISTRO para a lixeira (a RLS já
+  // garante que ele só enxerga registros da própria conta). Nada de exclusão definitiva
+  // aqui — é soft-delete, dá para restaurar da lixeira.
 
   const contaId = await contaIdDaColecao(tx, atual.colecao_id);
   if (contaId === null) return 'nao-encontrado';

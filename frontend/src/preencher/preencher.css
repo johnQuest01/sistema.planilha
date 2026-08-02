@@ -181,6 +181,25 @@
 }
 .tabela__acoes {
   width: 44px;
+  text-align: center;
+  white-space: nowrap;
+}
+.tabela__apagar-btn {
+  color: var(--tinta-3);
+}
+.tabela__apagar-btn:hover {
+  color: var(--perigo);
+  background: rgba(200, 60, 40, 0.08);
+}
+.tabela-apagar-confirma {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.tabela-apagar-confirma__ok {
+  background: var(--perigo);
+  border-color: var(--perigo);
+  color: #fff;
 }
 .tabela tbody tr:hover {
   background: rgba(23, 32, 28, 0.02);

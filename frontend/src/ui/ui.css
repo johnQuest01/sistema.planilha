@@ -149,7 +149,10 @@ textarea.campo__controle {
 .folha__fundo {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* Acima do FAB da lixeira (90), do banner "instalar" (60) e da barra de presença (55):
+     senão esses elementos fixos ficam POR CIMA do card (preview/ficha) e cobrem os
+     botões de baixo. O visor de fotos (200) continua acima da folha, como deve ser. */
+  z-index: 100;
   background: rgba(23, 32, 28, 0.42);
   display: flex;
   align-items: flex-end;

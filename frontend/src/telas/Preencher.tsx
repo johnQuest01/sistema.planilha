@@ -280,6 +280,7 @@ export function Preencher({
           registros={registros}
           aoAtualizar={aoAtualizar}
           aoAbrirFicha={abrirPrevia}
+          aoApagar={aoApagar}
           rodape={rodapeVerMais}
         />
       )}

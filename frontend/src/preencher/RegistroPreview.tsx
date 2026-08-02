@@ -146,10 +146,8 @@ export function RegistroPreview({
 }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
-  const podeApagar =
-    aoApagar !== undefined &&
-    usuario !== null &&
-    (usuario.papel === 'dono' || registro.criadoPorId === usuario.id);
+  // Qualquer usuário logado pode enviar o registro para a lixeira (soft-delete).
+  const podeApagar = aoApagar !== undefined && usuario !== null;
 
   const campoTitulo = campoTituloDoRegistro(colecao.campos);
   const [local, setLocal] = useState(registro);

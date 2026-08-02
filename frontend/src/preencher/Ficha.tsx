@@ -34,9 +34,9 @@ const DEBOUNCE_MS = 400;
 export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDuplicarVazio }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
-  // Só o dono ou quem criou o registro pode apagá-lo (o backend também barra).
-  const podeApagar =
-    usuario !== null && (usuario.papel === 'dono' || registro.criadoPorId === usuario.id);
+  // Qualquer usuário logado pode enviar o registro para a lixeira (soft-delete, dá para
+  // restaurar). O backend também libera para qualquer usuário da conta.
+  const podeApagar = usuario !== null;
 
   const [valores, setValores] = useState<Record<string, unknown>>(registro.valores);
   const valoresRef = useRef<Record<string, unknown>>(registro.valores);

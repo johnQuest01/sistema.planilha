@@ -1,9 +1,10 @@
 import { memo, useCallback, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ImageOff } from 'lucide-react';
+import { ImageOff, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
+import { useAuth } from '../contexto/Auth';
 import { CampoValor } from './CampoValor';
 import {
   campoTituloDoRegistro,
@@ -20,6 +21,7 @@ interface Props {
   registros: Registro[];
   aoAtualizar: (r: Registro) => void;
   aoAbrirFicha: (r: Registro) => void;
+  aoApagar?: (id: string) => void;
   rodape?: ReactNode;
 }
 
@@ -42,6 +44,9 @@ interface LinhaProps {
   salvandoTitulo: boolean;
   erroTitulo: string | null;
   prioritaria: boolean;
+  podeApagar: boolean;
+  confirmandoApagar: boolean;
+  apagando: boolean;
   aoAbrirFicha: (r: Registro) => void;
   iniciar: (r: Registro, c: Campo) => void;
   setRascunho: (v: unknown) => void;
@@ -51,6 +56,9 @@ interface LinhaProps {
   aoTeclarTitulo: (e: ReactKeyboardEvent<HTMLInputElement>, r: Registro) => void;
   salvarTitulo: (r: Registro) => void;
   cancelarRenomear: () => void;
+  aoPedirApagar: (r: Registro) => void;
+  aoConfirmarApagar: (r: Registro) => void;
+  aoCancelarApagar: () => void;
 }
 
 const LinhaTabela = memo(function LinhaTabela({
@@ -65,6 +73,9 @@ const LinhaTabela = memo(function LinhaTabela({
   salvandoTitulo,
   erroTitulo,
   prioritaria,
+  podeApagar,
+  confirmandoApagar,
+  apagando,
   aoAbrirFicha,
   iniciar,
   setRascunho,
@@ -74,6 +85,9 @@ const LinhaTabela = memo(function LinhaTabela({
   aoTeclarTitulo,
   salvarTitulo,
   cancelarRenomear,
+  aoPedirApagar,
+  aoConfirmarApagar,
+  aoCancelarApagar,
 }: LinhaProps): JSX.Element {
   const capa = capaDoRegistro(colecao.campos, r);
   const titulo = tituloDoRegistro(colecao.campos, r);
@@ -192,6 +206,40 @@ const LinhaTabela = memo(function LinhaTabela({
           </td>
         );
       })}
+      {podeApagar && (
+        <td className="tabela__acoes">
+          {confirmandoApagar ? (
+            <div className="tabela-apagar-confirma">
+              <button
+                type="button"
+                className="lista-item__salvar tabela-apagar-confirma__ok"
+                disabled={apagando}
+                onClick={() => aoConfirmarApagar(r)}
+              >
+                {apagando ? 'Apagando…' : 'Lixeira'}
+              </button>
+              <button
+                type="button"
+                className="lista-item__cancelar"
+                disabled={apagando}
+                onClick={aoCancelarApagar}
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--icone tabela__apagar-btn"
+              aria-label="Enviar para lixeira"
+              title="Enviar para lixeira"
+              onClick={() => aoPedirApagar(r)}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </td>
+      )}
     </tr>
   );
 });
@@ -201,18 +249,24 @@ export function Tabela({
   registros,
   aoAtualizar,
   aoAbrirFicha,
+  aoApagar,
   rodape,
 }: Props): JSX.Element {
+  const { estado } = useAuth();
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [rascunho, setRascunho] = useState<unknown>(undefined);
   const [renomeandoId, setRenomeandoId] = useState<string | null>(null);
   const [rascunhoTitulo, setRascunhoTitulo] = useState('');
   const [salvandoTitulo, setSalvandoTitulo] = useState(false);
   const [erroTitulo, setErroTitulo] = useState<string | null>(null);
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
+  const [apagandoId, setApagandoId] = useState<string | null>(null);
   const temImagem = colecao.campos.some((c) => c.tipo === 'imagem');
   const campoTitulo = campoTituloDoRegistro(colecao.campos);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const colunas = (temImagem ? 1 : 0) + 1 + colecao.campos.length;
+  // Qualquer usuário logado pode enviar registros para a lixeira (soft-delete).
+  const podeApagar = aoApagar !== undefined && estado.fase === 'logado';
+  const colunas = (temImagem ? 1 : 0) + 1 + colecao.campos.length + (podeApagar ? 1 : 0);
 
   const virtualizer = useVirtualizer({
     count: registros.length,
@@ -301,6 +355,33 @@ export function Tabela({
     [salvarTitulo, cancelarRenomear],
   );
 
+  const aoPedirApagar = useCallback((r: Registro): void => {
+    setEdicao(null);
+    setRenomeandoId(null);
+    setConfirmandoId(r.id);
+  }, []);
+
+  const aoCancelarApagar = useCallback((): void => {
+    setConfirmandoId(null);
+  }, []);
+
+  const aoConfirmarApagar = useCallback(
+    async (r: Registro): Promise<void> => {
+      if (apagandoId !== null) return;
+      setApagandoId(r.id);
+      try {
+        await api.apagarRegistro(r.id);
+        aoApagar?.(r.id);
+        setConfirmandoId(null);
+      } catch {
+        /* mantém a linha; usuário pode tentar de novo */
+      } finally {
+        setApagandoId(null);
+      }
+    },
+    [apagandoId, aoApagar],
+  );
+
   return (
     <div className="tabela-envolto" ref={scrollRef}>
       <table className="tabela">
@@ -311,6 +392,7 @@ export function Tabela({
             {colecao.campos.map((c) => (
               <th key={c.id}>{c.nome}</th>
             ))}
+            {podeApagar && <th aria-label="Ações" />}
           </tr>
         </thead>
         <tbody>
@@ -336,6 +418,9 @@ export function Tabela({
                 salvandoTitulo={salvandoTitulo}
                 erroTitulo={renomeandoId === r.id ? erroTitulo : null}
                 prioritaria={item.index < 8}
+                podeApagar={podeApagar}
+                confirmandoApagar={confirmandoId === r.id}
+                apagando={apagandoId === r.id}
                 aoAbrirFicha={aoAbrirFicha}
                 iniciar={iniciar}
                 setRascunho={setRascunho}
@@ -345,6 +430,9 @@ export function Tabela({
                 aoTeclarTitulo={aoTeclarTitulo}
                 salvarTitulo={(reg) => void salvarTitulo(reg)}
                 cancelarRenomear={cancelarRenomear}
+                aoPedirApagar={aoPedirApagar}
+                aoConfirmarApagar={(reg) => void aoConfirmarApagar(reg)}
+                aoCancelarApagar={aoCancelarApagar}
               />
             );
           })}
