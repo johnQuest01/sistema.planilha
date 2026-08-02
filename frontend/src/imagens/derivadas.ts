@@ -1,11 +1,11 @@
 // Gera as DUAS derivadas da seção 6.1 no canvas, a partir do mesmo arquivo:
-//  - cheia: lado maior 1600px, JPEG 0.8, teto 2 MB (visor)
+//  - cheia: lado maior 2560px, JPEG ~0.88, teto 4 MB (visor + zoom com detalhe)
 //  - mini:  lado maior 240px,  JPEG 0.7, teto 200 KB (lista/célula/tiras)
 // Sempre sai JPEG — por isso o mime enviado ao presign é image/jpeg.
 
-const LADO_CHEIA = 1600;
+const LADO_CHEIA = 2560;
 const LADO_MINI = 240;
-const MAX_CHEIA = 2 * 1024 * 1024;
+const MAX_CHEIA = 4 * 1024 * 1024;
 const MAX_MINI = 200 * 1024;
 
 export interface Derivadas {
@@ -27,6 +27,7 @@ function desenhar(bitmap: ImageBitmap, ladoMax: number): HTMLCanvasElement {
   canvas.height = altura;
   const ctx = canvas.getContext('2d');
   if (ctx === null) throw new Error('canvas 2d indisponível');
+  ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bitmap, 0, 0, largura, altura);
   return canvas;
@@ -51,8 +52,8 @@ async function codificarAbaixoDe(
 ): Promise<Blob> {
   let q = qInicial;
   let blob = await paraBlob(canvas, q);
-  while (blob.size > limite && q > 0.4) {
-    q -= 0.1;
+  while (blob.size > limite && q > 0.5) {
+    q -= 0.08;
     blob = await paraBlob(canvas, q);
   }
   return blob;
@@ -61,7 +62,7 @@ async function codificarAbaixoDe(
 export async function gerarDerivadas(file: File): Promise<Derivadas> {
   const bitmap = await carregarBitmap(file);
   try {
-    const cheia = await codificarAbaixoDe(desenhar(bitmap, LADO_CHEIA), MAX_CHEIA, 0.8);
+    const cheia = await codificarAbaixoDe(desenhar(bitmap, LADO_CHEIA), MAX_CHEIA, 0.88);
     const mini = await codificarAbaixoDe(desenhar(bitmap, LADO_MINI), MAX_MINI, 0.7);
     return { cheia, mini };
   } finally {

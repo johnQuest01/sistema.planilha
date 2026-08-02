@@ -189,7 +189,6 @@
   height: 100%;
   display: grid;
   place-items: center;
-  transform-origin: center center;
   will-change: transform;
 }
 .quadro-zoom__mini,
@@ -202,16 +201,18 @@
   object-fit: contain;
   pointer-events: none;
   -webkit-user-drag: none;
+  /* Usa o decode nítido; evita suavizar demais no zoom */
+  image-rendering: auto;
 }
 .quadro-zoom__mini {
   z-index: 0;
   filter: blur(6px);
-  /* sem scale — o scale fazia a mini vazar por cima da cheia nas bordas */
 }
 .quadro-zoom__cheia {
   z-index: 1;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  /* Quando o JS define width/height em px (zoom), libera o teto da tela */
+  object-fit: fill;
 }
 .quadro-zoom__cheia.on {
   opacity: 1;

@@ -12,7 +12,7 @@ interface Props {
 }
 
 // Visor: trilho com scroll-snap entre fotos; cada quadro tem pinch/roda zoom + arraste.
-// Qualidade: blur-up (mini → cheia 1600px). Só carrega cheia da atual + vizinhas.
+// Qualidade: blur-up (mini → cheia no R2). Só carrega cheia da atual + vizinhas.
 export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
   const trilhoRef = useRef<HTMLDivElement>(null);
   const quadrosRef = useRef<(HTMLDivElement | null)[]>([]);

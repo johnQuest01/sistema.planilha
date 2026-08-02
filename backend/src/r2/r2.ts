@@ -90,7 +90,7 @@ export function urlPublica(key: string): string {
 }
 
 // Presigned PUT com ContentLength e ContentType assinados: o cliente precisa mandar
-// exatamente esse tamanho e tipo, o que limita o upload (2 MB cheia / 200 KB mini).
+// exatamente esse tamanho e tipo, o que limita o upload (4 MB cheia / 200 KB mini).
 export async function presignPut(key: string, mime: string, tamanho: number): Promise<string> {
   const { s3, cfg } = ctx();
   const cmd = new PutObjectCommand({
