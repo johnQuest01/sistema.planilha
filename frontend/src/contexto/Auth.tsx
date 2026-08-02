@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, ErroApi, type Usuario } from '../api/cliente';
+import { api, type Usuario } from '../api/cliente';
 import { definirBaseR2 } from '../imagens/urls';
 
 type Estado =
@@ -29,25 +29,17 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
 
   useEffect(() => {
     let vivo = true;
-    // Config (base do R2) e sessão em paralelo. Config é público; eu() pode dar 401.
+    // Config (base do R2) e sessão de verdade em paralelo — antes era sequencial
+    // e somava a latência do Render (cold start) duas vezes no boot.
     void (async () => {
-      try {
-        const cfg = await api.config();
-        if (vivo) definirBaseR2(cfg.r2PublicBase);
-      } catch {
-        /* sem R2 configurado: fotos não carregam, resto funciona */
-      }
-      try {
-        const usuario = await api.eu();
-        if (vivo) setEstado({ fase: 'logado', usuario });
-      } catch (erro) {
-        if (vivo) {
-          if (erro instanceof ErroApi && erro.status === 401) {
-            setEstado({ fase: 'deslogado' });
-          } else {
-            setEstado({ fase: 'deslogado' });
-          }
-        }
+      const [cfg, sessao] = await Promise.allSettled([api.config(), api.eu()]);
+      if (!vivo) return;
+      if (cfg.status === 'fulfilled') definirBaseR2(cfg.value.r2PublicBase);
+      if (sessao.status === 'fulfilled') {
+        setEstado({ fase: 'logado', usuario: sessao.value });
+      } else {
+        void sessao; // 401 ou rede → tela de entrar
+        setEstado({ fase: 'deslogado' });
       }
     })();
     return () => {

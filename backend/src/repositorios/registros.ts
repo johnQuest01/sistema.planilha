@@ -30,7 +30,7 @@ interface LinhaCampo {
   config: ConfigCampo | null;
 }
 
-const LIMITE = 50; // por página (ver seção 5)
+const LIMITE = 30; // por página — 1ª carga mais leve; scroll infinito completa
 const LIMITE_BUSCA = 50;
 
 function mapRegistro(r: LinhaRegistro): Registro {

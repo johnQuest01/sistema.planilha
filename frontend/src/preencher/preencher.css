@@ -89,6 +89,55 @@
   transition: opacity 0.18s ease;
 }
 
+/* Skeleton enquanto a 1ª página de registros chega */
+.lista-skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.lista-skel__linha {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2);
+  background: var(--papel);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-2);
+  min-height: 72px;
+}
+.lista-skel__foto {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(23, 32, 28, 0.06) 0%,
+    rgba(23, 32, 28, 0.12) 50%,
+    rgba(23, 32, 28, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: miniatura-skel 1.1s ease-in-out infinite;
+}
+.lista-skel__txt {
+  flex: 1;
+  height: 14px;
+  max-width: 220px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    rgba(23, 32, 28, 0.06) 0%,
+    rgba(23, 32, 28, 0.12) 50%,
+    rgba(23, 32, 28, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: miniatura-skel 1.1s ease-in-out infinite;
+}
+.lista-skel--tabela .lista-skel__foto {
+  width: 72px;
+  height: 72px;
+}
+
 /* ---- tabela (desktop) ---- */
 .tabela-envolto {
   background: var(--papel);

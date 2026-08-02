@@ -36,6 +36,7 @@ interface ItemProps {
   rascunho: string;
   salvando: boolean;
   erro: string | null;
+  prioritaria: boolean;
   aoAbrir: (r: Registro) => void;
   iniciarEdicao: (r: Registro) => void;
   setRascunho: (v: string) => void;
@@ -54,6 +55,7 @@ const ItemLista = memo(function ItemLista({
   rascunho,
   salvando,
   erro,
+  prioritaria,
   aoAbrir,
   iniciarEdicao,
   setRascunho,
@@ -75,7 +77,7 @@ const ItemLista = memo(function ItemLista({
           onClick={() => aoAbrir(r)}
         >
           {capa !== null ? (
-            <Miniatura fotoKey={capa} tamanho={lado} />
+            <Miniatura fotoKey={capa} tamanho={lado} prioritaria={prioritaria} />
           ) : (
             <span className="capa capa--vazia" style={{ width: lado, height: lado }}>
               <ImageOff size={20} />
@@ -267,6 +269,7 @@ export function ListaDensa({
                 rascunho={rascunho}
                 salvando={salvando}
                 erro={editandoId === r.id ? erro : null}
+                prioritaria={item.index < 8}
                 aoAbrir={aoAbrir}
                 iniciarEdicao={iniciarEdicao}
                 setRascunho={setRascunho}

@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ListPlus, Plus, Rows2, Rows3 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
-import { Carregando } from '../ui/Carregando';
 import { useMedia } from '../ui/useMedia';
 import { Tabela } from '../preencher/Tabela';
 import { ListaDensa } from '../preencher/ListaDensa';
@@ -16,27 +15,51 @@ import { FolhaInferior } from '../ui/FolhaInferior';
 import { FormBloco, type DadosBloco } from './FormBloco';
 import '../preencher/preencher.css';
 
-const PAGINA = 50;
+const PAGINA = 30;
+
+function EsqueletoLista({ mobile }: { mobile: boolean }): JSX.Element {
+  const n = mobile ? 8 : 6;
+  return (
+    <div className={`lista-skel${mobile ? '' : ' lista-skel--tabela'}`} aria-busy="true" aria-label="Carregando registros">
+      {Array.from({ length: n }, (_, i) => (
+        <div key={i} className="lista-skel__linha">
+          <span className="lista-skel__foto" />
+          <span className="lista-skel__txt" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function Preencher({
   colecao,
   aoMudarCampos,
+  registrosIniciais,
 }: {
   colecao: Colecao;
   aoMudarCampos: (fn: (campos: Campo[]) => Campo[]) => void;
+  /** undefined = prefetch ainda; null = falhou (busca aqui); array = usar */
+  registrosIniciais?: Registro[] | null;
 }): JSX.Element {
   const ehMobile = useMedia('(max-width: 768px)');
-  const [registros, setRegistros] = useState<Registro[] | null>(null);
-  const [fim, setFim] = useState(false);
+  const [registros, setRegistros] = useState<Registro[] | null>(() =>
+    Array.isArray(registrosIniciais) ? registrosIniciais : null,
+  );
+  const [fim, setFim] = useState(() =>
+    Array.isArray(registrosIniciais) ? registrosIniciais.length < PAGINA : false,
+  );
   const [erro, setErro] = useState<string | null>(null);
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [previa, setPrevia] = useState<Registro | null>(null);
   const [aberta, setAberta] = useState<Registro | null>(null);
   const [solto, setSolto] = useState(false);
   const [adicionandoCampo, setAdicionandoCampo] = useState(false);
+  const carregandoMaisRef = useRef(false);
+  const fimRef = useRef(fim);
+  const registrosRef = useRef(registros);
+  fimRef.current = fim;
+  registrosRef.current = registros;
 
-  // Adiciona um campo durante o preenchimento (vale em qualquer planilha, inclusive
-  // cópias). O campo criado entra na coleção na hora, então tabela/ficha já o mostram.
   async function adicionarCampo(d: DadosBloco): Promise<void> {
     const criado = await api.criarCampo(colecao.id, d);
     aoMudarCampos((cs) => [...cs, criado]);
@@ -45,9 +68,27 @@ export function Preencher({
 
   useEffect(() => {
     let vivo = true;
+    setErro(null);
+
+    if (registrosIniciais === undefined) {
+      // Prefetch do pai ainda em voo — mantém skeleton, sem 2ª request.
+      setRegistros(null);
+      return () => {
+        vivo = false;
+      };
+    }
+
+    if (Array.isArray(registrosIniciais)) {
+      setRegistros(registrosIniciais);
+      setFim(registrosIniciais.length < PAGINA);
+      return () => {
+        vivo = false;
+      };
+    }
+
+    // Prefetch falhou (ex.: senha) — busca própria.
     setRegistros(null);
     setFim(false);
-    setErro(null);
     void api
       .listarRegistros(colecao.id)
       .then((rs) => {
@@ -63,23 +104,28 @@ export function Preencher({
     return () => {
       vivo = false;
     };
-  }, [colecao.id]);
+  }, [colecao.id, registrosIniciais]);
 
   const carregarMais = useCallback(async (): Promise<void> => {
-    if (registros === null || registros.length === 0 || carregandoMais || fim) return;
+    const atual = registrosRef.current;
+    if (atual === null || atual.length === 0 || carregandoMaisRef.current || fimRef.current) return;
+    carregandoMaisRef.current = true;
     setCarregandoMais(true);
     try {
-      const ultimo = registros[registros.length - 1];
+      const ultimo = atual[atual.length - 1];
       if (ultimo === undefined) return;
       const mais = await api.listarRegistros(colecao.id, ultimo.criadoEm);
-      setRegistros((atual) => (atual === null ? mais : [...atual, ...mais]));
-      setFim(mais.length < PAGINA);
+      setRegistros((prev) => (prev === null ? mais : [...prev, ...mais]));
+      const acabou = mais.length < PAGINA;
+      setFim(acabou);
+      fimRef.current = acabou;
     } catch {
       /* silencioso */
     } finally {
+      carregandoMaisRef.current = false;
       setCarregandoMais(false);
     }
-  }, [registros, carregandoMais, fim, colecao.id]);
+  }, [colecao.id]);
 
   async function novo(valores?: Record<string, unknown>): Promise<void> {
     try {
@@ -118,8 +164,6 @@ export function Preencher({
     setAberta(r);
   }, []);
 
-  if (registros === null) return <Carregando />;
-
   if (colecao.campos.length === 0) {
     return (
       <div className="preencher-vazio">
@@ -148,7 +192,7 @@ export function Preencher({
   return (
     <>
       <div className="preencher-barra">
-        <Botao variante="primario" onClick={() => void novo()}>
+        <Botao variante="primario" onClick={() => void novo()} disabled={registros === null}>
           <Plus size={18} />
           Novo registro
         </Botao>
@@ -161,7 +205,9 @@ export function Preencher({
           Adicionar campo
         </Botao>
         <span className="preencher-barra__espaco" />
-        <span className="preencher-contagem">{registros.length} registro(s)</span>
+        <span className="preencher-contagem">
+          {registros === null ? '…' : `${registros.length} registro(s)`}
+        </span>
         {ehMobile && (
           <button
             type="button"
@@ -198,7 +244,9 @@ export function Preencher({
         </div>
       )}
 
-      {registros.length === 0 ? (
+      {registros === null ? (
+        <EsqueletoLista mobile={ehMobile} />
+      ) : registros.length === 0 ? (
         <div className="preencher-vazio">Nenhum registro ainda. Toque em “Novo registro”.</div>
       ) : ehMobile ? (
         <ListaDensa
@@ -209,7 +257,7 @@ export function Preencher({
           aoAtualizar={aoAtualizar}
           temMais={!fim}
           carregandoMais={carregandoMais}
-          aoCarregarMais={() => void carregarMais()}
+          aoCarregarMais={carregarMais}
         />
       ) : (
         <Tabela
@@ -219,7 +267,7 @@ export function Preencher({
           aoAbrirFicha={abrirPrevia}
           temMais={!fim}
           carregandoMais={carregandoMais}
-          aoCarregarMais={() => void carregarMais()}
+          aoCarregarMais={carregarMais}
         />
       )}
 

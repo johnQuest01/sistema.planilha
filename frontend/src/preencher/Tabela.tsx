@@ -43,6 +43,7 @@ interface LinhaProps {
   rascunhoTitulo: string;
   salvandoTitulo: boolean;
   erroTitulo: string | null;
+  prioritaria: boolean;
   aoAbrirFicha: (r: Registro) => void;
   iniciar: (r: Registro, c: Campo) => void;
   setRascunho: (v: unknown) => void;
@@ -65,6 +66,7 @@ const LinhaTabela = memo(function LinhaTabela({
   rascunhoTitulo,
   salvandoTitulo,
   erroTitulo,
+  prioritaria,
   aoAbrirFicha,
   iniciar,
   setRascunho,
@@ -90,7 +92,7 @@ const LinhaTabela = memo(function LinhaTabela({
             onClick={() => aoAbrirFicha(r)}
           >
             {capa !== null ? (
-              <Miniatura fotoKey={capa} tamanho={72} />
+              <Miniatura fotoKey={capa} tamanho={72} prioritaria={prioritaria} />
             ) : (
               <span className="capa capa--vazia" style={{ width: 72, height: 72 }}>
                 <ImageOff size={22} />
@@ -352,6 +354,7 @@ export function Tabela({
                 rascunhoTitulo={rascunhoTitulo}
                 salvandoTitulo={salvandoTitulo}
                 erroTitulo={renomeandoId === r.id ? erroTitulo : null}
+                prioritaria={item.index < 8}
                 aoAbrirFicha={aoAbrirFicha}
                 iniciar={iniciar}
                 setRascunho={setRascunho}

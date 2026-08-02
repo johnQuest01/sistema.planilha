@@ -7,6 +7,8 @@ interface Props {
   tamanho: number;
   className?: string;
   alt?: string;
+  /** Primeiras linhas visíveis: baixa com prioridade (sem lazy). */
+  prioritaria?: boolean;
 }
 
 /** Mini com placeholder + fade-in — evita tela branca e layout shift. */
@@ -15,6 +17,7 @@ export function Miniatura({
   tamanho,
   className = 'capa',
   alt = '',
+  prioritaria = false,
 }: Props): JSX.Element {
   const [ok, setOk] = useState(false);
   useEffect(() => {
@@ -30,8 +33,9 @@ export function Miniatura({
         alt={alt}
         width={tamanho}
         height={tamanho}
-        loading="lazy"
+        loading={prioritaria ? 'eager' : 'lazy'}
         decoding="async"
+        {...(prioritaria ? { fetchPriority: 'high' as const } : {})}
         onLoad={() => setOk(true)}
       />
     </span>

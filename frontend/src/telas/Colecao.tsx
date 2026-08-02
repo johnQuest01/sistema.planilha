@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Copy, Lock, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
-import type { Campo, Colecao as TColecao } from '../../../shared/tipos';
+import type { Campo, Colecao as TColecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
 import { Segmentado } from '../ui/Segmentado';
 import { Botao } from '../ui/Botao';
@@ -15,6 +15,8 @@ import './colecao.css';
 import './telas.css';
 
 type Modo = 'criar' | 'preencher';
+/** undefined = prefetch em andamento; null = falhou; array = pronto */
+type PrefetchRegs = Registro[] | null | undefined;
 
 function nomeDoErroBloqueio(e: ErroApi): string {
   const c = e.corpo;
@@ -36,6 +38,7 @@ export function Colecao(): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   const [colecao, setColecao] = useState<TColecao | null>(null);
+  const [regsIniciais, setRegsIniciais] = useState<PrefetchRegs>(undefined);
   const [bloqueada, setBloqueada] = useState<{ nome: string } | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [senha, setSenha] = useState('');
@@ -55,6 +58,11 @@ export function Colecao(): JSX.Element {
     setColecao(col);
     setNomeEdit(col.nome);
     nomeSalvo.current = col.nome;
+    try {
+      setRegsIniciais(await api.listarRegistros(id));
+    } catch {
+      setRegsIniciais(null);
+    }
   };
 
   const atualizarCampos = (fn: (campos: Campo[]) => Campo[]): void => {
@@ -64,8 +72,10 @@ export function Colecao(): JSX.Element {
   useEffect(() => {
     let vivo = true;
     setColecao(null);
+    setRegsIniciais(undefined);
     setBloqueada(null);
     setErroCarga(null);
+    // Coleção + 1ª página de registros em paralelo (corta a cascata obter→listar).
     void api
       .obterColecao(id)
       .then((col) => {
@@ -79,6 +89,7 @@ export function Colecao(): JSX.Element {
         if (!vivo) return;
         if (e instanceof ErroApi && e.status === 403) {
           setBloqueada({ nome: nomeDoErroBloqueio(e) });
+          setRegsIniciais(null);
           return;
         }
         if (e instanceof ErroApi && e.status === 404) {
@@ -86,6 +97,15 @@ export function Colecao(): JSX.Element {
           return;
         }
         setErroCarga(e instanceof ErroApi ? e.message : 'falha ao carregar a planilha');
+        setRegsIniciais(null);
+      });
+    void api
+      .listarRegistros(id)
+      .then((rs) => {
+        if (vivo) setRegsIniciais(rs);
+      })
+      .catch(() => {
+        if (vivo) setRegsIniciais(null);
       });
     return () => {
       vivo = false;
@@ -111,6 +131,12 @@ export function Colecao(): JSX.Element {
       setNomeEdit(col.nome);
       nomeSalvo.current = col.nome;
       setModo(col.campos.length === 0 ? 'criar' : 'preencher');
+      setRegsIniciais(undefined);
+      try {
+        setRegsIniciais(await api.listarRegistros(id));
+      } catch {
+        setRegsIniciais(null);
+      }
     } catch (err) {
       setErroSenha(err instanceof ErroApi ? err.message : 'senha inválida');
     } finally {
@@ -299,7 +325,11 @@ export function Colecao(): JSX.Element {
             recarregar={() => void recarregar()}
           />
         ) : (
-          <Preencher colecao={colecao} aoMudarCampos={atualizarCampos} />
+          <Preencher
+            colecao={colecao}
+            aoMudarCampos={atualizarCampos}
+            registrosIniciais={regsIniciais}
+          />
         )}
       </div>
     </div>
