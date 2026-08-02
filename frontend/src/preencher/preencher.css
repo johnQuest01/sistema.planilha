@@ -481,9 +481,11 @@
   flex-direction: column;
   gap: var(--e3);
   margin-top: var(--e3);
+  /* Folga só no fim da rolagem: registros grandes rolam por inteiro acima dos
+     rodapés fixos (presença/instalar/FAB), sem vão no meio do conteúdo. */
+  padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
 }
 .busca-ref__resultados > .preview-registro:last-child {
-  /* rola o último resultado inteiro para cima sem exigir folga vazia embaixo */
   scroll-margin-bottom: var(--e4);
 }
 .busca-ref__status {

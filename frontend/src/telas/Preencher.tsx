@@ -54,6 +54,7 @@ export function Preencher({
   const [aberta, setAberta] = useState<Registro | null>(null);
   const [solto, setSolto] = useState(false);
   const [adicionandoCampo, setAdicionandoCampo] = useState(false);
+  const [buscaAtiva, setBuscaAtiva] = useState(false);
   const carregandoMaisRef = useRef(false);
   const fimRef = useRef(fim);
   const registrosRef = useRef(registros);
@@ -244,6 +245,7 @@ export function Preencher({
         aoAbrir={abrirEdicao}
         aoAtualizar={aoAtualizar}
         aoApagar={aoApagar}
+        aoMudarBusca={setBuscaAtiva}
       />
 
       {adicionandoCampo && (
@@ -259,29 +261,32 @@ export function Preencher({
         </div>
       )}
 
-      {registros === null ? (
-        <EsqueletoLista mobile={ehMobile} />
-      ) : registros.length === 0 ? (
-        <div className="preencher-vazio">Nenhum registro ainda. Toque em “Novo registro”.</div>
-      ) : ehMobile ? (
-        <ListaDensa
-          key={solto ? 'lista-solto' : 'lista-compacto'}
-          colecao={colecao}
-          registros={registros}
-          solto={solto}
-          aoAbrir={abrirPrevia}
-          aoAtualizar={aoAtualizar}
-          rodape={rodapeVerMais}
-        />
-      ) : (
-        <Tabela
-          colecao={colecao}
-          registros={registros}
-          aoAtualizar={aoAtualizar}
-          aoAbrirFicha={abrirPrevia}
-          rodape={rodapeVerMais}
-        />
-      )}
+      {/* Durante a busca, escondemos a lista: os resultados (prévia completa)
+          ficam sozinhos e rolam por inteiro, sem a lista abaixo sobrepondo. */}
+      {!buscaAtiva &&
+        (registros === null ? (
+          <EsqueletoLista mobile={ehMobile} />
+        ) : registros.length === 0 ? (
+          <div className="preencher-vazio">Nenhum registro ainda. Toque em “Novo registro”.</div>
+        ) : ehMobile ? (
+          <ListaDensa
+            key={solto ? 'lista-solto' : 'lista-compacto'}
+            colecao={colecao}
+            registros={registros}
+            solto={solto}
+            aoAbrir={abrirPrevia}
+            aoAtualizar={aoAtualizar}
+            rodape={rodapeVerMais}
+          />
+        ) : (
+          <Tabela
+            colecao={colecao}
+            registros={registros}
+            aoAtualizar={aoAtualizar}
+            aoAbrirFicha={abrirPrevia}
+            rodape={rodapeVerMais}
+          />
+        ))}
 
       {previa !== null && (
         <FolhaInferior

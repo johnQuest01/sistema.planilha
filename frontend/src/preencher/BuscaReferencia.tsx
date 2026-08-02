@@ -11,13 +11,26 @@ interface Props {
   aoAbrir: (r: Registro) => void;
   aoAtualizar?: (r: Registro) => void;
   aoApagar?: (id: string) => void;
+  /** Avisa o pai quando há um termo de busca ativo (para esconder a lista). */
+  aoMudarBusca?: (ativa: boolean) => void;
 }
 
-export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar, aoApagar }: Props): JSX.Element {
+export function BuscaReferencia({
+  colecao,
+  aoAbrir,
+  aoAtualizar,
+  aoApagar,
+  aoMudarBusca,
+}: Props): JSX.Element {
   const [q, setQ] = useState('');
   const [resultados, setResultados] = useState<Registro[] | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const buscaAtiva = q.trim() !== '';
+
+  useEffect(() => {
+    aoMudarBusca?.(buscaAtiva);
+  }, [buscaAtiva, aoMudarBusca]);
 
   useEffect(() => {
     const termo = q.trim();
