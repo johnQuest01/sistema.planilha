@@ -91,13 +91,12 @@ export function FotoZoomavel({
     return () => ro.disconnect();
   }, []);
 
+  // Só mede com caixa real — box 0×0 gerava fit=0 e a foto sumia (width/height 0).
+  const caixaOk = box.w > 8 && box.h > 8;
   const fit =
-    nat.w > 0 && nat.h > 0 && box.w > 0 && box.h > 0
-      ? Math.min(box.w / nat.w, box.h / nat.h)
-      : 1;
+    nat.w > 0 && nat.h > 0 && caixaOk ? Math.min(box.w / nat.w, box.h / nat.h) : 1;
   fitRef.current = fit;
-  // Até 1:1 com a bitmap (+ folga leve). Evita “zoom de tela” em imagem já pequena.
-  const maxScale = limitar(1 / Math.max(fit, 0.05), 3, 8);
+  const maxScale = caixaOk ? limitar(1 / Math.max(fit, 0.05), 3, 8) : 4;
   maxScaleRef.current = maxScale;
 
   const aplicar = useCallback(
@@ -276,8 +275,9 @@ export function FotoZoomavel({
   }
 
   const zoomado = scale > 1.02;
-  const dispW = nat.w > 0 ? nat.w * fit * scale : undefined;
-  const dispH = nat.h > 0 ? nat.h * fit * scale : undefined;
+  const usarPx = cheiaOk && caixaOk && nat.w > 0;
+  const dispW = usarPx ? Math.max(1, nat.w * fit * scale) : undefined;
+  const dispH = usarPx ? Math.max(1, nat.h * fit * scale) : undefined;
 
   return (
     <div
@@ -296,6 +296,7 @@ export function FotoZoomavel({
           transform: `translate3d(${tx}px, ${ty}px, 0)`,
         }}
       >
+        {/* Mini fica até a cheia estar visível — evita tela preta no meio do load */}
         {!cheiaOk && (
           <img
             className="quadro-zoom__mini"
@@ -312,13 +313,16 @@ export function FotoZoomavel({
             alt={alt}
             draggable={false}
             decoding="async"
-            // Tamanho explícito = usa pixels da cheia no zoom (não escala bitmap da tela)
             style={
               dispW !== undefined && dispH !== undefined
                 ? { width: dispW, height: dispH, maxWidth: 'none', maxHeight: 'none' }
-                : undefined
+                : { maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }
             }
             onLoad={(e) => aoCheiaPronta(e.currentTarget)}
+            onError={() => {
+              // Se a cheia falhar, mantém a mini visível
+              setCheiaOk(false);
+            }}
             ref={(el) => {
               if (el !== null && el.complete && el.naturalWidth > 0) aoCheiaPronta(el);
             }}
