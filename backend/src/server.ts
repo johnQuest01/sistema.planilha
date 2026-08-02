@@ -16,7 +16,8 @@ import { rotasUpload } from './rotas/upload';
 import { rotasConfig } from './rotas/config';
 import { rotasPresenca } from './rotas/presenca';
 import { rotasLixeira } from './rotas/lixeira';
-import { pluginWebsocket, rotasWs } from './ws/rotasWs';
+import websocket from '@fastify/websocket';
+import { rotasWs } from './ws/rotasWs';
 
 export function buildServer() {
   const app = Fastify({
@@ -24,8 +25,11 @@ export function buildServer() {
     bodyLimit: 64 * 1024, // binário vai direto pro R2; JSON de registro cabe folgado aqui
   });
 
-  // WebSocket precisa registrar antes das rotas HTTP (@fastify/websocket).
-  app.register(pluginWebsocket);
+  // @fastify/websocket é exportado via fastify-plugin, então registrar direto no
+  // `app` decora a instância raiz e as rotas-filho (rotasWs) herdam o suporte a
+  // `{ websocket: true }`. Envolver num plugin encapsulado próprio quebrava isso:
+  // a rota /ws/presenca virava um GET HTTP comum e nunca fazia o upgrade.
+  app.register(websocket);
 
   app.register(helmet);
   app.register(cors, { origin: config.corsOrigin, credentials: true });

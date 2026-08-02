@@ -73,10 +73,11 @@ export function Presenca(): JSX.Element | null {
     let pingTimer: ReturnType<typeof setInterval> | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
-    let usarFallback = false;
 
-    async function pollFallback(): Promise<void> {
-      if (!vivoRef.current || !usarFallback) return;
+    const wsAberto = (): boolean => ws !== null && ws.readyState === WebSocket.OPEN;
+
+    async function poll(): Promise<void> {
+      if (!vivoRef.current) return;
       try {
         const p = await api.presenca();
         if (!vivoRef.current) return;
@@ -84,10 +85,30 @@ export function Presenca(): JSX.Element | null {
         processarEntradas(p.entradas);
       } catch {
         /* ignora */
-      } finally {
-        if (vivoRef.current && usarFallback && document.visibilityState === 'visible') {
-          pollTimer = setTimeout(() => void pollFallback(), FALLBACK_POLL_MS);
+      }
+    }
+
+    // Mantém a presença via REST enquanto o WebSocket não estiver aberto (cold
+    // start do Render, queda de rede, proxy que barra WS). Para sozinho quando o
+    // WS conecta.
+    function garantirPoll(imediato: boolean): void {
+      if (pollTimer !== null) return;
+      const passo = async (): Promise<void> => {
+        pollTimer = null;
+        if (!vivoRef.current || wsAberto()) return;
+        await poll();
+        if (vivoRef.current && !wsAberto()) {
+          pollTimer = setTimeout(() => void passo(), FALLBACK_POLL_MS);
         }
+      };
+      if (imediato) void passo();
+      else pollTimer = setTimeout(() => void passo(), FALLBACK_POLL_MS);
+    }
+
+    function pararPoll(): void {
+      if (pollTimer !== null) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
       }
     }
 
@@ -98,24 +119,28 @@ export function Presenca(): JSX.Element | null {
       }
     }
 
+    function agendarReconexao(): void {
+      if (reconnectTimer !== null) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        void conectarWs();
+      }, RECONNECT_MS);
+    }
+
     async function conectarWs(): Promise<void> {
-      if (!vivoRef.current) return;
+      if (!vivoRef.current || ws !== null) return;
       try {
         const { ticket } = await api.ticketPresenca();
         if (!vivoRef.current) return;
-        const url = urlWsPresenca(ticket);
-        ws = new WebSocket(url);
+        ws = new WebSocket(urlWsPresenca(ticket));
 
         ws.onopen = () => {
-          usarFallback = false;
-          if (pollTimer !== null) {
-            clearTimeout(pollTimer);
-            pollTimer = null;
-          }
+          pararPoll();
           limparPing();
           pingTimer = setInterval(() => {
-            if (ws !== null && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ tipo: 'ping' }));
+            const s = ws;
+            if (s !== null && s.readyState === WebSocket.OPEN) {
+              s.send(JSON.stringify({ tipo: 'ping' }));
             }
           }, PING_MS);
         };
@@ -138,43 +163,44 @@ export function Presenca(): JSX.Element | null {
           limparPing();
           ws = null;
           if (!vivoRef.current) return;
-          // Reconecta; se falhar de novo, cai no polling REST.
-          reconnectTimer = setTimeout(() => {
-            void conectarWs().catch(() => {
-              usarFallback = true;
-              void pollFallback();
-            });
-          }, RECONNECT_MS);
+          // Enquanto o WS não volta, mantém a presença por REST.
+          garantirPoll(true);
+          agendarReconexao();
         };
 
         ws.onerror = () => {
           ws?.close();
         };
       } catch {
-        usarFallback = true;
-        void pollFallback();
+        // Nem o ticket saiu (401/rede): presença por REST e tenta de novo.
+        garantirPoll(true);
+        agendarReconexao();
       }
     }
 
     function aoVisibilidade(): void {
-      if (document.visibilityState === 'visible') {
-        if (ws === null || ws.readyState !== WebSocket.OPEN) {
-          void conectarWs();
-        } else {
-          ws.send(JSON.stringify({ tipo: 'ping' }));
-        }
+      if (document.visibilityState !== 'visible') return;
+      const s = ws;
+      if (s !== null && s.readyState === WebSocket.OPEN) {
+        s.send(JSON.stringify({ tipo: 'ping' }));
+      } else if (s === null) {
+        void poll();
+        void conectarWs();
       }
     }
 
     document.addEventListener('visibilitychange', aoVisibilidade);
+    // Presença imediata (não espera o handshake nem o cold start do Render) e,
+    // em paralelo, abre o WebSocket para atualizações em tempo real.
+    garantirPoll(true);
     void conectarWs();
 
     return () => {
       vivoRef.current = false;
       document.removeEventListener('visibilitychange', aoVisibilidade);
       limparPing();
+      pararPoll();
       if (reconnectTimer !== null) clearTimeout(reconnectTimer);
-      if (pollTimer !== null) clearTimeout(pollTimer);
       if (ws !== null) {
         ws.onclose = null;
         ws.close();
