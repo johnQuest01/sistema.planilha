@@ -16,6 +16,7 @@ import { rotasUpload } from './rotas/upload';
 import { rotasConfig } from './rotas/config';
 import { rotasPresenca } from './rotas/presenca';
 import { rotasLixeira } from './rotas/lixeira';
+import { rotasWs } from './ws/rotasWs';
 
 export function buildServer() {
   const app = Fastify({
@@ -29,6 +30,7 @@ export function buildServer() {
   // Teto global por IP. As rotas de auth apertam mais (config.rateLimit local),
   // porque o argon2 é memory-hard e cada POST custa caro (ver 2.5.4).
   app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
+  app.register(rotasWs);
 
   app.setErrorHandler((err: FastifyError | ZodError | Error, req, reply) => {
     if (err instanceof ZodError) {

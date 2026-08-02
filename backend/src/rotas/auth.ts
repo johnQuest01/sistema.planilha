@@ -6,6 +6,7 @@ import { NOME_COOKIE_SESSAO, opcoesLimpar, opcoesSessao } from '../auth/cookies'
 import { exigeDono, usuarioObrigatorio, contaObrigatoria } from '../auth/exigeDono';
 import { criarSessao, revogarSessao, revogarSessoesDoUsuario } from '../auth/sessoes';
 import { registrarEntrada } from '../repositorios/presenca';
+import { anunciarEntradaWs } from '../ws/presencaHub';
 import { workspaceContaId, workspaceCodigoHash } from '../auth/workspace';
 import {
   credenciaisSchema,
@@ -67,7 +68,8 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
 
     const sessaoId = await criarSessao(usuario.id, contaId);
     reply.setCookie(NOME_COOKIE_SESSAO, sessaoId, opcoesSessao());
-    await registrarEntrada(usuario.id, contaId, nome);
+    const entrada = await registrarEntrada(usuario.id, contaId, nome);
+    void anunciarEntradaWs(contaId, entrada);
     return reply.code(201).send(corpoUsuario({ id: usuario.id, nome, email, papel: 'membro' }));
   });
 
@@ -86,7 +88,8 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
 
     const sessaoId = await criarSessao(usuario.id, usuario.conta_id);
     reply.setCookie(NOME_COOKIE_SESSAO, sessaoId, opcoesSessao());
-    await registrarEntrada(usuario.id, usuario.conta_id, usuario.nome);
+    const entrada = await registrarEntrada(usuario.id, usuario.conta_id, usuario.nome);
+    void anunciarEntradaWs(usuario.conta_id, entrada);
     return reply.send(
       corpoUsuario({
         id: usuario.id,

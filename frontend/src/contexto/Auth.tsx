@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api, type Usuario } from '../api/cliente';
+import { definirWsBase } from '../api/runtime';
 import { definirBaseR2 } from '../imagens/urls';
 
 type Estado =
@@ -34,7 +35,10 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
     void (async () => {
       const [cfg, sessao] = await Promise.allSettled([api.config(), api.eu()]);
       if (!vivo) return;
-      if (cfg.status === 'fulfilled') definirBaseR2(cfg.value.r2PublicBase);
+      if (cfg.status === 'fulfilled') {
+        definirBaseR2(cfg.value.r2PublicBase);
+        definirWsBase(cfg.value.wsBase ?? '');
+      }
       if (sessao.status === 'fulfilled') {
         setEstado({ fase: 'logado', usuario: sessao.value });
       } else {

@@ -25,12 +25,21 @@ export async function registrarEntrada(
   usuarioId: string,
   contaId: string,
   nome: string,
-): Promise<void> {
+): Promise<Entrada> {
   await sql`update usuarios set visto_em = now() where id = ${usuarioId}`;
-  await sql`
+  const linhas = await sql<{ id: string; criado_em: Date }[]>`
     insert into entradas (conta_id, usuario_id, nome)
-    values (${contaId}, ${usuarioId}, ${nome})`;
+    values (${contaId}, ${usuarioId}, ${nome})
+    returning id, criado_em`;
   await sql`delete from entradas where criado_em < now() - interval '1 day'`;
+  const row = linhas[0];
+  if (row === undefined) throw new Error('insert de entrada não retornou linha');
+  return {
+    id: row.id,
+    usuarioId,
+    nome,
+    criadoEm: row.criado_em.toISOString(),
+  };
 }
 
 // Usuários vistos nos últimos `minutos` (default 2), na conta dada.

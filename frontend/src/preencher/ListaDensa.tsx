@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ImageOff } from 'lucide-react';
@@ -21,9 +21,6 @@ interface Props {
   solto: boolean;
   aoAbrir: (r: Registro) => void;
   aoAtualizar: (r: Registro) => void;
-  temMais?: boolean;
-  carregandoMais?: boolean;
-  aoCarregarMais?: () => void;
 }
 
 interface ItemProps {
@@ -159,9 +156,6 @@ export function ListaDensa({
   solto,
   aoAbrir,
   aoAtualizar,
-  temMais = false,
-  carregandoMais = false,
-  aoCarregarMais,
 }: Props): JSX.Element {
   const comImagem = temCampoImagem(colecao.campos);
   const campoTitulo = campoTituloDoRegistro(colecao.campos);
@@ -172,7 +166,6 @@ export function ListaDensa({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
     count: registros.length,
@@ -239,22 +232,8 @@ export function ListaDensa({
     [salvarNome, cancelarEdicao],
   );
 
-  useEffect(() => {
-    const el = sentinelRef.current;
-    const root = scrollRef.current;
-    if (el === null || root === null || !temMais || aoCarregarMais === undefined) return;
-    const obs = new IntersectionObserver(
-      (entradas) => {
-        if (entradas.some((e) => e.isIntersecting)) aoCarregarMais();
-      },
-      { root, rootMargin: '160px', threshold: 0 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [temMais, aoCarregarMais, registros.length]);
-
   const total = virtualizer.getTotalSize();
-  const extraFim = (temMais ? 48 : 0) + RODAPE_SCROLL;
+  const extraFim = RODAPE_SCROLL;
 
   return (
     <div
@@ -295,17 +274,6 @@ export function ListaDensa({
             </div>
           );
         })}
-        {temMais && (
-          <div
-            ref={sentinelRef}
-            className="lista__virtual-item"
-            style={{ transform: `translateY(${total}px)`, height: 48 }}
-          >
-            <span className="etiqueta" style={{ display: 'block', textAlign: 'center', paddingTop: 12 }}>
-              {carregandoMais ? 'Carregando…' : ''}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );

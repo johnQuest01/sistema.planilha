@@ -15,7 +15,7 @@ import { FolhaInferior } from '../ui/FolhaInferior';
 import { FormBloco, type DadosBloco } from './FormBloco';
 import '../preencher/preencher.css';
 
-const PAGINA = 30;
+const PAGINA = 20;
 
 function EsqueletoLista({ mobile }: { mobile: boolean }): JSX.Element {
   const n = mobile ? 8 : 6;
@@ -256,9 +256,6 @@ export function Preencher({
           solto={solto}
           aoAbrir={abrirPrevia}
           aoAtualizar={aoAtualizar}
-          temMais={!fim}
-          carregandoMais={carregandoMais}
-          aoCarregarMais={carregarMais}
         />
       ) : (
         <Tabela
@@ -266,10 +263,20 @@ export function Preencher({
           registros={registros}
           aoAtualizar={aoAtualizar}
           aoAbrirFicha={abrirPrevia}
-          temMais={!fim}
-          carregandoMais={carregandoMais}
-          aoCarregarMais={carregarMais}
         />
+      )}
+
+      {!fim && registros !== null && registros.length > 0 && (
+        <div className="ver-mais-rodape">
+          <button
+            type="button"
+            className="btn-ver-mais"
+            disabled={carregandoMais}
+            onClick={() => void carregarMais()}
+          >
+            {carregandoMais ? 'Carregando…' : 'Ver mais'}
+          </button>
+        </div>
       )}
 
       {previa !== null && (

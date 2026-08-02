@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ImageOff } from 'lucide-react';
@@ -20,9 +20,6 @@ interface Props {
   registros: Registro[];
   aoAtualizar: (r: Registro) => void;
   aoAbrirFicha: (r: Registro) => void;
-  temMais?: boolean;
-  carregandoMais?: boolean;
-  aoCarregarMais?: () => void;
 }
 
 interface Edicao {
@@ -203,9 +200,6 @@ export function Tabela({
   registros,
   aoAtualizar,
   aoAbrirFicha,
-  temMais = false,
-  carregandoMais = false,
-  aoCarregarMais,
 }: Props): JSX.Element {
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [rascunho, setRascunho] = useState<unknown>(undefined);
@@ -216,7 +210,6 @@ export function Tabela({
   const temImagem = colecao.campos.some((c) => c.tipo === 'imagem');
   const campoTitulo = campoTituloDoRegistro(colecao.campos);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLTableRowElement>(null);
   const colunas = (temImagem ? 1 : 0) + 1 + colecao.campos.length;
 
   const virtualizer = useVirtualizer({
@@ -306,20 +299,6 @@ export function Tabela({
     [salvarTitulo, cancelarRenomear],
   );
 
-  useEffect(() => {
-    const el = sentinelRef.current;
-    const root = scrollRef.current;
-    if (el === null || root === null || !temMais || aoCarregarMais === undefined) return;
-    const obs = new IntersectionObserver(
-      (entradas) => {
-        if (entradas.some((e) => e.isIntersecting)) aoCarregarMais();
-      },
-      { root, rootMargin: '120px', threshold: 0 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [temMais, aoCarregarMais, registros.length]);
-
   return (
     <div className="tabela-envolto" ref={scrollRef}>
       <table className="tabela">
@@ -370,16 +349,6 @@ export function Tabela({
           {paddingBottom > 0 && (
             <tr aria-hidden="true">
               <td colSpan={colunas} style={{ height: paddingBottom, padding: 0, border: 0 }} />
-            </tr>
-          )}
-          {temMais && (
-            <tr ref={sentinelRef}>
-              <td
-                colSpan={colunas}
-                style={{ textAlign: 'center', color: 'var(--tinta-3)', fontSize: 12 }}
-              >
-                {carregandoMais ? 'Carregando…' : ''}
-              </td>
             </tr>
           )}
         </tbody>

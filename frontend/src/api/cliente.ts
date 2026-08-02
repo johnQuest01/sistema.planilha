@@ -76,7 +76,7 @@ function corpoJson(dados: unknown): RequestInit {
 
 export const api = {
   // --- config / auth ---
-  config: () => pedir<{ r2PublicBase: string }>('/api/config'),
+  config: () => pedir<{ r2PublicBase: string; wsBase?: string }>('/api/config'),
   eu: () => pedir<Usuario>('/api/auth/eu'),
   entrar: (email: string, senha: string) =>
     pedir<Usuario>('/api/auth/entrar', corpoJson({ email, senha })),
@@ -169,6 +169,8 @@ export const api = {
       online: { id: string; nome: string }[];
       entradas: { id: string; usuarioId: string; nome: string; criadoEm: string }[];
     }>('/api/presenca'),
+  ticketPresenca: () =>
+    pedir<{ ticket: string; expiraEm: number }>('/api/presenca/ws-ticket'),
 
   // --- upload (Fase 5) ---
   presignUpload: (

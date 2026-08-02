@@ -479,11 +479,44 @@
   flex-direction: column;
   gap: var(--e3);
   margin-top: var(--e3);
+  /* Folga grande: o último dos ~100 resultados rola inteiro (prévia completa) */
+  padding-bottom: max(40vh, calc(180px + env(safe-area-inset-bottom, 0px)));
+}
+.busca-ref__resultados > .preview-registro:last-child {
+  scroll-margin-bottom: max(32vh, 120px);
 }
 .busca-ref__status {
   font-size: 14px;
   color: var(--tinta-2);
   padding: var(--e2) 0;
+}
+
+/* Botão "Ver mais" — rodapé, um pouco à direita */
+.ver-mais-rodape {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--e3) var(--e2) calc(var(--e4) + env(safe-area-inset-bottom, 0px));
+  margin-top: var(--e2);
+}
+.btn-ver-mais {
+  border: 1px solid rgba(20, 24, 26, 0.18);
+  border-radius: 999px;
+  background: #fff;
+  color: #14181a;
+  font-family: var(--fonte);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 22px;
+  min-height: var(--toque);
+  box-shadow: 0 1px 3px rgba(20, 24, 26, 0.12);
+  cursor: pointer;
+}
+.btn-ver-mais:hover:not(:disabled) {
+  background: #f7f7f5;
+}
+.btn-ver-mais:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 /* ---- preview de registro (busca) ---- */

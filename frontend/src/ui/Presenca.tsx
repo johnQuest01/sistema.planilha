@@ -1,22 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import { LogIn } from 'lucide-react';
 import { api } from '../api/cliente';
+import { urlWsPresenca } from '../api/runtime';
 import { useAuth } from '../contexto/Auth';
 import './presenca.css';
 
-// Presença "ao vivo" por polling: consulta a cada ~18s quem está online e as entradas
-// (logins) recentes, mostrando a lista fixa e avisos "Fulano entrou".
-const INTERVALO_MS = 18000;
 const AVISO_MS = 6000;
+const PING_MS = 25_000;
+const RECONNECT_MS = 2_000;
+const FALLBACK_POLL_MS = 20_000;
 
 interface Online {
   id: string;
+  nome: string;
+}
+interface Entrada {
+  id: string;
+  usuarioId: string;
   nome: string;
 }
 interface Aviso {
   id: string;
   texto: string;
 }
+
+type MsgWs =
+  | { tipo: 'presenca'; online: Online[]; entradas: Entrada[] }
+  | { tipo: 'entrada'; entrada: Entrada }
+  | { tipo: 'pong' };
 
 export function Presenca(): JSX.Element | null {
   const { estado } = useAuth();
@@ -25,9 +36,29 @@ export function Presenca(): JSX.Element | null {
 
   const [online, setOnline] = useState<Online[]>([]);
   const [avisos, setAvisos] = useState<Aviso[]>([]);
-  // null = ainda não semeado. Na 1ª consulta guardamos as entradas atuais SEM avisar,
-  // para não disparar uma enxurrada de logins antigos ao abrir o app.
   const vistasRef = useRef<Set<string> | null>(null);
+  const vivoRef = useRef(true);
+
+  function processarEntradas(entradas: Entrada[]): void {
+    const vistas = vistasRef.current;
+    if (vistas === null) {
+      vistasRef.current = new Set(entradas.map((e) => e.id));
+      return;
+    }
+    const novos = entradas.filter((e) => !vistas.has(e.id) && e.usuarioId !== meuId);
+    for (const e of novos) vistas.add(e.id);
+    if (novos.length === 0) return;
+    const ordenados = [...novos].reverse();
+    setAvisos((atual) => [
+      ...atual,
+      ...ordenados.map((e) => ({ id: e.id, texto: `${e.nome} entrou` })),
+    ]);
+    for (const e of ordenados) {
+      setTimeout(() => {
+        if (vivoRef.current) setAvisos((atual) => atual.filter((a) => a.id !== e.id));
+      }, AVISO_MS);
+    }
+  }
 
   useEffect(() => {
     if (!logado) {
@@ -37,71 +68,120 @@ export function Presenca(): JSX.Element | null {
       return undefined;
     }
 
-    let vivo = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    vivoRef.current = true;
+    let ws: WebSocket | null = null;
+    let pingTimer: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    let usarFallback = false;
 
-    async function tick(): Promise<void> {
-      // Colapsa timers: se foi chamado manualmente (foco), cancela o agendado.
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
+    async function pollFallback(): Promise<void> {
+      if (!vivoRef.current || !usarFallback) return;
       try {
         const p = await api.presenca();
-        if (!vivo) return;
+        if (!vivoRef.current) return;
         setOnline(p.online);
-
-        const vistas = vistasRef.current;
-        if (vistas === null) {
-          vistasRef.current = new Set(p.entradas.map((e) => e.id));
-        } else {
-          const novos = p.entradas.filter((e) => !vistas.has(e.id) && e.usuarioId !== meuId);
-          for (const e of novos) vistas.add(e.id);
-          if (novos.length > 0) {
-            const ordenados = [...novos].reverse(); // mais antigo primeiro
-            setAvisos((atual) => [
-              ...atual,
-              ...ordenados.map((e) => ({ id: e.id, texto: `${e.nome} entrou` })),
-            ]);
-            for (const e of ordenados) {
-              setTimeout(() => {
-                if (vivo) setAvisos((atual) => atual.filter((a) => a.id !== e.id));
-              }, AVISO_MS);
-            }
-          }
-        }
+        processarEntradas(p.entradas);
       } catch {
-        /* rede/401: ignora e tenta no próximo ciclo */
+        /* ignora */
       } finally {
-        // Não polla com a aba em background — só agenda se estiver visível.
-        if (vivo && document.visibilityState === 'visible') {
-          timer = setTimeout(() => void tick(), INTERVALO_MS);
+        if (vivoRef.current && usarFallback && document.visibilityState === 'visible') {
+          pollTimer = setTimeout(() => void pollFallback(), FALLBACK_POLL_MS);
         }
       }
     }
 
-    // Ao voltar o foco/abrir o app, consulta na hora (sensação "ao vivo").
-    function aoFocar(): void {
-      if (document.visibilityState === 'visible') void tick();
-    }
-    function aoEsconder(): void {
-      if (document.visibilityState === 'hidden' && timer !== null) {
-        clearTimeout(timer);
-        timer = null;
+    function limparPing(): void {
+      if (pingTimer !== null) {
+        clearInterval(pingTimer);
+        pingTimer = null;
       }
     }
-    document.addEventListener('visibilitychange', aoFocar);
-    document.addEventListener('visibilitychange', aoEsconder);
-    window.addEventListener('focus', aoFocar);
 
-    void tick();
+    async function conectarWs(): Promise<void> {
+      if (!vivoRef.current) return;
+      try {
+        const { ticket } = await api.ticketPresenca();
+        if (!vivoRef.current) return;
+        const url = urlWsPresenca(ticket);
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+          usarFallback = false;
+          if (pollTimer !== null) {
+            clearTimeout(pollTimer);
+            pollTimer = null;
+          }
+          limparPing();
+          pingTimer = setInterval(() => {
+            if (ws !== null && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ tipo: 'ping' }));
+            }
+          }, PING_MS);
+        };
+
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(String(ev.data)) as MsgWs;
+            if (msg.tipo === 'presenca') {
+              setOnline(msg.online);
+              processarEntradas(msg.entradas);
+            } else if (msg.tipo === 'entrada') {
+              processarEntradas([msg.entrada]);
+            }
+          } catch {
+            /* ignore */
+          }
+        };
+
+        ws.onclose = () => {
+          limparPing();
+          ws = null;
+          if (!vivoRef.current) return;
+          // Reconecta; se falhar de novo, cai no polling REST.
+          reconnectTimer = setTimeout(() => {
+            void conectarWs().catch(() => {
+              usarFallback = true;
+              void pollFallback();
+            });
+          }, RECONNECT_MS);
+        };
+
+        ws.onerror = () => {
+          ws?.close();
+        };
+      } catch {
+        usarFallback = true;
+        void pollFallback();
+      }
+    }
+
+    function aoVisibilidade(): void {
+      if (document.visibilityState === 'visible') {
+        if (ws === null || ws.readyState !== WebSocket.OPEN) {
+          void conectarWs();
+        } else {
+          ws.send(JSON.stringify({ tipo: 'ping' }));
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', aoVisibilidade);
+    void conectarWs();
+
     return () => {
-      vivo = false;
-      if (timer !== null) clearTimeout(timer);
-      document.removeEventListener('visibilitychange', aoFocar);
-      document.removeEventListener('visibilitychange', aoEsconder);
-      window.removeEventListener('focus', aoFocar);
+      vivoRef.current = false;
+      document.removeEventListener('visibilitychange', aoVisibilidade);
+      limparPing();
+      if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+      if (pollTimer !== null) clearTimeout(pollTimer);
+      if (ws !== null) {
+        ws.onclose = null;
+        ws.close();
+      }
     };
+    // processarEntradas usa meuId do closure
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logado, meuId]);
 
   if (!logado) return null;

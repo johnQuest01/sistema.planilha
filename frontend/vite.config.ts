@@ -43,7 +43,7 @@ export default defineConfig({
         // Navegação cai no index.html (SPA), MENOS as chamadas de API/health, que
         // precisam ir sempre à rede (dados vivos, não cacheados pelo SW).
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/, /^\/health/],
+        navigateFallbackDenylist: [/^\/api/, /^\/health/, /^\/ws/],
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
@@ -68,6 +68,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3333',
       '/health': 'http://localhost:3333',
+      '/ws': { target: 'ws://localhost:3333', ws: true },
     },
   },
 });
