@@ -146,6 +146,8 @@
   overflow: auto;
   /* Altura limitada → virtualização monta só as linhas visíveis */
   max-height: min(70vh, calc(100dvh - 220px));
+  /* folga no fim p/ o botão "Ver mais" não colar na borda */
+  padding-bottom: var(--e4);
 }
 .tabela {
   border-collapse: collapse;
@@ -491,11 +493,13 @@
   padding: var(--e2) 0;
 }
 
-/* Botão "Ver mais" — no fim da rolagem da lista/tabela, à direita */
+/* Botão "Ver mais" — no fim da rolagem da lista/tabela, à direita.
+   O FAB flutuante da lixeira ocupa o canto inferior direito (56px, z-index 90);
+   reservamos esse espaço à direita p/ o botão não ficar por baixo dele. */
 .ver-mais-rodape {
   display: flex;
   justify-content: flex-end;
-  padding: var(--e3) var(--e2) var(--e3);
+  padding: var(--e3) calc(72px + var(--e2)) var(--e4) var(--e2);
 }
 .btn-ver-mais {
   border: 1px solid rgba(20, 24, 26, 0.18);
