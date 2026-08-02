@@ -53,6 +53,41 @@
   color: var(--tinta-3);
   background: var(--papel);
 }
+.miniatura {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.miniatura__skel {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(23, 32, 28, 0.06) 0%,
+    rgba(23, 32, 28, 0.12) 50%,
+    rgba(23, 32, 28, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: miniatura-skel 1.1s ease-in-out infinite;
+}
+@keyframes miniatura-skel {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+.miniatura__img {
+  opacity: 0;
+}
+.miniatura__img--on {
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
 
 /* ---- tabela (desktop) ---- */
 .tabela-envolto {
@@ -60,6 +95,8 @@
   border-radius: var(--raio-2);
   box-shadow: var(--sombra);
   overflow: auto;
+  /* Altura limitada → virtualização monta só as linhas visíveis */
+  max-height: min(70vh, calc(100dvh - 220px));
 }
 .tabela {
   border-collapse: collapse;
@@ -162,6 +199,24 @@
   flex-direction: column;
   gap: var(--e2);
 }
+.lista--virtual {
+  display: block;
+  overflow: auto;
+  max-height: min(75vh, calc(100dvh - 200px));
+  overscroll-behavior: contain;
+}
+.lista__virtual-inner {
+  position: relative;
+  width: 100%;
+}
+.lista__virtual-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding-bottom: var(--e2);
+  box-sizing: border-box;
+}
 .lista-item {
   display: flex;
   align-items: stretch;
@@ -171,6 +226,8 @@
   border: 1px solid var(--linha);
   border-radius: var(--raio-2);
   box-shadow: var(--sombra);
+  height: 100%;
+  box-sizing: border-box;
 }
 .lista--solto .lista-item {
   padding: var(--e3);

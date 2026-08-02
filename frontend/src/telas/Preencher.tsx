@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ListPlus, Plus, Rows2, Rows3 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
@@ -65,21 +65,21 @@ export function Preencher({
     };
   }, [colecao.id]);
 
-  async function carregarMais(): Promise<void> {
-    if (registros === null || registros.length === 0 || carregandoMais) return;
+  const carregarMais = useCallback(async (): Promise<void> => {
+    if (registros === null || registros.length === 0 || carregandoMais || fim) return;
     setCarregandoMais(true);
     try {
       const ultimo = registros[registros.length - 1];
       if (ultimo === undefined) return;
       const mais = await api.listarRegistros(colecao.id, ultimo.criadoEm);
-      setRegistros([...registros, ...mais]);
+      setRegistros((atual) => (atual === null ? mais : [...atual, ...mais]));
       setFim(mais.length < PAGINA);
     } catch {
       /* silencioso */
     } finally {
       setCarregandoMais(false);
     }
-  }
+  }, [registros, carregandoMais, fim, colecao.id]);
 
   async function novo(valores?: Record<string, unknown>): Promise<void> {
     try {
@@ -96,27 +96,27 @@ export function Preencher({
     await novo(valoresVaziosDe(colecao.campos));
   }
 
-  function aoAtualizar(r: Registro): void {
+  const aoAtualizar = useCallback((r: Registro): void => {
     setRegistros((atual) => (atual === null ? atual : atual.map((x) => (x.id === r.id ? r : x))));
     setAberta((a) => (a !== null && a.id === r.id ? r : a));
     setPrevia((p) => (p !== null && p.id === r.id ? r : p));
-  }
+  }, []);
 
-  function aoApagar(id: string): void {
+  const aoApagar = useCallback((id: string): void => {
     setRegistros((atual) => (atual === null ? atual : atual.filter((x) => x.id !== id)));
     setAberta(null);
     setPrevia(null);
-  }
+  }, []);
 
-  function abrirPrevia(r: Registro): void {
+  const abrirPrevia = useCallback((r: Registro): void => {
     setAberta(null);
     setPrevia(r);
-  }
+  }, []);
 
-  function abrirEdicao(r: Registro): void {
+  const abrirEdicao = useCallback((r: Registro): void => {
     setPrevia(null);
     setAberta(r);
-  }
+  }, []);
 
   if (registros === null) return <Carregando />;
 
@@ -207,6 +207,9 @@ export function Preencher({
           solto={solto}
           aoAbrir={abrirPrevia}
           aoAtualizar={aoAtualizar}
+          temMais={!fim}
+          carregandoMais={carregandoMais}
+          aoCarregarMais={() => void carregarMais()}
         />
       ) : (
         <Tabela
@@ -214,15 +217,10 @@ export function Preencher({
           registros={registros}
           aoAtualizar={aoAtualizar}
           aoAbrirFicha={abrirPrevia}
+          temMais={!fim}
+          carregandoMais={carregandoMais}
+          aoCarregarMais={() => void carregarMais()}
         />
-      )}
-
-      {!fim && registros.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--e4)' }}>
-          <Botao variante="fantasma" onClick={() => void carregarMais()} disabled={carregandoMais}>
-            Carregar mais
-          </Botao>
-        </div>
       )}
 
       {previa !== null && (

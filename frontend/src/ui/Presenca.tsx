@@ -4,9 +4,9 @@ import { api } from '../api/cliente';
 import { useAuth } from '../contexto/Auth';
 import './presenca.css';
 
-// Presença "ao vivo" por polling: consulta a cada ~20s quem está online e as entradas
+// Presença "ao vivo" por polling: consulta a cada ~18s quem está online e as entradas
 // (logins) recentes, mostrando a lista fixa e avisos "Fulano entrou".
-const INTERVALO_MS = 7000;
+const INTERVALO_MS = 18000;
 const AVISO_MS = 6000;
 
 interface Online {
@@ -73,7 +73,10 @@ export function Presenca(): JSX.Element | null {
       } catch {
         /* rede/401: ignora e tenta no próximo ciclo */
       } finally {
-        if (vivo) timer = setTimeout(() => void tick(), INTERVALO_MS);
+        // Não polla com a aba em background — só agenda se estiver visível.
+        if (vivo && document.visibilityState === 'visible') {
+          timer = setTimeout(() => void tick(), INTERVALO_MS);
+        }
       }
     }
 
@@ -81,7 +84,14 @@ export function Presenca(): JSX.Element | null {
     function aoFocar(): void {
       if (document.visibilityState === 'visible') void tick();
     }
+    function aoEsconder(): void {
+      if (document.visibilityState === 'hidden' && timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    }
     document.addEventListener('visibilitychange', aoFocar);
+    document.addEventListener('visibilitychange', aoEsconder);
     window.addEventListener('focus', aoFocar);
 
     void tick();
@@ -89,6 +99,7 @@ export function Presenca(): JSX.Element | null {
       vivo = false;
       if (timer !== null) clearTimeout(timer);
       document.removeEventListener('visibilitychange', aoFocar);
+      document.removeEventListener('visibilitychange', aoEsconder);
       window.removeEventListener('focus', aoFocar);
     };
   }, [logado, meuId]);

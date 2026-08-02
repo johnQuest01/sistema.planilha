@@ -5,7 +5,7 @@ import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
 import { Visor } from '../imagens/Visor';
-import { urlCheia } from '../imagens/urls';
+import { urlMini } from '../imagens/urls';
 import { Botao } from '../ui/Botao';
 import {
   campoTituloDoRegistro,
@@ -48,7 +48,13 @@ function GradeFotos({
           onClick={() => aoAbrirVisor(i)}
           aria-label={`Ver foto ${i + 1} de ${keys.length}`}
         >
-          <img className="preview-imagens__foto" src={urlCheia(k)} alt="" loading="lazy" />
+          <img
+            className="preview-imagens__foto"
+            src={urlMini(k)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
         </button>
       ))}
     </div>
