@@ -146,8 +146,9 @@
   overflow: auto;
   /* Altura limitada → virtualização monta só as linhas visíveis */
   max-height: min(70vh, calc(100dvh - 220px));
-  /* folga no fim p/ o botão "Ver mais" não colar na borda */
-  padding-bottom: var(--e2);
+  /* Folga no fim p/ a última linha e o "Ver mais" não ficarem sob as barras fixas. */
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 }
 .tabela {
   border-collapse: collapse;
@@ -251,17 +252,13 @@
   gap: var(--e2);
 }
 .lista--virtual {
+  /* A lista rola JUNTO com a página (window virtualizer): sem rolagem interna, o
+     botão "Ver mais" e o restante dos registros sempre aparecem ao rolar no celular. */
   display: block;
-  overflow: auto;
-  /* Altura da área útil + folga pro FAB/presença/safe-area no fim do scroll */
-  max-height: min(70vh, calc(100dvh - 220px));
-  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-/* Com o "Ver mais" no fim da lista, a folga é dele: encosta menos espaço vazio. */
-.lista--com-rodape {
-  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  position: relative;
+  /* Folga no fim para o último registro e o "Ver mais" ficarem ACIMA das barras fixas
+     (presença no canto esquerdo, lixeira flutuante) e do safe-area do celular. */
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 .lista__virtual-inner {
   position: relative;

@@ -58,6 +58,12 @@ function ctx(): { s3: S3Client; cfg: ConfigR2 } {
       region: 'auto',
       endpoint: `https://${cfg.accountId}.r2.cloudflarestorage.com`,
       credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
+      // O AWS SDK v3 (>= 3.729) passou a exigir checksum CRC32 por padrão em PutObject.
+      // O Cloudflare R2 REJEITA esse header (403/400), então o PUT pré-assinado da foto
+      // falhava e a key nunca era gravada no registro — a foto "não salvava no banco".
+      // WHEN_REQUIRED desliga o checksum automático e restaura a compatibilidade com o R2.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     });
   }
   return { s3: cliente, cfg: configCache };
@@ -99,7 +105,12 @@ export async function presignPut(key: string, mime: string, tamanho: number): Pr
     ContentType: mime,
     ContentLength: tamanho,
   });
-  return getSignedUrl(s3, cmd, { expiresIn: EXPIRA_S });
+  // Reforço: caso alguma versão do SDK ainda insira o header de checksum, ele NÃO entra
+  // na assinatura, evitando o "SignatureDoesNotMatch" do R2 no PUT do navegador.
+  return getSignedUrl(s3, cmd, {
+    expiresIn: EXPIRA_S,
+    unsignableHeaders: new Set(['x-amz-checksum-crc32']),
+  });
 }
 
 export async function apagarObjeto(key: string): Promise<void> {

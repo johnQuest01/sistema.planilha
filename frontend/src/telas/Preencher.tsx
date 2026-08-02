@@ -272,6 +272,7 @@ export function Preencher({
           aoAbrir={abrirPrevia}
           aoAtualizar={aoAtualizar}
           rodape={rodapeVerMais}
+          aoAproximarFim={carregarMais}
         />
       ) : (
         <Tabela

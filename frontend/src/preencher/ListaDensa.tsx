@@ -1,6 +1,6 @@
-import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { ImageOff } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
@@ -22,6 +22,8 @@ interface Props {
   aoAbrir: (r: Registro) => void;
   aoAtualizar: (r: Registro) => void;
   rodape?: ReactNode;
+  /** Chamado quando a rolagem se aproxima do fim — carrega a próxima página sozinho. */
+  aoAproximarFim?: () => void;
 }
 
 interface ItemProps {
@@ -45,8 +47,6 @@ interface ItemProps {
 
 /** Gap entre cards (padding-bottom do slot virtual). */
 const GAP = 8;
-/** Folga no fim da lista — último registro não fica sob FAB/presença. */
-const RODAPE_SCROLL = 24;
 
 function alturaLinha(solto: boolean, lado: number): number {
   // capa + padding vertical do card + borda + gap entre itens
@@ -158,6 +158,7 @@ export function ListaDensa({
   aoAbrir,
   aoAtualizar,
   rodape,
+  aoAproximarFim,
 }: Props): JSX.Element {
   const comImagem = temCampoImagem(colecao.campos);
   const campoTitulo = campoTituloDoRegistro(colecao.campos);
@@ -167,13 +168,34 @@ export function ListaDensa({
   const [rascunho, setRascunho] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
 
-  const virtualizer = useVirtualizer({
+  // A lista rola JUNTO com a página (não tem rolagem interna própria): assim, no
+  // celular, o botão "Ver mais" e o restante dos registros sempre aparecem ao rolar.
+  // O virtualizer de janela precisa saber a que distância do topo do documento a
+  // lista começa (scrollMargin) para posicionar os itens no lugar certo.
+  const [margemScroll, setMargemScroll] = useState(0);
+  const medir = useCallback((): void => {
+    const el = listaRef.current;
+    if (el === null) return;
+    const nova = el.getBoundingClientRect().top + window.scrollY;
+    // Durante a rolagem, top diminui e scrollY aumenta na mesma medida → soma constante,
+    // então isso NÃO dispara re-render em cada scroll (só quando o layout acima muda).
+    setMargemScroll((prev) => (Math.abs(prev - nova) > 0.5 ? nova : prev));
+  }, []);
+  // Remede a cada render (pega mudanças de altura do que está acima: form de campo,
+  // resultados de busca, avisos) e também em resize da janela.
+  useLayoutEffect(() => {
+    medir();
+    window.addEventListener('resize', medir);
+    return () => window.removeEventListener('resize', medir);
+  });
+
+  const virtualizer = useWindowVirtualizer({
     count: registros.length,
-    getScrollElement: () => scrollRef.current,
     estimateSize: () => altura,
     overscan: 8,
+    scrollMargin: margemScroll,
   });
 
   // Ao trocar compacto/solto, recalcula posições (senão a capa “vaza” com altura velha).
@@ -235,18 +257,20 @@ export function ListaDensa({
   );
 
   const total = virtualizer.getTotalSize();
-  const extraFim = RODAPE_SCROLL;
-  const temRodape = rodape !== null && rodape !== undefined;
+  const itens = virtualizer.getVirtualItems();
+  const ultimoIndice = itens.length > 0 ? (itens[itens.length - 1]?.index ?? -1) : -1;
+
+  // Carrega a próxima página automaticamente ao chegar perto do fim da lista, sem
+  // depender de o usuário achar/tocar o botão "Ver mais".
+  useEffect(() => {
+    if (aoAproximarFim === undefined || registros.length === 0) return;
+    if (ultimoIndice >= registros.length - 4) aoAproximarFim();
+  }, [ultimoIndice, registros.length, aoAproximarFim]);
 
   return (
-    <div
-      ref={scrollRef}
-      className={`lista lista--virtual${solto ? ' lista--solto' : ''}${
-        temRodape ? ' lista--com-rodape' : ''
-      }`}
-    >
-      <div className="lista__virtual-inner" style={{ height: total + extraFim }}>
-        {virtualizer.getVirtualItems().map((item) => {
+    <div ref={listaRef} className={`lista lista--virtual${solto ? ' lista--solto' : ''}`}>
+      <div className="lista__virtual-inner" style={{ height: total }}>
+        {itens.map((item) => {
           const r = registros[item.index];
           if (r === undefined) return null;
           return (
@@ -254,7 +278,7 @@ export function ListaDensa({
               key={r.id}
               className="lista__virtual-item"
               style={{
-                transform: `translateY(${item.start}px)`,
+                transform: `translateY(${item.start - margemScroll}px)`,
                 height: item.size,
               }}
             >
