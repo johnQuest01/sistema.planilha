@@ -236,11 +236,14 @@ export function ListaDensa({
 
   const total = virtualizer.getTotalSize();
   const extraFim = RODAPE_SCROLL;
+  const temRodape = rodape !== null && rodape !== undefined;
 
   return (
     <div
       ref={scrollRef}
-      className={`lista lista--virtual${solto ? ' lista--solto' : ''}`}
+      className={`lista lista--virtual${solto ? ' lista--solto' : ''}${
+        temRodape ? ' lista--com-rodape' : ''
+      }`}
     >
       <div className="lista__virtual-inner" style={{ height: total + extraFim }}>
         {virtualizer.getVirtualItems().map((item) => {
