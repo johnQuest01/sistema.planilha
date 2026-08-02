@@ -12,6 +12,11 @@ body,
   height: 100%;
 }
 
+html {
+  /* remove o flash/realce azul ao tocar em botões e links no mobile */
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   margin: 0;
   font-family: var(--fonte);
@@ -24,6 +29,10 @@ body {
   background-size: 24px 24px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* impede o menu de seleção/"copiar" e o callout de toque na interface */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 button,
@@ -32,6 +41,15 @@ textarea,
 select {
   font: inherit;
   color: inherit;
+}
+
+/* onde o usuário digita, seleção/cópia e o callout continuam liberados */
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 button {
