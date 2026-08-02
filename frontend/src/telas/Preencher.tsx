@@ -250,6 +250,7 @@ export function Preencher({
         <div className="preencher-vazio">Nenhum registro ainda. Toque em “Novo registro”.</div>
       ) : ehMobile ? (
         <ListaDensa
+          key={solto ? 'lista-solto' : 'lista-compacto'}
           colecao={colecao}
           registros={registros}
           solto={solto}

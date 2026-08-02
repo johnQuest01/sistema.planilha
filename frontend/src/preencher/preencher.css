@@ -251,8 +251,11 @@
 .lista--virtual {
   display: block;
   overflow: auto;
-  max-height: min(75vh, calc(100dvh - 200px));
+  /* Altura da área útil + folga pro FAB/presença/safe-area no fim do scroll */
+  max-height: min(70vh, calc(100dvh - 220px));
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .lista__virtual-inner {
   position: relative;
@@ -268,7 +271,7 @@
 }
 .lista-item {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: var(--e2);
   padding: var(--e2);
   background: var(--papel);
@@ -277,18 +280,22 @@
   box-shadow: var(--sombra);
   height: 100%;
   box-sizing: border-box;
+  min-height: 0;
 }
 .lista--solto .lista-item {
   padding: var(--e3);
 }
 .lista-item__capa-btn {
-  display: block;
+  display: grid;
+  place-items: center;
   padding: 0;
   border: none;
   background: transparent;
   cursor: pointer;
   border-radius: var(--raio);
   flex: none;
+  overflow: hidden;
+  line-height: 0;
 }
 .lista-item__corpo {
   flex: 1;

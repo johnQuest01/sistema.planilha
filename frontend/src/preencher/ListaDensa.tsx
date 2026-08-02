@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ImageOff } from 'lucide-react';
@@ -43,6 +43,18 @@ interface ItemProps {
   aoTeclarNome: (e: ReactKeyboardEvent<HTMLInputElement>, r: Registro) => void;
   salvarNome: (r: Registro) => void;
   cancelarEdicao: () => void;
+}
+
+/** Gap entre cards (padding-bottom do slot virtual). */
+const GAP = 8;
+/** Folga no fim da lista — último registro não fica sob FAB/presença. */
+const RODAPE_SCROLL = 24;
+
+function alturaLinha(solto: boolean, lado: number): number {
+  // capa + padding vertical do card + borda + gap entre itens
+  const pad = solto ? 24 : 16; // e3*2 ou e2*2
+  const borda = 2;
+  return lado + pad + borda + GAP;
 }
 
 const ItemLista = memo(function ItemLista({
@@ -154,7 +166,7 @@ export function ListaDensa({
   const comImagem = temCampoImagem(colecao.campos);
   const campoTitulo = campoTituloDoRegistro(colecao.campos);
   const lado = solto ? 72 : 56;
-  const altura = solto ? 88 : 72;
+  const altura = alturaLinha(solto, lado);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -166,8 +178,13 @@ export function ListaDensa({
     count: registros.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => altura,
-    overscan: 12,
+    overscan: 8,
   });
+
+  // Ao trocar compacto/solto, recalcula posições (senão a capa “vaza” com altura velha).
+  useLayoutEffect(() => {
+    virtualizer.measure();
+  }, [solto, altura, virtualizer]);
 
   const iniciarEdicao = useCallback(
     (r: Registro): void => {
@@ -237,16 +254,14 @@ export function ListaDensa({
   }, [temMais, aoCarregarMais, registros.length]);
 
   const total = virtualizer.getTotalSize();
+  const extraFim = (temMais ? 48 : 0) + RODAPE_SCROLL;
 
   return (
     <div
       ref={scrollRef}
       className={`lista lista--virtual${solto ? ' lista--solto' : ''}`}
     >
-      <div
-        className="lista__virtual-inner"
-        style={{ height: total + (temMais ? 40 : 0) }}
-      >
+      <div className="lista__virtual-inner" style={{ height: total + extraFim }}>
         {virtualizer.getVirtualItems().map((item) => {
           const r = registros[item.index];
           if (r === undefined) return null;
@@ -284,9 +299,9 @@ export function ListaDensa({
           <div
             ref={sentinelRef}
             className="lista__virtual-item"
-            style={{ transform: `translateY(${total}px)`, height: 40 }}
+            style={{ transform: `translateY(${total}px)`, height: 48 }}
           >
-            <span className="etiqueta" style={{ display: 'block', textAlign: 'center' }}>
+            <span className="etiqueta" style={{ display: 'block', textAlign: 'center', paddingTop: 12 }}>
               {carregandoMais ? 'Carregando…' : ''}
             </span>
           </div>
