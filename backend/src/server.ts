@@ -16,13 +16,16 @@ import { rotasUpload } from './rotas/upload';
 import { rotasConfig } from './rotas/config';
 import { rotasPresenca } from './rotas/presenca';
 import { rotasLixeira } from './rotas/lixeira';
-import { rotasWs } from './ws/rotasWs';
+import { pluginWebsocket, rotasWs } from './ws/rotasWs';
 
 export function buildServer() {
   const app = Fastify({
     logger: true,
     bodyLimit: 64 * 1024, // binário vai direto pro R2; JSON de registro cabe folgado aqui
   });
+
+  // WebSocket precisa registrar antes das rotas HTTP (@fastify/websocket).
+  app.register(pluginWebsocket);
 
   app.register(helmet);
   app.register(cors, { origin: config.corsOrigin, credentials: true });

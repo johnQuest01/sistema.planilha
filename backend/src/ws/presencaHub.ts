@@ -1,4 +1,3 @@
-import type { RawData, WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
 import { entradasRecentes, marcarVisto, online } from '../repositorios/presenca';
 
@@ -9,8 +8,18 @@ export interface TicketPresenca {
   exp: number;
 }
 
+/** API mínima do socket do @fastify/websocket (sem importar o pacote `ws`). */
+export interface SocketPresenca {
+  readyState: number;
+  OPEN: number;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+  on(event: 'message', cb: (raw: unknown) => void): void;
+  on(event: 'close' | 'error', cb: () => void): void;
+}
+
 interface ClienteWs {
-  socket: WebSocket;
+  socket: SocketPresenca;
   usuarioId: string;
   contaId: string;
   nome: string;
@@ -39,10 +48,22 @@ export function consumirTicketPresenca(ticket: string): TicketPresenca | null {
   return t;
 }
 
-function enviar(socket: WebSocket, msg: unknown): void {
-  if (socket.readyState === socket.OPEN) {
-    socket.send(JSON.stringify(msg));
+function aberto(socket: SocketPresenca): boolean {
+  return socket.readyState === socket.OPEN;
+}
+
+function enviar(socket: SocketPresenca, msg: unknown): void {
+  if (aberto(socket)) socket.send(JSON.stringify(msg));
+}
+
+function textoDaMensagem(raw: unknown): string {
+  if (typeof raw === 'string') return raw;
+  if (Buffer.isBuffer(raw)) return raw.toString('utf8');
+  if (raw instanceof ArrayBuffer) return Buffer.from(raw).toString('utf8');
+  if (ArrayBuffer.isView(raw)) {
+    return Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength).toString('utf8');
   }
+  return String(raw);
 }
 
 async function snapshot(contaId: string): Promise<{
@@ -59,7 +80,7 @@ export async function broadcastPresenca(contaId: string): Promise<void> {
   const dados = await snapshot(contaId);
   const payload = JSON.stringify({ tipo: 'presenca', ...dados });
   for (const c of sala) {
-    if (c.socket.readyState === c.socket.OPEN) c.socket.send(payload);
+    if (aberto(c.socket)) c.socket.send(payload);
   }
 }
 
@@ -71,15 +92,16 @@ export async function anunciarEntradaWs(
   if (sala === undefined || sala.size === 0) return;
   const payload = JSON.stringify({ tipo: 'entrada', entrada });
   for (const c of sala) {
-    if (c.socket.readyState === c.socket.OPEN) c.socket.send(payload);
+    if (aberto(c.socket)) c.socket.send(payload);
   }
   await broadcastPresenca(contaId);
 }
 
-export async function conectarPresencaWs(
-  socket: WebSocket,
-  ticket: TicketPresenca,
-): Promise<void> {
+/**
+ * Handlers de mensagem/close são ligados de forma síncrona (exigência do
+ * @fastify/websocket); o I/O no Neon roda depois.
+ */
+export function conectarPresencaWs(socket: SocketPresenca, ticket: TicketPresenca): void {
   const cliente: ClienteWs = {
     socket,
     usuarioId: ticket.usuarioId,
@@ -94,16 +116,10 @@ export async function conectarPresencaWs(
   }
   sala.add(cliente);
 
-  await marcarVisto(ticket.usuarioId);
-  const dados = await snapshot(ticket.contaId);
-  enviar(socket, { tipo: 'presenca', ...dados });
-  void broadcastPresenca(ticket.contaId);
-
-  socket.on('message', (raw: RawData) => {
+  socket.on('message', (raw: unknown) => {
     void (async () => {
       try {
-        const texto = typeof raw === 'string' ? raw : Buffer.isBuffer(raw) ? raw.toString() : String(raw);
-        const msg = JSON.parse(texto) as { tipo?: string };
+        const msg = JSON.parse(textoDaMensagem(raw)) as { tipo?: string };
         if (msg.tipo === 'ping') {
           await marcarVisto(ticket.usuarioId);
           enviar(socket, { tipo: 'pong' });
@@ -121,4 +137,15 @@ export async function conectarPresencaWs(
   };
   socket.on('close', aoSair);
   socket.on('error', aoSair);
+
+  void (async () => {
+    try {
+      await marcarVisto(ticket.usuarioId);
+      const dados = await snapshot(ticket.contaId);
+      enviar(socket, { tipo: 'presenca', ...dados });
+      await broadcastPresenca(ticket.contaId);
+    } catch {
+      socket.close(1011, 'falha na presença');
+    }
+  })();
 }
