@@ -246,18 +246,21 @@ export function FotoZoomavel({
       onDoubleClick={aoDuploClique}
     >
       <div
-        className="quadro-zoom__palco"
+        className={`quadro-zoom__palco${cheiaOk ? ' quadro-zoom__palco--pronta' : ''}`}
         style={{
           transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
         }}
       >
-        <img
-          className="quadro-zoom__mini"
-          src={srcMini}
-          alt=""
-          draggable={false}
-          decoding="async"
-        />
+        {/* Mini só como placeholder; some assim que a cheia pinta (evita overlay embaçado). */}
+        {!cheiaOk && (
+          <img
+            className="quadro-zoom__mini"
+            src={srcMini}
+            alt=""
+            draggable={false}
+            decoding="async"
+          />
+        )}
         {carregarCheia && (
           <img
             className={`quadro-zoom__cheia${cheiaOk ? ' on' : ''}`}
@@ -266,6 +269,10 @@ export function FotoZoomavel({
             draggable={false}
             decoding="async"
             onLoad={() => setCheiaOk(true)}
+            ref={(el) => {
+              // Cache do browser: onLoad pode não disparar de novo
+              if (el !== null && el.complete && el.naturalWidth > 0) setCheiaOk(true);
+            }}
           />
         )}
       </div>

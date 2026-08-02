@@ -204,14 +204,19 @@
   -webkit-user-drag: none;
 }
 .quadro-zoom__mini {
-  filter: blur(8px);
-  transform: scale(1.04);
+  z-index: 0;
+  filter: blur(6px);
+  /* sem scale — o scale fazia a mini vazar por cima da cheia nas bordas */
 }
 .quadro-zoom__cheia {
+  z-index: 1;
   opacity: 0;
-  transition: opacity 0.18s ease;
+  transition: opacity 0.15s ease;
 }
 .quadro-zoom__cheia.on {
+  opacity: 1;
+}
+.quadro-zoom__palco--pronta .quadro-zoom__cheia {
   opacity: 1;
 }
 
