@@ -31,7 +31,8 @@ interface LinhaCampo {
 }
 
 const LIMITE = 20; // 1ª página leve; "Ver mais" completa
-const LIMITE_BUSCA = 100;
+/** Teto só da resposta da busca (independente da lista paginada). */
+const LIMITE_BUSCA = 200;
 
 function mapRegistro(r: LinhaRegistro): Registro {
   return {
@@ -115,8 +116,8 @@ export async function listarRegistros(
   return linhas.map(mapRegistro);
 }
 
-// Busca parcial em QUALQUER dado do registro: texto, número, células de seção
-// (aviamentos etc.), quem criou… Vários termos = AND (ex.: "botão 4647").
+// Busca em TODOS os registros da coleção no Neon — não depende do "Ver mais"
+// nem do que já foi carregado na lista. Vários termos = AND (ex.: "botão 4647").
 export async function buscarRegistros(
   tx: Tx,
   colecaoId: string,
@@ -130,28 +131,27 @@ export async function buscarRegistros(
     .split(/\s+/)
     .filter((t) => t.length > 0)
     .slice(0, 8);
-  const primeiro = termos[0];
-  if (primeiro === undefined) return [];
+  if (termos.length === 0) return [];
 
-  // 1º termo no SQL (valores jsonb + criado_por); demais filtrados em memória (AND).
+  // Todos os termos no SQL (AND). Antes o 2º+ termo filtrava só os 100 primeiros
+  // do 1º termo e podia esconder registros ainda não paginados na lista.
+  const condicoes = termos.map(
+    (t) =>
+      tx`
+        position(${t} in lower(valores::text || ' ' || coalesce(criado_por, ''))) > 0
+      `,
+  );
+  const filtroAnd = condicoes.reduce((acc, c) => tx`${acc} and ${c}`);
+
   const linhas = await tx<LinhaRegistro[]>`
     select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
     from registros
     where colecao_id = ${colecaoId}
-      and (
-        position(${primeiro} in lower(valores::text)) > 0
-        or position(${primeiro} in lower(coalesce(criado_por, ''))) > 0
-      )
+      and ${filtroAnd}
     order by criado_em desc
     limit ${LIMITE_BUSCA}`;
 
-  const registros = linhas.map(mapRegistro);
-  if (termos.length === 1) return registros;
-
-  return registros.filter((r) => {
-    const hay = `${JSON.stringify(r.valores).toLowerCase()} ${(r.criadoPor ?? '').toLowerCase()}`;
-    return termos.every((t) => hay.includes(t));
-  });
+  return linhas.map(mapRegistro);
 }
 
 export async function criarRegistro(

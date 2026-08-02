@@ -60,7 +60,7 @@ export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar, aoApagar }: Pro
         <input
           type="search"
           className="busca-ref__input"
-          placeholder="Buscar em qualquer campo (ref., aviamentos, número…)"
+          placeholder="Buscar em todos os registros (mesmo sem carregar a lista)"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           aria-label="Buscar registro"
