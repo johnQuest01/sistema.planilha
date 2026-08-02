@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as EventoTeclado } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { FotoZoomavel } from './FotoZoomavel';
 import { urlCheia, urlMini } from './urls';
@@ -11,8 +12,7 @@ interface Props {
   aoFechar: () => void;
 }
 
-// Visor: trilho com scroll-snap entre fotos; cada quadro tem pinch/roda zoom + arraste.
-// Qualidade: blur-up (mini → cheia no R2). Só carrega cheia da atual + vizinhas.
+// Portal no body: se ficar dentro da FolhaInferior, overflow/stacking esconde a foto.
 export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
   const trilhoRef = useRef<HTMLDivElement>(null);
   const quadrosRef = useRef<(HTMLDivElement | null)[]>([]);
@@ -66,7 +66,6 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
     tira?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }, [ativo]);
 
-  // Ao mudar de foto, libera o travamento do trilho.
   useEffect(() => {
     setZoomAtivo(false);
   }, [ativo]);
@@ -92,7 +91,7 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
     [zoomAtivo, ativo, keys.length, irPara],
   );
 
-  return (
+  const ui = (
     <div
       className="visor"
       role="dialog"
@@ -112,10 +111,7 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
         </button>
       </div>
 
-      <div
-        className={`trilho${zoomAtivo ? ' trilho--travado' : ''}`}
-        ref={trilhoRef}
-      >
+      <div className={`trilho${zoomAtivo ? ' trilho--travado' : ''}`} ref={trilhoRef}>
         {keys.map((k, i) => {
           const vizinha = Math.abs(i - ativo) <= 1;
           return (
@@ -157,4 +153,6 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
       )}
     </div>
   );
+
+  return createPortal(ui, document.body);
 }
