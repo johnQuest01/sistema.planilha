@@ -5,7 +5,9 @@ services:
   - type: web
     name: mostruario-api
     runtime: node
-    plan: free # cold start no free tier: 1º acesso do dia é lento (ver 7.4). Não resolva com ping.
+    plan: starter # pago (US$7/mês): sempre no ar, SEM spin-down/cold start do free tier.
+    # Precisa concluir o upgrade no painel do Render (Settings > Instance Type > Starter)
+    # e ter forma de pagamento na workspace. O Neon pode seguir no free (acorda em ~ms).
     rootDir: . # raiz do repo — é workspace npm
     # --include=dev: com NODE_ENV=production o npm omite devDependencies (tsc, @types/node).
     # Sem isso o Render cai num tsc GLOBAL da imagem (versão nova) e o build quebra.
