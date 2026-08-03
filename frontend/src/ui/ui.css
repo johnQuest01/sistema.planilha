@@ -214,6 +214,15 @@ textarea.campo__controle {
   min-height: 100%;
   display: grid;
   place-items: center;
+  gap: var(--e3);
+  color: var(--giz);
+}
+.carregando__dica {
+  max-width: 30ch;
+  padding: 0 var(--e4);
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--giz);
 }
 .carregando__giro {

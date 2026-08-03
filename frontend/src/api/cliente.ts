@@ -40,34 +40,77 @@ export class ErroApi extends Error {
   }
 }
 
+// Depois disso sem resposta, avisamos a UI que o servidor está "acordando" (cold start
+// do Render/Neon no free tier) para o usuário não achar que a tela travou.
+const LENTO_MS = 4_000;
+// Rede de segurança: aborta requisições penduradas. Fica ACIMA do cold start típico
+// (~30-50s) para não deslogar/errar por engano quando o servidor só está demorando.
+const TIMEOUT_MS = 60_000;
+
+type OuvinteLento = (lento: boolean) => void;
+const ouvintesLento = new Set<OuvinteLento>();
+let pendentesLentas = 0;
+
+// A UI (tela Carregando) assina isto para mostrar "acordando o servidor…".
+export function aoServidorLento(fn: OuvinteLento): () => void {
+  ouvintesLento.add(fn);
+  fn(pendentesLentas > 0);
+  return () => {
+    ouvintesLento.delete(fn);
+  };
+}
+
+function marcarLento(lento: boolean): void {
+  for (const fn of ouvintesLento) fn(lento);
+}
+
 async function pedir<T>(caminho: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(caminho, {
-    ...init,
-    credentials: 'same-origin',
-    headers:
-      init?.body === undefined
-        ? init?.headers
-        : { 'content-type': 'application/json', ...init?.headers },
-  });
+  const ctrl = new AbortController();
+  const tTimeout = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let contouLento = false;
+  const tLento = setTimeout(() => {
+    contouLento = true;
+    pendentesLentas += 1;
+    if (pendentesLentas === 1) marcarLento(true);
+  }, LENTO_MS);
 
-  if (resp.status === 204) return undefined as T;
+  try {
+    const resp = await fetch(caminho, {
+      ...init,
+      signal: init?.signal ?? ctrl.signal,
+      credentials: 'same-origin',
+      headers:
+        init?.body === undefined
+          ? init?.headers
+          : { 'content-type': 'application/json', ...init?.headers },
+    });
 
-  const texto = await resp.text();
-  const corpo: unknown = texto.length > 0 ? JSON.parse(texto) : undefined;
+    if (resp.status === 204) return undefined as T;
 
-  if (!resp.ok) {
-    const msg =
-      corpo !== undefined &&
-      typeof corpo === 'object' &&
-      corpo !== null &&
-      'erro' in corpo &&
-      typeof (corpo as { erro: unknown }).erro === 'string'
-        ? (corpo as { erro: string }).erro
-        : `erro ${resp.status}`;
-    throw new ErroApi(resp.status, msg, corpo);
+    const texto = await resp.text();
+    const corpo: unknown = texto.length > 0 ? JSON.parse(texto) : undefined;
+
+    if (!resp.ok) {
+      const msg =
+        corpo !== undefined &&
+        typeof corpo === 'object' &&
+        corpo !== null &&
+        'erro' in corpo &&
+        typeof (corpo as { erro: unknown }).erro === 'string'
+          ? (corpo as { erro: string }).erro
+          : `erro ${resp.status}`;
+      throw new ErroApi(resp.status, msg, corpo);
+    }
+
+    return corpo as T;
+  } finally {
+    clearTimeout(tTimeout);
+    clearTimeout(tLento);
+    if (contouLento) {
+      pendentesLentas -= 1;
+      if (pendentesLentas === 0) marcarLento(false);
+    }
   }
-
-  return corpo as T;
 }
 
 function corpoJson(dados: unknown): RequestInit {
