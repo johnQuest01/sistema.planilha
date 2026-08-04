@@ -12,6 +12,7 @@ import {
   listarRegistros,
   obterColecaoIdDoRegistro,
 } from '../repositorios/registros';
+import { broadcastRegistro } from '../ws/presencaHub';
 
 const corpoRegistroSchema = z
   .object({ valores: z.record(z.string(), z.unknown()).default({}) })
@@ -89,6 +90,7 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
         criarRegistro(tx, req.params.id, valores, { id: u.id, nome: u.nome, papel: u.papel }),
       );
       if (registro === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
+      broadcastRegistro(contaId, { acao: 'criado', colecaoId: req.params.id, registro });
       return reply.code(201).send(registro);
     },
   );
@@ -111,6 +113,7 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
         editarRegistro(tx, req.params.id, valores),
       );
       if (registro === null) return reply.code(404).send({ erro: 'registro não encontrado' });
+      broadcastRegistro(contaId, { acao: 'atualizado', colecaoId, registro });
       return reply.send(registro);
     },
   );
@@ -137,6 +140,7 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       if (resultado === 'proibido') {
         return reply.code(403).send({ erro: 'só quem criou (ou o dono) pode apagar este registro' });
       }
+      broadcastRegistro(contaId, { acao: 'apagado', colecaoId, registroId: req.params.id });
       return reply.code(204).send();
     },
   );

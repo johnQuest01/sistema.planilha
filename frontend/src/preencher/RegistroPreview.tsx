@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
+import { ExternalLink, Lock, Pencil, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
@@ -22,6 +22,8 @@ interface Props {
   aoAbrir?: () => void;
   aoAtualizar?: (r: Registro) => void;
   aoApagar?: (id: string) => void;
+  /** Alavanca travada: esconde o "Abrir registro" (edição) e mostra um aviso. */
+  edicaoBloqueada?: boolean;
 }
 
 function keysDe(valor: unknown): string[] {
@@ -143,6 +145,7 @@ export function RegistroPreview({
   aoAbrir,
   aoAtualizar,
   aoApagar,
+  edicaoBloqueada = false,
 }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
@@ -283,7 +286,7 @@ export function RegistroPreview({
                 <span className="preview-registro__btn-txt">Renomear</span>
               </Botao>
             )}
-            {aoAbrir !== undefined && (
+            {aoAbrir !== undefined && !edicaoBloqueada && (
               <Botao
                 variante="primario"
                 onClick={aoAbrir}
@@ -297,6 +300,12 @@ export function RegistroPreview({
                   Abrir registro
                 </span>
               </Botao>
+            )}
+            {aoAbrir !== undefined && edicaoBloqueada && (
+              <span className="preview-registro__travado" title="Libere a edição na barra para abrir este registro">
+                <Lock size={14} aria-hidden />
+                Edição travada
+              </span>
             )}
             {podeApagar && (
               <button

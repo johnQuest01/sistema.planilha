@@ -55,46 +55,52 @@ function nomeNormalizado(nome: string): string {
     .toLowerCase();
 }
 
-function nomeEhTitulo(nome: string): boolean {
+// Só a "área de referência" define o título. Não usamos mais o nome do bloco
+// "título"/"nome" nem caímos no 1º parágrafo/texto: o título do registro é
+// exclusivamente o que estiver escrito nos blocos de referência.
+function nomeEhReferencia(nome: string): boolean {
   const n = nomeNormalizado(nome);
-  return (
-    n.includes('referencia') ||
-    n.includes('titulo') ||
-    n === 'nome' ||
-    n.startsWith('nome ') ||
-    n.includes('ref.')
-  );
+  return n.includes('referencia') || n.includes('ref.');
 }
 
-// Campo usado como "nome"/referência na lista: bloco cujo nome sugere título/ref.,
-// ou o primeiro texto/parágrafo da planilha.
+// Tipos de bloco cujo valor pode compor o título (texto puro/legível).
+const TIPOS_TITULO: Campo['tipo'][] = ['texto', 'paragrafo', 'numero', 'selecao'];
+
+// Todos os blocos da "área de referência" (na ordem da planilha) que podem
+// virar título. Pode haver mais de um ("Referência 1", "Referência 2"…).
+export function camposReferencia(campos: Campo[]): Campo[] {
+  return campos.filter((c) => TIPOS_TITULO.includes(c.tipo) && nomeEhReferencia(c.nome));
+}
+
+// Compat: o primeiro bloco de referência.
 export function campoReferencia(campos: Campo[]): Campo | undefined {
-  const textois = campos.filter((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
-  const marcado = textois.find((c) => nomeEhTitulo(c.nome));
-  if (marcado !== undefined) return marcado;
-  return textois[0];
+  return camposReferencia(campos)[0];
 }
 
-// Alias: o "nome" editável na lista é o mesmo campo de referência/título.
+// Campo renomeável na prévia/lista: o 1º bloco de referência textual (texto/
+// parágrafo). Referências numéricas/seleção não abrem o "renomear" para não
+// gravar texto num campo que espera número.
 export function campoTituloDoRegistro(campos: Campo[]): Campo | undefined {
-  return campoReferencia(campos);
+  return camposReferencia(campos).find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
 }
 
-// Título = campo de referência (ou 1º texto). Sem valor -> "Sem nome".
+// Título = valores preenchidos dos blocos de referência, unidos por " | ".
+// Ex.: dois blocos preenchidos -> "4578 | 4589". Sem nenhum -> "Sem nome".
 export function tituloDoRegistro(campos: Campo[], registro: Registro): string {
-  const ref = campoReferencia(campos);
-  const bruto = ref === undefined ? '' : textoDe(registro.valores[ref.id]).trim();
-  return bruto === '' ? 'Sem nome' : bruto;
+  const partes = camposReferencia(campos)
+    .map((c) => formatarValor(c, registro.valores[c.id]).trim())
+    .filter((s) => s !== '');
+  return partes.length === 0 ? 'Sem nome' : partes.join(' | ');
 }
 
-// Resumo = próximos até 3 campos de texto/número/data/seleção (fora o do título),
-// com valor preenchido.
+// Resumo = próximos até 3 campos de texto/número/data/seleção (fora os de
+// referência), com valor preenchido.
 export function resumoDoRegistro(campos: Campo[], registro: Registro): string {
-  const ref = campoReferencia(campos);
+  const refs = new Set(camposReferencia(campos).map((c) => c.id));
   const tiposResumo: Campo['tipo'][] = ['texto', 'numero', 'data', 'selecao'];
   const partes: string[] = [];
   for (const c of campos) {
-    if (c.id === ref?.id) continue;
+    if (refs.has(c.id)) continue;
     if (!tiposResumo.includes(c.tipo)) continue;
     const txt = formatarValor(c, registro.valores[c.id]).trim();
     if (txt !== '') partes.push(txt);

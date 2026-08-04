@@ -849,3 +849,50 @@
   font-weight: 600;
   color: var(--tinta-2);
 }
+
+/* ---- alavanca de edição (trava contra edição acidental) ---- */
+.trava-edicao {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e1);
+  padding: 6px 10px;
+  min-height: 32px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--giz);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(238, 243, 236, 0.25);
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.trava-edicao:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.trava-edicao--liberada {
+  color: var(--fita);
+  border-color: var(--fita);
+  background: rgba(217, 138, 61, 0.14);
+}
+@media (max-width: 480px) {
+  .trava-edicao__txt {
+    display: none;
+  }
+}
+
+.preview-registro__travado {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e1);
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--tinta-2);
+  background: rgba(23, 32, 28, 0.06);
+  border: 1px dashed var(--linha-2);
+  border-radius: var(--raio);
+}

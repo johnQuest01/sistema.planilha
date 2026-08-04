@@ -109,6 +109,27 @@ export async function broadcastPresenca(contaId: string): Promise<void> {
   }
 }
 
+/**
+ * Modo live: avisa todo mundo da mesma conta que um registro foi criado,
+ * atualizado ou apagado. O payload já é o `Registro` serializado (mesmo formato
+ * do REST) em criar/atualizar; em apagar vai só o `registroId`. Como não toca no
+ * banco, é síncrono e barato — cada aba decide o que fazer com base no
+ * `colecaoId`. Se ninguém estiver conectado, não faz nada.
+ */
+export function broadcastRegistro(
+  contaId: string,
+  evento:
+    | { acao: 'criado' | 'atualizado'; colecaoId: string; registro: unknown }
+    | { acao: 'apagado'; colecaoId: string; registroId: string },
+): void {
+  const sala = salas.get(contaId);
+  if (sala === undefined || sala.size === 0) return;
+  const payload = JSON.stringify({ tipo: 'registro', ...evento });
+  for (const c of sala) {
+    if (aberto(c.socket)) c.socket.send(payload);
+  }
+}
+
 export async function anunciarEntradaWs(
   contaId: string,
   entrada: { id: string; usuarioId: string; nome: string; criadoEm: string },

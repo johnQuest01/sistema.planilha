@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ListPlus, Plus, Rows2, Rows3 } from 'lucide-react';
+import { ListPlus, Lock, Plus, Rows2, Rows3, Unlock } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
+import { assinarRealtime } from '../api/realtime';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import { useMedia } from '../ui/useMedia';
@@ -54,6 +55,16 @@ export function Preencher({
   const [aberta, setAberta] = useState<Registro | null>(null);
   const [solto, setSolto] = useState(false);
   const [adicionandoCampo, setAdicionandoCampo] = useState(false);
+  // Alavanca de edição: por padrão TRAVADA, para ninguém abrir um registro para
+  // edição sem querer. Fica salva no aparelho (por planilha).
+  const chaveTrava = `edicaoLiberada:${colecao.id}`;
+  const [edicaoLiberada, setEdicaoLiberada] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(chaveTrava) === '1';
+    } catch {
+      return false;
+    }
+  });
   const carregandoMaisRef = useRef(false);
   const fimRef = useRef(fim);
   const registrosRef = useRef(registros);
@@ -159,10 +170,63 @@ export function Preencher({
     setPrevia(r);
   }, []);
 
-  const abrirEdicao = useCallback((r: Registro): void => {
-    setPrevia(null);
-    setAberta(r);
-  }, []);
+  const abrirEdicao = useCallback(
+    (r: Registro): void => {
+      // Com a alavanca travada, abrir um registro NÃO leva à edição: mostra só
+      // a prévia (somente leitura). Assim ninguém altera sem querer.
+      if (!edicaoLiberada) {
+        setAberta(null);
+        setPrevia(r);
+        return;
+      }
+      setPrevia(null);
+      setAberta(r);
+    },
+    [edicaoLiberada],
+  );
+
+  const alternarTrava = useCallback((): void => {
+    setEdicaoLiberada((v) => {
+      const novo = !v;
+      try {
+        localStorage.setItem(chaveTrava, novo ? '1' : '0');
+      } catch {
+        /* sem persistência não é problema */
+      }
+      // Ao travar de novo, fecha qualquer edição aberta (volta ao seguro).
+      if (!novo) setAberta(null);
+      return novo;
+    });
+  }, [chaveTrava]);
+
+  // Modo live: aplica em tempo real o que outras pessoas (ou outras abas) criam,
+  // editam ou apagam. Tudo idempotente (dedupe por id), então o eco da própria
+  // ação não duplica nem conflita. Ignora eventos de outras planilhas.
+  useEffect(() => {
+    const cancelar = assinarRealtime((msg) => {
+      if (msg.tipo !== 'registro' || msg.colecaoId !== colecao.id) return;
+      if (msg.acao === 'apagado') {
+        setRegistros((atual) => (atual === null ? atual : atual.filter((x) => x.id !== msg.registroId)));
+        setAberta((a) => (a !== null && a.id === msg.registroId ? null : a));
+        setPrevia((p) => (p !== null && p.id === msg.registroId ? null : p));
+        return;
+      }
+      const r = msg.registro as Registro;
+      if (msg.acao === 'criado') {
+        setRegistros((atual) => {
+          if (atual === null) return atual;
+          if (atual.some((x) => x.id === r.id)) return atual.map((x) => (x.id === r.id ? r : x));
+          return [r, ...atual];
+        });
+      } else {
+        // atualizado: substitui se já estiver carregado; senão ignora (mantém a ordem/paginação).
+        setRegistros((atual) => (atual === null ? atual : atual.map((x) => (x.id === r.id ? r : x))));
+        setAberta((a) => (a !== null && a.id === r.id ? r : a));
+        setPrevia((p) => (p !== null && p.id === r.id ? r : p));
+      }
+    });
+    return cancelar;
+  }, [colecao.id]);
 
   if (colecao.campos.length === 0) {
     return (
@@ -219,6 +283,22 @@ export function Preencher({
           <ListPlus size={18} />
           Adicionar campo
         </Botao>
+        <button
+          type="button"
+          className={`trava-edicao${edicaoLiberada ? ' trava-edicao--liberada' : ''}`}
+          onClick={alternarTrava}
+          aria-pressed={edicaoLiberada}
+          title={
+            edicaoLiberada
+              ? 'Edição liberada — abrir registro entra na edição. Clique para travar.'
+              : 'Edição travada — abrir registro mostra só a prévia. Clique para liberar.'
+          }
+        >
+          {edicaoLiberada ? <Unlock size={16} /> : <Lock size={16} />}
+          <span className="trava-edicao__txt">
+            {edicaoLiberada ? 'Edição liberada' : 'Edição travada'}
+          </span>
+        </button>
         <span className="preencher-barra__espaco" />
         <span className="preencher-contagem">
           {registros === null ? '…' : `${registros.length} registro(s)`}
@@ -288,13 +368,18 @@ export function Preencher({
       {previa !== null && (
         <FolhaInferior
           titulo={tituloDoRegistro(colecao.campos, previa)}
-          subtitulo="Prévia — toque em Abrir registro para editar"
+          subtitulo={
+            edicaoLiberada
+              ? 'Prévia — toque em Abrir registro para editar'
+              : 'Prévia (somente leitura) — libere a edição na barra para alterar'
+          }
           onFechar={() => setPrevia(null)}
         >
           <RegistroPreview
             colecao={colecao}
             registro={previa}
             aoAbrir={() => abrirEdicao(previa)}
+            edicaoBloqueada={!edicaoLiberada}
             aoAtualizar={aoAtualizar}
             aoApagar={(id) => {
               aoApagar(id);
