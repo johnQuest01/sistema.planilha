@@ -515,6 +515,21 @@ export function RegistroPreview({
         </div>
       )}
 
+      {modoShare && selShare.size > 0 && (
+        <button
+          type="button"
+          className="preview-share-fab"
+          disabled={enviandoShare}
+          onClick={() => void enviarShare()}
+          aria-label={`Compartilhar ${selShare.size} bloco(s) no WhatsApp`}
+        >
+          <Share2 size={20} aria-hidden />
+          <span className="preview-share-fab__txt">
+            {enviandoShare ? 'Preparando…' : `Compartilhar (${selShare.size})`}
+          </span>
+        </button>
+      )}
+
       {visor !== null && (
         <Visor
           keys={visor.keys}

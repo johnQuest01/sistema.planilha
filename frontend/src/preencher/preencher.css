@@ -1013,6 +1013,36 @@
   opacity: 0.45;
   cursor: default;
 }
+.preview-share-fab {
+  position: fixed;
+  right: max(var(--e3), env(safe-area-inset-right));
+  bottom: calc(var(--e3) + env(safe-area-inset-bottom));
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--fita-forte, #d98a3d);
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+.preview-share-fab:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.32);
+}
+.preview-share-fab:active:not(:disabled) {
+  transform: translateY(0);
+}
+.preview-share-fab:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
 .preview-campo--sel {
   padding: var(--e2);
   border: 1px solid var(--linha-2);
