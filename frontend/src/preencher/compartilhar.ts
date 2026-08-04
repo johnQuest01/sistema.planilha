@@ -36,39 +36,51 @@ function montarTextoSecao(campo: Campo, registro: Registro): string {
   return partes.join('\n');
 }
 
+function rotuloFotos(qtd: number): string {
+  return `${qtd} ${qtd === 1 ? 'foto' : 'fotos'}`;
+}
+
 export function montarCompartilhamento(
   titulo: string,
   campos: Campo[],
   registro: Registro,
   selecionados: Set<string>,
 ): Compartilhavel {
-  const linhas: string[] = [];
+  // Cada "bloco" e uma informacao. Percorremos os campos na MESMA ordem da previa
+  // (referencia -> foto -> cor -> foto ...) e no fim juntamos com linha em branco
+  // entre os blocos, para o texto nao ficar tudo grudado.
+  const blocos: string[] = [];
   const keys: string[] = [];
-  if (titulo.trim() !== '') linhas.push(`*${titulo}*`);
+  if (titulo.trim() !== '') blocos.push(`*${titulo}*`);
 
   for (const campo of campos) {
     if (!selecionados.has(campo.id)) continue;
 
     if (campo.tipo === 'imagem') {
-      for (const k of keysDoCampo(registro, campo.id)) keys.push(k);
+      const ks = keysDoCampo(registro, campo.id);
+      if (ks.length === 0) continue;
+      for (const k of ks) keys.push(k);
+      // Rotula a imagem na ordem certa (a foto em si vai anexada em alta resolucao).
+      blocos.push(`${campo.nome}: ${rotuloFotos(ks.length)}`);
       continue;
     }
 
     if (campo.tipo === 'secao') {
-      for (const k of keysDeImagensDoCampo(campo, registro)) keys.push(k);
+      const ksSecao = keysDeImagensDoCampo(campo, registro);
+      for (const k of ksSecao) keys.push(k);
       const txt = montarTextoSecao(campo, registro);
-      if (txt !== '') {
-        linhas.push(`${campo.nome}:`);
-        linhas.push(txt);
-      }
+      const partes: string[] = [];
+      if (txt !== '') partes.push(txt);
+      if (ksSecao.length > 0) partes.push(rotuloFotos(ksSecao.length));
+      if (partes.length > 0) blocos.push(`${campo.nome}:\n${partes.join('\n')}`);
       continue;
     }
 
     const v = formatarValor(campo, registro.valores[campo.id]).trim();
-    if (v !== '') linhas.push(`${campo.nome}: ${v}`);
+    if (v !== '') blocos.push(`${campo.nome}: ${v}`);
   }
 
-  return { texto: linhas.join('\n'), keys };
+  return { texto: blocos.join('\n\n'), keys };
 }
 
 // ---- Envio via Web Share API (WhatsApp etc.), sem baixar nada ----

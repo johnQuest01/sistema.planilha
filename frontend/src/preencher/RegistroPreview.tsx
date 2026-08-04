@@ -17,7 +17,7 @@ import {
   tituloDoRegistro,
 } from './derivarResumo';
 import { linhasDe } from './SecaoEditor';
-import { campoTemConteudo, compartilhar, montarCompartilhamento } from './compartilhar';
+import { compartilhar, montarCompartilhamento } from './compartilhar';
 
 interface Props {
   colecao: Colecao;
@@ -178,9 +178,8 @@ export function RegistroPreview({
   }, [registro]);
 
   function entrarShare(): void {
-    const inicial = new Set<string>();
-    for (const c of campos) if (campoTemConteudo(c, local)) inicial.add(c.id);
-    setSelShare(inicial);
+    // Comeca sem nada marcado: o usuario escolhe manualmente o que compartilhar.
+    setSelShare(new Set());
     setAvisoShare(null);
     setModoShare(true);
   }
