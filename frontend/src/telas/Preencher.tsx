@@ -59,6 +59,9 @@ export function Preencher({
   // edição sem querer. O estado é salvo no SERVIDOR (por conta), então persiste
   // entre aparelhos/sessões e vale para todos da mesma conta.
   const [edicaoLiberada, setEdicaoLiberada] = useState(false);
+  // Marca que o usuário mexeu na alavanca, para o GET inicial (lento no cold
+  // start) não sobrescrever a ação dele quando chegar atrasado.
+  const travaTocadaRef = useRef(false);
   const carregandoMaisRef = useRef(false);
   const fimRef = useRef(fim);
   const registrosRef = useRef(registros);
@@ -180,15 +183,17 @@ export function Preencher({
   );
 
   const alternarTrava = useCallback((): void => {
-    setEdicaoLiberada((v) => {
-      const novo = !v;
-      // Ao travar de novo, fecha qualquer edição aberta (volta ao seguro).
-      if (!novo) setAberta(null);
-      // Persiste no servidor; se falhar, reverte o estado local.
-      void api.salvarEdicaoTrava(novo).catch(() => setEdicaoLiberada(v));
-      return novo;
-    });
-  }, []);
+    const novo = !edicaoLiberada;
+    travaTocadaRef.current = true;
+    setEdicaoLiberada(novo); // otimista
+    // Ao travar de novo, fecha qualquer edição aberta (volta ao seguro).
+    if (!novo) setAberta(null);
+    // A resposta do servidor é a verdade; se falhar, volta ao estado anterior.
+    void api
+      .salvarEdicaoTrava(novo)
+      .then((r) => setEdicaoLiberada(r.liberada))
+      .catch(() => setEdicaoLiberada(!novo));
+  }, [edicaoLiberada]);
 
   // Carrega o estado atual da trava (por conta) e mantém sincronizado em tempo
   // real: se outra pessoa (ou aba) mudar a alavanca, todos acompanham.
@@ -197,7 +202,9 @@ export function Preencher({
     void api
       .edicaoTrava()
       .then((r) => {
-        if (vivo) setEdicaoLiberada(r.liberada);
+        // Não sobrescreve se o usuário já mexeu na alavanca enquanto o GET vinha:
+        // no cold start o GET pode demorar e chegar DEPOIS do toque, "retravando".
+        if (vivo && !travaTocadaRef.current) setEdicaoLiberada(r.liberada);
       })
       .catch(() => {
         /* mantém o padrão travado */

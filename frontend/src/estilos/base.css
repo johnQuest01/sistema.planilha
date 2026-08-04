@@ -17,6 +17,15 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Permite rolar (pan) em X/Y, mas bloqueia o zoom do NAVEGADOR (pinça e
+   duplo-toque) na interface. O zoom livre das fotos NÃO é afetado: o visor
+   (.quadro-zoom / .trilho) usa touch-action: none e trata os próprios gestos. */
+html,
+body,
+#root {
+  touch-action: pan-x pan-y;
+}
+
 body {
   margin: 0;
   font-family: var(--fonte);
