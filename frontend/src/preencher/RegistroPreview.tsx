@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ExternalLink, Lock, Pencil, Trash2 } from 'lucide-react';
+import { ExternalLink, Lock, Pencil, Share2, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
@@ -17,6 +17,7 @@ import {
   tituloDoRegistro,
 } from './derivarResumo';
 import { linhasDe } from './SecaoEditor';
+import { campoTemConteudo, compartilhar, montarCompartilhamento } from './compartilhar';
 
 interface Props {
   colecao: Colecao;
@@ -166,10 +167,56 @@ export function RegistroPreview({
   const [confirmandoApagar, setConfirmandoApagar] = useState(false);
   const [apagando, setApagando] = useState(false);
   const [erroApagar, setErroApagar] = useState<string | null>(null);
+  // Modo compartilhar: escolhe quais campos entram e envia (texto + fotos) pro WhatsApp.
+  const [modoShare, setModoShare] = useState(false);
+  const [selShare, setSelShare] = useState<Set<string>>(new Set());
+  const [enviandoShare, setEnviandoShare] = useState(false);
+  const [avisoShare, setAvisoShare] = useState<string | null>(null);
 
   useEffect(() => {
     setLocal(registro);
   }, [registro]);
+
+  function entrarShare(): void {
+    const inicial = new Set<string>();
+    for (const c of campos) if (campoTemConteudo(c, local)) inicial.add(c.id);
+    setSelShare(inicial);
+    setAvisoShare(null);
+    setModoShare(true);
+  }
+
+  function alternarShare(id: string): void {
+    setSelShare((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  async function enviarShare(): Promise<void> {
+    if (enviandoShare) return;
+    const { texto, keys } = montarCompartilhamento(tituloAtual, campos, local, selShare);
+    if (texto.trim() === '' && keys.length === 0) {
+      setAvisoShare('Selecione ao menos um campo para compartilhar.');
+      return;
+    }
+    setEnviandoShare(true);
+    setAvisoShare(null);
+    const r = await compartilhar(tituloAtual, texto, keys);
+    setEnviandoShare(false);
+    if (r === 'ok') {
+      setModoShare(false);
+    } else if (r === 'so-texto') {
+      setAvisoShare(
+        'Enviado só o texto — este navegador não anexa fotos. Abra pelo celular (Safari/Chrome) para enviar as imagens.',
+      );
+    } else if (r === 'sem-suporte') {
+      setAvisoShare('Compartilhamento não suportado aqui. Abra o app pelo celular (Safari/Chrome).');
+    } else if (r === 'erro') {
+      setAvisoShare('Não foi possível compartilhar. Tente novamente.');
+    }
+  }
 
   function iniciarEdicao(): void {
     if (alvo === undefined) return;
@@ -282,7 +329,7 @@ export function RegistroPreview({
             <h3 className="preview-registro__titulo">{tituloAtual}</h3>
           )}
         </div>
-        {!editando && !confirmandoApagar && (
+        {!editando && !confirmandoApagar && !modoShare && (
           <div className="preview-registro__acoes">
             {alvo !== undefined && (
               <Botao variante="padrao" onClick={iniciarEdicao}>
@@ -290,6 +337,14 @@ export function RegistroPreview({
                 <span className="preview-registro__btn-txt">Renomear</span>
               </Botao>
             )}
+            <Botao
+              variante="padrao"
+              onClick={entrarShare}
+              aria-label={`Compartilhar registro ${tituloAtual}`}
+            >
+              <Share2 size={16} aria-hidden />
+              <span className="preview-registro__btn-txt">Compartilhar</span>
+            </Botao>
             {aoAbrir !== undefined && !edicaoBloqueada && (
               <Botao
                 variante="primario"
@@ -353,21 +408,83 @@ export function RegistroPreview({
         )}
       </div>
 
+      {modoShare && (
+        <div className="preview-share-topo">
+          <Share2 size={16} aria-hidden />
+          <span>Marque os campos que vão no WhatsApp (fotos vão em alta resolução).</span>
+        </div>
+      )}
+
       <div className="preview-campos">
-        {campos.map((campo) => (
-          <div key={campo.id} className="preview-campo">
-            {campo.config.titulo !== undefined && campo.config.titulo !== '' && (
-              <span className="preview-campo__titulo-bloco">{campo.config.titulo}</span>
-            )}
-            <span className="preview-campo__nome">{campo.nome}</span>
+        {campos.map((campo) => {
+          const marcado = selShare.has(campo.id);
+          const cabecalho = (
+            <>
+              {campo.config.titulo !== undefined && campo.config.titulo !== '' && (
+                <span className="preview-campo__titulo-bloco">{campo.config.titulo}</span>
+              )}
+              <span className="preview-campo__nome">{campo.nome}</span>
+            </>
+          );
+          const valor = (
             <ValorCampo
               campo={campo}
               registro={local}
               aoAbrirVisor={(keys, indice) => setVisor({ keys, indice })}
             />
-          </div>
-        ))}
+          );
+          if (!modoShare) {
+            return (
+              <div key={campo.id} className="preview-campo">
+                {cabecalho}
+                {valor}
+              </div>
+            );
+          }
+          return (
+            <div
+              key={campo.id}
+              className={`preview-campo preview-campo--sel${marcado ? ' preview-campo--on' : ''}`}
+            >
+              <label className="preview-campo__check">
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  onChange={() => alternarShare(campo.id)}
+                />
+                <span className="preview-campo__cabecalho">{cabecalho}</span>
+              </label>
+              {valor}
+            </div>
+          );
+        })}
       </div>
+
+      {modoShare && (
+        <div className="preview-share-bar">
+          {avisoShare !== null && <p className="preview-share-bar__aviso">{avisoShare}</p>}
+          <div className="preview-share-bar__acoes">
+            <Botao
+              variante="primario"
+              disabled={enviandoShare}
+              onClick={() => void enviarShare()}
+            >
+              <Share2 size={16} aria-hidden />
+              {enviandoShare ? 'Preparando…' : 'Enviar pro WhatsApp'}
+            </Botao>
+            <Botao
+              variante="fantasma"
+              disabled={enviandoShare}
+              onClick={() => {
+                setModoShare(false);
+                setAvisoShare(null);
+              }}
+            >
+              Cancelar
+            </Botao>
+          </div>
+        </div>
+      )}
 
       {visor !== null && (
         <Visor

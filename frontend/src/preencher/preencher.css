@@ -958,3 +958,78 @@
   border: 1px solid var(--linha-2);
   border-radius: var(--raio);
 }
+
+/* ---- Compartilhar registro (selecionar campos + enviar pro WhatsApp) ---- */
+.preview-share-topo {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  margin: 0 var(--e3);
+  padding: var(--e2) var(--e3);
+  font-size: 13px;
+  color: var(--tinta-2);
+  background: rgba(217, 138, 61, 0.1);
+  border: 1px solid rgba(217, 138, 61, 0.3);
+  border-radius: var(--raio);
+}
+.preview-share-topo svg {
+  flex: none;
+  color: var(--fita-forte);
+}
+.preview-campo--sel {
+  padding: var(--e2);
+  border: 1px solid var(--linha-2);
+  border-radius: var(--raio);
+  transition: border-color 0.15s, background 0.15s;
+}
+.preview-campo--sel.preview-campo--on {
+  border-color: var(--fita);
+  background: rgba(217, 138, 61, 0.08);
+}
+.preview-campo__check {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  cursor: pointer;
+  margin: 0;
+}
+.preview-campo__check > input[type='checkbox'] {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--fita);
+  cursor: pointer;
+}
+.preview-campo__cabecalho {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.preview-share-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  padding: var(--e3);
+  padding-bottom: calc(var(--e3) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--linha);
+  background: rgba(23, 32, 28, 0.03);
+  position: sticky;
+  bottom: 0;
+}
+.preview-share-bar__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
+.preview-share-bar__acoes .btn {
+  flex: 1;
+  min-width: 0;
+}
+.preview-share-bar__aviso {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tinta-2);
+  line-height: 1.4;
+}
