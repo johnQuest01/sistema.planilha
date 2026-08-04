@@ -209,7 +209,11 @@ export async function gerarImagemRegistro(
   const ctx = canvas.getContext('2d');
   if (ctx === null) return null;
 
-  const LARGURA = 1000;
+  // Resolução base da imagem "print". Mais largura = fotos e texto mais nítidos
+  // (o WhatsApp reamostra para ~1600px no lado maior, então subir daqui melhora o
+  // caso de poucas fotos). 1280 mantém folga contra o teto de ÁREA do canvas no
+  // iOS: 16MP / 1280 ≈ 12.5k px de altura, acima do pior caso (10 fotos + texto).
+  const LARGURA = 1280;
   const M = 40; // margem
   const W = LARGURA - M * 2;
   const GAP = 20;
@@ -303,7 +307,7 @@ export async function gerarImagemRegistro(
   }
 
   const blob = await new Promise<Blob | null>((res) =>
-    canvas.toBlob((b) => res(b), 'image/jpeg', 0.9),
+    canvas.toBlob((b) => res(b), 'image/jpeg', 0.92),
   );
   for (const bmp of bitmaps.values()) if (typeof bmp.close === 'function') bmp.close();
   if (blob === null) return null;

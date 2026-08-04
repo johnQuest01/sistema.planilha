@@ -28,6 +28,8 @@ services:
         value: mostruario-midia # bucket dedicado, NUNCA o do outro projeto do dono (7.1)
       - key: R2_PUBLIC_BASE
         value: https://pub-856c1e1b6dc645308495de9e44b391e0.r2.dev # r2.dev público (trocar por domínio próprio depois, 7.2b)
+      - key: LINK_PUBLICO_DIAS
+        value: "30" # dias até o link /r/<token> expirar. 0 = nunca. Bruno ajusta aqui no painel do Render.
       # --- segredos: preenchidos no painel, ficam fora do git ---
       - key: DATABASE_URL # Neon POOLED (host com -pooler, ?sslmode=require) — a aplicação (7.6)
         sync: false

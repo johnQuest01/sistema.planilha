@@ -25,6 +25,12 @@ export function buildServer() {
   const app = Fastify({
     logger: true,
     bodyLimit: 64 * 1024, // binário vai direto pro R2; JSON de registro cabe folgado aqui
+    // O link público leva o token ASSINADO no PATH (/api/publico/r/:token). Esse
+    // token carrega conta+registro+blocos+validade em base64url e passa fácil dos
+    // 100 chars que o Fastify aceita por parâmetro por padrão — sem isto a rota
+    // devolve 414 (URI Too Long) e a página do link "não carrega". 8 KB cobre
+    // links com dezenas/centenas de blocos com folga. (Fastify 5: vai em routerOptions.)
+    routerOptions: { maxParamLength: 8192 },
   });
 
   // @fastify/websocket é exportado via fastify-plugin, então registrar direto no
