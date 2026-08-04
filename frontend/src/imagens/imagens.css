@@ -111,12 +111,17 @@
   background: var(--visor-fundo);
   display: flex;
   flex-direction: column;
+  /* iOS com status-bar "black-translucent": respeita o recorte inferior (home indicator). */
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .visor__topo {
   display: flex;
   align-items: center;
   gap: var(--e3);
-  padding: var(--e3) var(--e4);
+  /* Empurra o topo (contador, Baixar e X) para baixo da barra de status/notch do iPhone,
+     senão ficam escondidos embaixo do sistema e o X não recebe o toque. */
+  padding: max(var(--e3), env(safe-area-inset-top)) max(var(--e4), env(safe-area-inset-right))
+    var(--e3) max(var(--e4), env(safe-area-inset-left));
   color: var(--giz);
 }
 .visor__contador {
@@ -181,22 +186,22 @@
 }
 
 .quadro {
+  /* Bloco-contêiner para o .quadro-zoom absoluto: dá altura DEFINIDA à foto no iOS,
+     onde a cadeia de alturas em flex + height:100% não resolvia (foto minúscula). */
+  position: relative;
   flex: 0 0 100%;
   align-self: stretch;
   scroll-snap-align: center;
   scroll-snap-stop: always;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 16px;
   min-width: 0;
   min-height: 0;
   box-sizing: border-box;
 }
 
 .quadro-zoom {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  /* O respiro (8px/16px) que antes vinha do padding do .quadro. */
+  inset: 8px 16px;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -216,10 +221,11 @@
 }
 .quadro-zoom__palco {
   position: relative;
+  /* Preenche a caixa (definida) do .quadro-zoom, dando referência de 100% às imagens. */
+  width: 100%;
+  height: 100%;
   display: grid;
   place-items: center;
-  max-width: 100%;
-  max-height: 100%;
   transform-origin: center center;
   will-change: transform;
   line-height: 0;
@@ -227,8 +233,8 @@
 .quadro-zoom__mini,
 .quadro-zoom__cheia {
   grid-area: 1 / 1;
-  max-width: min(100%, calc(100vw - 32px));
-  max-height: min(100%, calc(100dvh - 140px));
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -253,6 +259,12 @@
   overflow-x: auto;
   justify-content: center;
   scrollbar-width: none;
+}
+@supports (padding: max(0px)) {
+  .tiras {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
 }
 .tiras::-webkit-scrollbar {
   display: none;
