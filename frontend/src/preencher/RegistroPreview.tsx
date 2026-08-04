@@ -17,7 +17,7 @@ import {
   tituloDoRegistro,
 } from './derivarResumo';
 import { linhasDe } from './SecaoEditor';
-import { campoTemConteudo, compartilhar, montarCompartilhamento } from './compartilhar';
+import { campoTemConteudo, compartilharRegistro } from './compartilhar';
 
 interface Props {
   colecao: Colecao;
@@ -205,20 +205,19 @@ export function RegistroPreview({
 
   async function enviarShare(): Promise<void> {
     if (enviandoShare) return;
-    const { texto, keys } = montarCompartilhamento(tituloAtual, campos, local, selShare);
-    if (texto.trim() === '' && keys.length === 0) {
+    if (selShare.size === 0) {
       setAvisoShare('Selecione ao menos um campo para compartilhar.');
       return;
     }
     setEnviandoShare(true);
     setAvisoShare(null);
-    const r = await compartilhar(tituloAtual, texto, keys);
+    const r = await compartilharRegistro(tituloAtual, campos, local, selShare);
     setEnviandoShare(false);
     if (r === 'ok') {
       setModoShare(false);
     } else if (r === 'so-texto') {
       setAvisoShare(
-        'Enviado só o texto — este navegador não anexa fotos. Abra pelo celular (Safari/Chrome) para enviar as imagens.',
+        'Enviado só o texto — este navegador não anexa imagem. Abra pelo celular (Safari/Chrome) para enviar na ordem com as fotos.',
       );
     } else if (r === 'sem-suporte') {
       setAvisoShare('Compartilhamento não suportado aqui. Abra o app pelo celular (Safari/Chrome).');
