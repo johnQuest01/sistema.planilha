@@ -130,6 +130,16 @@ export function broadcastRegistro(
   }
 }
 
+/** Modo live: avisa a conta que a alavanca de edição mudou (todos sincronizam). */
+export function broadcastTrava(contaId: string, liberada: boolean): void {
+  const sala = salas.get(contaId);
+  if (sala === undefined || sala.size === 0) return;
+  const payload = JSON.stringify({ tipo: 'trava', liberada });
+  for (const c of sala) {
+    if (aberto(c.socket)) c.socket.send(payload);
+  }
+}
+
 export async function anunciarEntradaWs(
   contaId: string,
   entrada: { id: string; usuarioId: string; nome: string; criadoEm: string },

@@ -14,6 +14,7 @@ import { rotasCampos } from './rotas/campos';
 import { rotasRegistros } from './rotas/registros';
 import { rotasUpload } from './rotas/upload';
 import { rotasConfig } from './rotas/config';
+import { rotasConta } from './rotas/conta';
 import { rotasPresenca } from './rotas/presenca';
 import { rotasLixeira } from './rotas/lixeira';
 import websocket from '@fastify/websocket';
@@ -66,6 +67,7 @@ export function buildServer() {
   });
 
   app.register(rotasConfig);
+  app.register(rotasConta);
   app.register(rotasAuth);
   app.register(rotasColecoes);
   app.register(rotasCampos);

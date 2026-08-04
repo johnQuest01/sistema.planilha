@@ -8,10 +8,11 @@ import { Visor } from '../imagens/Visor';
 import { urlMini } from '../imagens/urls';
 import { Botao } from '../ui/Botao';
 import {
-  campoTituloDoRegistro,
+  alvoTitulo,
   formatarValor,
   keysDoCampo,
-  textoDe,
+  lerAlvoTitulo,
+  patchAlvoTitulo,
   tituloDoRegistro,
 } from './derivarResumo';
 import { linhasDe } from './SecaoEditor';
@@ -152,7 +153,7 @@ export function RegistroPreview({
   // Qualquer usuário logado pode enviar o registro para a lixeira (soft-delete).
   const podeApagar = aoApagar !== undefined && usuario !== null;
 
-  const campoTitulo = campoTituloDoRegistro(colecao.campos);
+  const alvo = alvoTitulo(colecao.campos);
   const [local, setLocal] = useState(registro);
   const [editando, setEditando] = useState(false);
   const [rascunho, setRascunho] = useState('');
@@ -168,9 +169,9 @@ export function RegistroPreview({
   }, [registro]);
 
   function iniciarEdicao(): void {
-    if (campoTitulo === undefined) return;
+    if (alvo === undefined) return;
     setEditando(true);
-    setRascunho(textoDe(local.valores[campoTitulo.id]));
+    setRascunho(lerAlvoTitulo(local, alvo));
     setErroNome(null);
   }
 
@@ -180,8 +181,8 @@ export function RegistroPreview({
   }
 
   async function salvarNome(): Promise<void> {
-    if (campoTitulo === undefined || !editando || salvando) return;
-    const atual = textoDe(local.valores[campoTitulo.id]);
+    if (alvo === undefined || !editando || salvando) return;
+    const atual = lerAlvoTitulo(local, alvo);
     const novo = rascunho.trim();
     if (novo === atual.trim()) {
       setEditando(false);
@@ -190,7 +191,7 @@ export function RegistroPreview({
     setSalvando(true);
     setErroNome(null);
     try {
-      const atualizado = await api.editarRegistro(local.id, { [campoTitulo.id]: novo });
+      const atualizado = await api.editarRegistro(local.id, patchAlvoTitulo(local, alvo, novo));
       setLocal(atualizado);
       aoAtualizar?.(atualizado);
       setEditando(false);
@@ -265,7 +266,7 @@ export function RegistroPreview({
               </div>
               {erroNome !== null && <p className="aviso-erro">{erroNome}</p>}
             </div>
-          ) : campoTitulo !== undefined ? (
+          ) : alvo !== undefined ? (
             <button
               type="button"
               className="preview-registro__titulo-btn"
@@ -280,7 +281,7 @@ export function RegistroPreview({
         </div>
         {!editando && !confirmandoApagar && (
           <div className="preview-registro__acoes">
-            {campoTitulo !== undefined && (
+            {alvo !== undefined && (
               <Botao variante="padrao" onClick={iniciarEdicao}>
                 <Pencil size={16} aria-hidden />
                 <span className="preview-registro__btn-txt">Renomear</span>

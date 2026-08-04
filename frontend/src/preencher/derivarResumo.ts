@@ -1,4 +1,4 @@
-import type { Campo, Registro } from '../../../shared/tipos';
+import type { Campo, ConfigCampo, Registro, TipoCampo } from '../../../shared/tipos';
 
 const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 const fmtDataHora = new Intl.DateTimeFormat('pt-BR', {
@@ -14,7 +14,11 @@ export function textoDe(v: unknown): string {
 }
 
 // Valor de um campo formatado para leitura (célula/resumo). Imagem não entra aqui.
-export function formatarValor(campo: Campo, valor: unknown): string {
+// Aceita Campo ou SubCampo (só precisa de tipo + config).
+export function formatarValor(
+  campo: { tipo: TipoCampo; config: ConfigCampo },
+  valor: unknown,
+): string {
   switch (campo.tipo) {
     case 'texto':
     case 'paragrafo':
@@ -66,35 +70,100 @@ function nomeEhReferencia(nome: string): boolean {
 // Tipos de bloco cujo valor pode compor o título (texto puro/legível).
 const TIPOS_TITULO: Campo['tipo'][] = ['texto', 'paragrafo', 'numero', 'selecao'];
 
-// Todos os blocos da "área de referência" (na ordem da planilha) que podem
-// virar título. Pode haver mais de um ("Referência 1", "Referência 2"…).
+// Todos os blocos de topo da "área de referência" (na ordem da planilha).
 export function camposReferencia(campos: Campo[]): Campo[] {
   return campos.filter((c) => TIPOS_TITULO.includes(c.tipo) && nomeEhReferencia(c.nome));
 }
 
-// Compat: o primeiro bloco de referência.
+// Compat: o primeiro bloco de referência de topo.
 export function campoReferencia(campos: Campo[]): Campo | undefined {
   return camposReferencia(campos)[0];
 }
 
-// Campo renomeável na prévia/lista: o 1º bloco de referência textual (texto/
-// parágrafo). Referências numéricas/seleção não abrem o "renomear" para não
-// gravar texto num campo que espera número.
-export function campoTituloDoRegistro(campos: Campo[]): Campo | undefined {
-  return camposReferencia(campos).find((c) => c.tipo === 'texto' || c.tipo === 'paragrafo');
+// Linhas de uma seção (array de objetos {subcampoId: valor}). Tolerante a lixo.
+function linhasDeSecao(registro: Registro, campoId: string): Record<string, unknown>[] {
+  const v = registro.valores[campoId];
+  if (!Array.isArray(v)) return [];
+  return v.filter((l): l is Record<string, unknown> => typeof l === 'object' && l !== null);
 }
 
-// Título = valores preenchidos dos blocos de referência, unidos por " | ".
-// Ex.: dois blocos preenchidos -> "4578 | 4589". Sem nenhum -> "Sem nome".
+// Título = TUDO que estiver escrito na "área de referência", unido por " | ".
+// A referência pode ser:
+//  - um ou mais blocos de topo cujo nome é "Referência"/"ref.", e/ou
+//  - um subcampo "Referência" dentro de uma seção (uma parte por LINHA da seção).
+// Ex. com uma seção de 3 linhas -> "4578 | 5486 | 4458". Sem nada -> "Sem nome".
 export function tituloDoRegistro(campos: Campo[], registro: Registro): string {
-  const partes = camposReferencia(campos)
-    .map((c) => formatarValor(c, registro.valores[c.id]).trim())
-    .filter((s) => s !== '');
+  const partes: string[] = [];
+  for (const c of campos) {
+    if (TIPOS_TITULO.includes(c.tipo) && nomeEhReferencia(c.nome)) {
+      const v = formatarValor(c, registro.valores[c.id]).trim();
+      if (v !== '') partes.push(v);
+      continue;
+    }
+    if (c.tipo === 'secao') {
+      const subsRef = (c.config.subcampos ?? []).filter((s) => nomeEhReferencia(s.nome));
+      if (subsRef.length === 0) continue;
+      for (const linha of linhasDeSecao(registro, c.id)) {
+        for (const s of subsRef) {
+          const v = formatarValor(s, linha[s.id]).trim();
+          if (v !== '') partes.push(v);
+        }
+      }
+    }
+  }
   return partes.length === 0 ? 'Sem nome' : partes.join(' | ');
 }
 
+// ---- alvo editável do "Renomear" ----
+// Pode ser um bloco de topo (texto/parágrafo) OU o subcampo "Referência" de uma
+// seção (edita a 1ª linha). undefined = sem alvo (não mostra o botão renomear).
+export interface AlvoTitulo {
+  campoId: string;
+  subcampoId?: string;
+}
+
+export function alvoTitulo(campos: Campo[]): AlvoTitulo | undefined {
+  const topo = campos.find(
+    (c) => (c.tipo === 'texto' || c.tipo === 'paragrafo') && nomeEhReferencia(c.nome),
+  );
+  if (topo !== undefined) return { campoId: topo.id };
+  for (const c of campos) {
+    if (c.tipo !== 'secao') continue;
+    const sub = (c.config.subcampos ?? []).find(
+      (s) => s.tipo === 'texto' && nomeEhReferencia(s.nome),
+    );
+    if (sub !== undefined) return { campoId: c.id, subcampoId: sub.id };
+  }
+  return undefined;
+}
+
+export function lerAlvoTitulo(registro: Registro, alvo: AlvoTitulo): string {
+  if (alvo.subcampoId === undefined) return textoDe(registro.valores[alvo.campoId]);
+  const linha0 = linhasDeSecao(registro, alvo.campoId)[0];
+  return linha0 === undefined ? '' : textoDe(linha0[alvo.subcampoId]);
+}
+
+// Monta o PATCH mínimo para gravar o novo título. Para subcampo, reescreve a
+// seção inteira preservando as demais linhas (só a 1ª linha muda; cria uma se
+// não houver nenhuma).
+export function patchAlvoTitulo(
+  registro: Registro,
+  alvo: AlvoTitulo,
+  texto: string,
+): Record<string, unknown> {
+  if (alvo.subcampoId === undefined) return { [alvo.campoId]: texto };
+  const brutas = registro.valores[alvo.campoId];
+  const linhas = Array.isArray(brutas) ? [...(brutas as unknown[])] : [];
+  const base = typeof linhas[0] === 'object' && linhas[0] !== null
+    ? { ...(linhas[0] as Record<string, unknown>) }
+    : {};
+  base[alvo.subcampoId] = texto;
+  linhas[0] = base;
+  return { [alvo.campoId]: linhas };
+}
+
 // Resumo = próximos até 3 campos de texto/número/data/seleção (fora os de
-// referência), com valor preenchido.
+// referência de topo), com valor preenchido.
 export function resumoDoRegistro(campos: Campo[], registro: Registro): string {
   const refs = new Set(camposReferencia(campos).map((c) => c.id));
   const tiposResumo: Campo['tipo'][] = ['texto', 'numero', 'data', 'selecao'];

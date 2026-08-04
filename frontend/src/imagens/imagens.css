@@ -134,6 +134,37 @@
   display: grid;
   place-items: center;
 }
+.visor__acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+.visor__baixar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e1);
+  min-height: var(--toque);
+  padding: 0 var(--e3);
+  border: 1px solid rgba(238, 243, 236, 0.35);
+  border-radius: var(--raio);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--giz);
+  font-family: var(--mono);
+  font-size: 13px;
+  cursor: pointer;
+}
+.visor__baixar:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.visor__baixar:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+@media (max-width: 480px) {
+  .visor__baixar-txt {
+    display: none;
+  }
+}
 
 .trilho {
   flex: 1;

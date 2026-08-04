@@ -206,6 +206,14 @@ export const api = {
   apagarLixeiraDefinitivo: (id: string) =>
     pedir<void>(`/api/lixeira/${id}`, { method: 'DELETE' }),
 
+  // --- alavanca de edição (por conta, salva no servidor) ---
+  edicaoTrava: () => pedir<{ liberada: boolean }>('/api/conta/edicao-trava'),
+  salvarEdicaoTrava: (liberada: boolean) =>
+    pedir<{ liberada: boolean }>('/api/conta/edicao-trava', {
+      method: 'PATCH',
+      body: JSON.stringify({ liberada }),
+    }),
+
   // --- presença ao vivo ---
   presenca: () =>
     pedir<{

@@ -56,15 +56,9 @@ export function Preencher({
   const [solto, setSolto] = useState(false);
   const [adicionandoCampo, setAdicionandoCampo] = useState(false);
   // Alavanca de edição: por padrão TRAVADA, para ninguém abrir um registro para
-  // edição sem querer. Fica salva no aparelho (por planilha).
-  const chaveTrava = `edicaoLiberada:${colecao.id}`;
-  const [edicaoLiberada, setEdicaoLiberada] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(chaveTrava) === '1';
-    } catch {
-      return false;
-    }
-  });
+  // edição sem querer. O estado é salvo no SERVIDOR (por conta), então persiste
+  // entre aparelhos/sessões e vale para todos da mesma conta.
+  const [edicaoLiberada, setEdicaoLiberada] = useState(false);
   const carregandoMaisRef = useRef(false);
   const fimRef = useRef(fim);
   const registrosRef = useRef(registros);
@@ -188,16 +182,37 @@ export function Preencher({
   const alternarTrava = useCallback((): void => {
     setEdicaoLiberada((v) => {
       const novo = !v;
-      try {
-        localStorage.setItem(chaveTrava, novo ? '1' : '0');
-      } catch {
-        /* sem persistência não é problema */
-      }
       // Ao travar de novo, fecha qualquer edição aberta (volta ao seguro).
       if (!novo) setAberta(null);
+      // Persiste no servidor; se falhar, reverte o estado local.
+      void api.salvarEdicaoTrava(novo).catch(() => setEdicaoLiberada(v));
       return novo;
     });
-  }, [chaveTrava]);
+  }, []);
+
+  // Carrega o estado atual da trava (por conta) e mantém sincronizado em tempo
+  // real: se outra pessoa (ou aba) mudar a alavanca, todos acompanham.
+  useEffect(() => {
+    let vivo = true;
+    void api
+      .edicaoTrava()
+      .then((r) => {
+        if (vivo) setEdicaoLiberada(r.liberada);
+      })
+      .catch(() => {
+        /* mantém o padrão travado */
+      });
+    const cancelar = assinarRealtime((msg) => {
+      if (msg.tipo === 'trava' && vivo) {
+        setEdicaoLiberada(msg.liberada);
+        if (!msg.liberada) setAberta(null);
+      }
+    });
+    return () => {
+      vivo = false;
+      cancelar();
+    };
+  }, []);
 
   // Modo live: aplica em tempo real o que outras pessoas (ou outras abas) criam,
   // editam ou apagam. Tudo idempotente (dedupe por id), então o eco da própria

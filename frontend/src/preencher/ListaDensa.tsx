@@ -3,13 +3,14 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { ImageOff } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
-import type { Campo, Colecao, Registro } from '../../../shared/tipos';
+import type { Colecao, Registro } from '../../../shared/tipos';
 import {
-  campoTituloDoRegistro,
+  alvoTitulo,
   capaDoRegistro,
+  lerAlvoTitulo,
+  patchAlvoTitulo,
   resumoDoRegistro,
   temCampoImagem,
-  textoDe,
   tituloDoRegistro,
 } from './derivarResumo';
 import { Miniatura } from './Miniatura';
@@ -31,7 +32,7 @@ interface ItemProps {
   colecao: Colecao;
   comImagem: boolean;
   lado: number;
-  campoTitulo: Campo | undefined;
+  podeRenomear: boolean;
   editando: boolean;
   rascunho: string;
   salvando: boolean;
@@ -60,7 +61,7 @@ const ItemLista = memo(function ItemLista({
   colecao,
   comImagem,
   lado,
-  campoTitulo,
+  podeRenomear,
   editando,
   rascunho,
   salvando,
@@ -136,7 +137,7 @@ const ItemLista = memo(function ItemLista({
           </button>
         )}
       </div>
-      {campoTitulo !== undefined && !editando && (
+      {podeRenomear && !editando && (
         <button
           type="button"
           className="lista-item__renomear"
@@ -161,7 +162,7 @@ export function ListaDensa({
   aoAproximarFim,
 }: Props): JSX.Element {
   const comImagem = temCampoImagem(colecao.campos);
-  const campoTitulo = campoTituloDoRegistro(colecao.campos);
+  const alvo = alvoTitulo(colecao.campos);
   const lado = solto ? 72 : 56;
   const altura = alturaLinha(solto, lado);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -205,12 +206,12 @@ export function ListaDensa({
 
   const iniciarEdicao = useCallback(
     (r: Registro): void => {
-      if (campoTitulo === undefined) return;
+      if (alvo === undefined) return;
       setEditandoId(r.id);
-      setRascunho(textoDe(r.valores[campoTitulo.id]));
+      setRascunho(lerAlvoTitulo(r, alvo));
       setErro(null);
     },
-    [campoTitulo],
+    [alvo],
   );
 
   const cancelarEdicao = useCallback((): void => {
@@ -220,8 +221,8 @@ export function ListaDensa({
 
   const salvarNome = useCallback(
     async (r: Registro): Promise<void> => {
-      if (campoTitulo === undefined || editandoId !== r.id || salvando) return;
-      const atual = textoDe(r.valores[campoTitulo.id]);
+      if (alvo === undefined || editandoId !== r.id || salvando) return;
+      const atual = lerAlvoTitulo(r, alvo);
       const novo = rascunho.trim();
       if (novo === atual.trim()) {
         setEditandoId(null);
@@ -230,7 +231,7 @@ export function ListaDensa({
       setSalvando(true);
       setErro(null);
       try {
-        const atualizado = await api.editarRegistro(r.id, { [campoTitulo.id]: novo });
+        const atualizado = await api.editarRegistro(r.id, patchAlvoTitulo(r, alvo, novo));
         aoAtualizar(atualizado);
         setEditandoId(null);
       } catch (e) {
@@ -239,7 +240,7 @@ export function ListaDensa({
         setSalvando(false);
       }
     },
-    [campoTitulo, editandoId, salvando, rascunho, aoAtualizar],
+    [alvo, editandoId, salvando, rascunho, aoAtualizar],
   );
 
   const aoTeclarNome = useCallback(
@@ -287,7 +288,7 @@ export function ListaDensa({
                 colecao={colecao}
                 comImagem={comImagem}
                 lado={lado}
-                campoTitulo={campoTitulo}
+                podeRenomear={alvo !== undefined}
                 editando={editandoId === r.id}
                 rascunho={rascunho}
                 salvando={salvando}

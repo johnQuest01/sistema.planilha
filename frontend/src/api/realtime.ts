@@ -13,6 +13,7 @@ export type MsgRealtime =
   | { tipo: 'entrada'; entrada: Entrada }
   | { tipo: 'registro'; acao: 'criado' | 'atualizado'; colecaoId: string; registro: unknown }
   | { tipo: 'registro'; acao: 'apagado'; colecaoId: string; registroId: string }
+  | { tipo: 'trava'; liberada: boolean }
   | { tipo: 'pong' };
 
 type Assinante = (msg: MsgRealtime) => void;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as EventoTeclado } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { FotoZoomavel } from './FotoZoomavel';
 import { urlCheia, urlMini } from './urls';
 import './imagens.css';
@@ -19,6 +19,35 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
   const dialogoRef = useRef<HTMLDivElement>(null);
   const [ativo, setAtivo] = useState(indiceInicial);
   const [zoomAtivo, setZoomAtivo] = useState(false);
+  const [baixando, setBaixando] = useState(false);
+
+  // Baixa a foto ATUAL em alta resolução (a "cheia" do R2). Busca como blob para
+  // forçar o download (o atributo download é ignorado entre origens); se o fetch
+  // falhar (rede/CORS), abre numa aba nova como alternativa.
+  const baixar = useCallback(async (): Promise<void> => {
+    const key = keys[ativo];
+    if (key === undefined || baixando) return;
+    const url = urlCheia(key);
+    const nome = key.split('/').pop() ?? 'foto.jpg';
+    setBaixando(true);
+    try {
+      const resp = await fetch(url, { mode: 'cors' });
+      if (!resp.ok) throw new Error('falha ao baixar');
+      const blob = await resp.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = nome;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      window.open(url, '_blank', 'noopener');
+    } finally {
+      setBaixando(false);
+    }
+  }, [ativo, keys, baixando]);
 
   const irPara = useCallback((i: number, comportamento: ScrollBehavior) => {
     const alvo = quadrosRef.current[i];
@@ -106,9 +135,22 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
           {ativo + 1} / {keys.length}
           {zoomAtivo ? ' · arraste para mover' : ''}
         </span>
-        <button type="button" className="visor__fechar" aria-label="Fechar" onClick={aoFechar}>
-          <X size={22} />
-        </button>
+        <div className="visor__acoes">
+          <button
+            type="button"
+            className="visor__baixar"
+            aria-label="Baixar imagem em alta resolução"
+            title="Baixar imagem em alta resolução"
+            disabled={baixando}
+            onClick={() => void baixar()}
+          >
+            <Download size={20} />
+            <span className="visor__baixar-txt">{baixando ? 'Baixando…' : 'Baixar'}</span>
+          </button>
+          <button type="button" className="visor__fechar" aria-label="Fechar" onClick={aoFechar}>
+            <X size={22} />
+          </button>
+        </div>
       </div>
 
       <div className={`trilho${zoomAtivo ? ' trilho--travado' : ''}`} ref={trilhoRef}>

@@ -7,10 +7,11 @@ import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
 import { CampoValor } from './CampoValor';
 import {
-  campoTituloDoRegistro,
+  alvoTitulo,
   capaDoRegistro,
   formatarValor,
-  textoDe,
+  lerAlvoTitulo,
+  patchAlvoTitulo,
   tituloDoRegistro,
 } from './derivarResumo';
 import { Miniatura } from './Miniatura';
@@ -36,7 +37,7 @@ interface LinhaProps {
   r: Registro;
   colecao: Colecao;
   temImagem: boolean;
-  campoTitulo: Campo | undefined;
+  podeRenomear: boolean;
   edicao: Edicao | null;
   rascunho: unknown;
   renomeando: boolean;
@@ -65,7 +66,7 @@ const LinhaTabela = memo(function LinhaTabela({
   r,
   colecao,
   temImagem,
-  campoTitulo,
+  podeRenomear,
   edicao,
   rascunho,
   renomeando,
@@ -153,7 +154,7 @@ const LinhaTabela = memo(function LinhaTabela({
             <button type="button" className="tabela-titulo" onClick={() => aoAbrirFicha(r)}>
               {titulo}
             </button>
-            {campoTitulo !== undefined && (
+            {podeRenomear && (
               <button
                 type="button"
                 className="tabela-renomear-btn"
@@ -262,7 +263,7 @@ export function Tabela({
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
   const temImagem = colecao.campos.some((c) => c.tipo === 'imagem');
-  const campoTitulo = campoTituloDoRegistro(colecao.campos);
+  const alvo = alvoTitulo(colecao.campos);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Qualquer usuário logado pode enviar registros para a lixeira (soft-delete).
   const podeApagar = aoApagar !== undefined && estado.fase === 'logado';
@@ -303,13 +304,13 @@ export function Tabela({
 
   const iniciarRenomear = useCallback(
     (r: Registro): void => {
-      if (campoTitulo === undefined) return;
+      if (alvo === undefined) return;
       setEdicao(null);
       setRenomeandoId(r.id);
-      setRascunhoTitulo(textoDe(r.valores[campoTitulo.id]));
+      setRascunhoTitulo(lerAlvoTitulo(r, alvo));
       setErroTitulo(null);
     },
-    [campoTitulo],
+    [alvo],
   );
 
   const cancelarRenomear = useCallback((): void => {
@@ -319,8 +320,8 @@ export function Tabela({
 
   const salvarTitulo = useCallback(
     async (r: Registro): Promise<void> => {
-      if (campoTitulo === undefined || renomeandoId !== r.id || salvandoTitulo) return;
-      const atual = textoDe(r.valores[campoTitulo.id]);
+      if (alvo === undefined || renomeandoId !== r.id || salvandoTitulo) return;
+      const atual = lerAlvoTitulo(r, alvo);
       const novo = rascunhoTitulo.trim();
       if (novo === atual.trim()) {
         setRenomeandoId(null);
@@ -329,7 +330,7 @@ export function Tabela({
       setSalvandoTitulo(true);
       setErroTitulo(null);
       try {
-        const atualizado = await api.editarRegistro(r.id, { [campoTitulo.id]: novo });
+        const atualizado = await api.editarRegistro(r.id, patchAlvoTitulo(r, alvo, novo));
         aoAtualizar(atualizado);
         setRenomeandoId(null);
       } catch (e) {
@@ -338,7 +339,7 @@ export function Tabela({
         setSalvandoTitulo(false);
       }
     },
-    [campoTitulo, renomeandoId, salvandoTitulo, rascunhoTitulo, aoAtualizar],
+    [alvo, renomeandoId, salvandoTitulo, rascunhoTitulo, aoAtualizar],
   );
 
   const aoTeclarTitulo = useCallback(
@@ -410,7 +411,7 @@ export function Tabela({
                 r={r}
                 colecao={colecao}
                 temImagem={temImagem}
-                campoTitulo={campoTitulo}
+                podeRenomear={alvo !== undefined}
                 edicao={edicao}
                 rascunho={rascunho}
                 renomeando={renomeandoId === r.id}
