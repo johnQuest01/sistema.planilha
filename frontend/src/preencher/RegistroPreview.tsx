@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ExternalLink, Lock, Pencil, Share2, Trash2 } from 'lucide-react';
+import { ExternalLink, Link as LinkIcon, Lock, Pencil, Share2, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
@@ -175,6 +175,7 @@ export function RegistroPreview({
   const [preparandoShare, setPreparandoShare] = useState(false);
   const [enviandoShare, setEnviandoShare] = useState(false);
   const [imgShare, setImgShare] = useState<File | null>(null);
+  const [gerandoLink, setGerandoLink] = useState(false);
   const [avisoShare, setAvisoShare] = useState<string | null>(null);
 
   useEffect(() => {
@@ -236,6 +237,42 @@ export function RegistroPreview({
       setImgShare(f);
     } finally {
       setPreparandoShare(false);
+    }
+  }
+
+  // Alternativa: link público (rápido, qualidade máxima). Gera o token dos blocos
+  // selecionados e compartilha a URL; se o share não abrir, copia para a área de
+  // transferência (e, em último caso, mostra o link para copiar na mão).
+  async function enviarLink(): Promise<void> {
+    if (gerandoLink) return;
+    if (selShare.size === 0) {
+      setAvisoShare('Selecione ao menos um campo para compartilhar.');
+      return;
+    }
+    setGerandoLink(true);
+    setAvisoShare(null);
+    try {
+      const { token } = await api.criarLinkRegistro(registro.id, [...selShare]);
+      const url = `${window.location.origin}/r/${token}`;
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ title: tituloAtual, text: tituloAtual, url });
+          sairShare();
+          return;
+        } catch (e) {
+          if (e instanceof DOMException && e.name === 'AbortError') return; // usuário cancelou
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        setAvisoShare('Link copiado! Cole no WhatsApp.');
+      } catch {
+        setAvisoShare(`Link: ${url}`);
+      }
+    } catch {
+      setAvisoShare('Não foi possível gerar o link. Tente novamente.');
+    } finally {
+      setGerandoLink(false);
     }
   }
 
@@ -547,8 +584,16 @@ export function RegistroPreview({
               </Botao>
             )}
             <Botao
+              variante="padrao"
+              disabled={gerandoLink || selShare.size === 0}
+              onClick={() => void enviarLink()}
+            >
+              <LinkIcon size={16} aria-hidden />
+              {gerandoLink ? 'Gerando link…' : 'Enviar link'}
+            </Botao>
+            <Botao
               variante="fantasma"
-              disabled={preparandoShare || enviandoShare}
+              disabled={preparandoShare || enviandoShare || gerandoLink}
               onClick={sairShare}
             >
               Cancelar

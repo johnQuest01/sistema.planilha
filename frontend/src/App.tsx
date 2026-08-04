@@ -13,6 +13,10 @@ import { Presenca } from './ui/Presenca';
 const Colecao = lazy(() => import('./telas/Colecao').then((m) => ({ default: m.Colecao })));
 const Config = lazy(() => import('./telas/Config').then((m) => ({ default: m.Config })));
 const Lixeira = lazy(() => import('./telas/Lixeira').then((m) => ({ default: m.Lixeira })));
+// Página pública (sem login) do link de compartilhamento.
+const RegistroPublico = lazy(() =>
+  import('./publico/RegistroPublico').then((m) => ({ default: m.RegistroPublico })),
+);
 
 function Protegida({ children }: { children: JSX.Element }): JSX.Element {
   const { estado } = useAuth();
@@ -26,6 +30,7 @@ function Rotas(): JSX.Element {
   return (
     <Suspense fallback={<Carregando />}>
       <Routes>
+        <Route path="/r/:token" element={<RegistroPublico />} />
         <Route
           path="/entrar"
           element={estado.fase === 'logado' ? <Navigate to="/" replace /> : <Entrar />}

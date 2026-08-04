@@ -17,15 +17,23 @@ function opcional(nome: string, padrao: string): string {
 
 const isProd = process.env.NODE_ENV === 'production';
 
+// Em produção, sem segredo o processo não sobe (falhar no deploy é melhor que
+// assinar sessão com string de dev). Em dev, fallback funcional.
+const cookieSecret = isProd
+  ? obrigatoria('COOKIE_SECRET')
+  : opcional('COOKIE_SECRET', 'dev-inseguro-nao-use-em-producao');
+
 export const config = {
   databaseUrl: obrigatoria('DATABASE_URL'),
   port: Number(process.env.PORT ?? 3333),
   corsOrigin: opcional('CORS_ORIGIN', 'http://localhost:5173'),
-  // Em produção, sem segredo o processo não sobe (falhar no deploy é melhor que
-  // assinar sessão com string de dev). Em dev, fallback funcional.
-  cookieSecret: isProd
-    ? obrigatoria('COOKIE_SECRET')
-    : opcional('COOKIE_SECRET', 'dev-inseguro-nao-use-em-producao'),
+  cookieSecret,
+  // ---- Link público de compartilhamento (ADMIN BRUNO define) ----
+  // Segredo que ASSINA os links públicos. Trocá-lo REVOGA todos os links já
+  // gerados (env LINK_PUBLICO_SEGREDO). Sem env, reusa o COOKIE_SECRET.
+  linkPublicoSegredo: opcional('LINK_PUBLICO_SEGREDO', cookieSecret),
+  // Prazo (em dias) até o link expirar. 0 = nunca expira. (env LINK_PUBLICO_DIAS)
+  linkPublicoDias: Math.max(0, Math.floor(Number(opcional('LINK_PUBLICO_DIAS', '30')) || 0)),
   // E-mail do dono cuja conta é o "workspace" compartilhado: todo cadastro novo
   // cai nessa conta. Configurável por env; default é a conta do Bruno.
   workspaceOwnerEmail: opcional('WORKSPACE_OWNER_EMAIL', 'brunoacre07@gmail.com').toLowerCase(),

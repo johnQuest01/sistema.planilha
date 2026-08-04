@@ -146,6 +146,18 @@ export async function obterColecaoIdDoRegistro(tx: Tx, id: string): Promise<stri
   return linha?.colecao_id ?? null;
 }
 
+// Registro + a estrutura VIGENTE de blocos (própria ou herdada da coleção).
+// Usada pelo link público para renderizar um registro isolado. Null → 404.
+export async function lerRegistroComCampos(
+  tx: Tx,
+  id: string,
+): Promise<{ registro: Registro; campos: Campo[]; colecaoId: string } | null> {
+  const linha = await lerRegistro(tx, id);
+  if (linha === null) return null;
+  const campos = await camposEfetivos(tx, linha);
+  return { registro: mapRegistro(linha), campos, colecaoId: linha.colecao_id };
+}
+
 // Keys de imagem guardadas em `valores` para um campo. Robusto a valor ausente/torto.
 function keysDeImagem(valores: Record<string, unknown>, campoId: string): string[] {
   const v = valores[campoId];

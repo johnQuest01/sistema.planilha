@@ -14,6 +14,7 @@ import { rotasCampos } from './rotas/campos';
 import { rotasRegistros } from './rotas/registros';
 import { rotasUpload } from './rotas/upload';
 import { rotasConfig } from './rotas/config';
+import { rotasPublico } from './rotas/publico';
 import { rotasConta } from './rotas/conta';
 import { rotasPresenca } from './rotas/presenca';
 import { rotasLixeira } from './rotas/lixeira';
@@ -67,6 +68,7 @@ export function buildServer() {
   });
 
   app.register(rotasConfig);
+  app.register(rotasPublico);
   app.register(rotasConta);
   app.register(rotasAuth);
   app.register(rotasColecoes);
