@@ -141,6 +141,43 @@ export const reordenarCamposSchema = z
   .object({ ids: z.array(z.string().uuid()).min(1).max(200) })
   .strict();
 
+// Um campo COMPLETO como o front o guarda (id/ordem inclusos). Usado quando o
+// registro traz seu próprio corpo (independente do corpo da coleção). Reaproveita
+// as mesmas regras de config/tipo dos blocos da coleção.
+const campoCompletoSchema = z
+  .object({
+    id: z.string().uuid(),
+    // colecaoId/ordem são carregados pelo front; aceitos mas não confiáveis aqui.
+    colecaoId: z.string().uuid().optional(),
+    ordem: z.number().finite().optional(),
+    nome: z.string().trim().min(1).max(60),
+    tipo: tipoSchema,
+    config: configSchema.default({}),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    exigeOpcoesSeSelecao(val.tipo, val.config.opcoes, ctx);
+    proibeMaxFotosSeNaoImagem(val.tipo, val.config.maxFotos, ctx);
+    exigeSubcamposSeSecao(val.tipo, val.config.subcampos, ctx);
+  });
+
+// Corpo próprio de um registro: lista de blocos (0..200) com ids únicos.
+export const corpoRegistroSchema = z
+  .array(campoCompletoSchema)
+  .max(200)
+  .superRefine((campos, ctx) => {
+    const vistos = new Set<string>();
+    for (const c of campos) {
+      if (vistos.has(c.id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'ids de bloco repetidos no corpo' });
+        return;
+      }
+      vistos.add(c.id);
+    }
+  });
+
+export type CampoCompleto = z.infer<typeof campoCompletoSchema>;
+
 export type CriarCampo = z.infer<typeof criarCampoSchema>;
 export type EditarCampo = z.infer<typeof editarCampoSchema>;
 export type ReordenarCampos = z.infer<typeof reordenarCamposSchema>;

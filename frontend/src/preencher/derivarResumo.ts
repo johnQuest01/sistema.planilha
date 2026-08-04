@@ -13,6 +13,15 @@ export function textoDe(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
 
+// Corpo (blocos) VIGENTE de um registro: o próprio, quando o registro tem
+// estrutura independente; senão o compartilhado da coleção. Tudo que deriva
+// título/resumo/capa/edição deve usar ISTO (não colecao.campos direto).
+export function camposDoRegistro(colecao: { campos: Campo[] }, registro: Registro): Campo[] {
+  return Array.isArray(registro.campos) && registro.campos.length > 0
+    ? registro.campos
+    : colecao.campos;
+}
+
 // Valor de um campo formatado para leitura (célula/resumo). Imagem não entra aqui.
 // Aceita Campo ou SubCampo (só precisa de tipo + config).
 export function formatarValor(

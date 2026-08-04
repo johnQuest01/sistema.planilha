@@ -32,6 +32,7 @@ interface LinhaLixeiraReg {
   colecao_nome: string;
   registro_id: string;
   valores: Record<string, unknown> | null;
+  campos?: unknown;
   fotos_referencia: unknown;
   criado_por: string | null;
   criado_por_id: string | null;
@@ -62,6 +63,7 @@ interface LinhaRegistro {
   id: string;
   colecao_id: string;
   valores: Record<string, unknown> | null;
+  campos?: unknown;
   criado_por: string | null;
   criado_por_id: string | null;
   criado_em: Date;
@@ -234,7 +236,7 @@ export async function moverRegistroParaLixeira(
   ator: Ator,
 ): Promise<ResultadoMover> {
   const regs = await tx<LinhaRegistro[]>`
-    select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
+    select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
     from registros where id = ${registroId}`;
   const atual = regs[0];
   if (atual === undefined) return 'nao-encontrado';
@@ -250,21 +252,26 @@ export async function moverRegistroParaLixeira(
     select nome from colecoes where id = ${atual.colecao_id}`;
   const colecaoNome = nomes[0]?.nome ?? '';
 
-  const campos = await tx<LinhaCampo[]>`
-    select id, nome, tipo, config from campos
-    where colecao_id = ${atual.colecao_id}
-    order by ordem asc`;
+  // Corpo VIGENTE do registro: o próprio (se tiver) ou o compartilhado da coleção.
+  const corpoProprio = Array.isArray(atual.campos) ? (atual.campos as LinhaCampo[]) : null;
+  const campos =
+    corpoProprio ??
+    (await tx<LinhaCampo[]>`
+      select id, nome, tipo, config from campos
+      where colecao_id = ${atual.colecao_id}
+      order by ordem asc`);
   const valores = atual.valores ?? {};
   const fotosReferencia = fotosDoBlocoReferencia(campos, valores);
 
   await tx`
     insert into lixeira_registros (
-      conta_id, colecao_id, colecao_nome, registro_id, valores, fotos_referencia,
+      conta_id, colecao_id, colecao_nome, registro_id, valores, campos, fotos_referencia,
       criado_por, criado_por_id, criado_em, atualizado_em,
       apagado_por_id, apagado_por_nome
     ) values (
       ${contaId}::uuid, ${atual.colecao_id}, ${colecaoNome}, ${atual.id},
-      ${tx.json(valores as never)}, ${tx.json(fotosReferencia as never)},
+      ${tx.json(valores as never)}, ${atual.campos == null ? null : tx.json(atual.campos as never)},
+      ${tx.json(fotosReferencia as never)},
       ${atual.criado_por}, ${atual.criado_por_id}, ${atual.criado_em}, ${atual.atualizado_em},
       ${ator.id}::uuid, ${ator.nome}
     )`;
@@ -388,7 +395,7 @@ export async function restaurarDaLixeira(
   lixeiraId: string,
 ): Promise<{ resultado: ResultadoRestaurar; registro?: Registro }> {
   const regs = await tx<LinhaLixeiraReg[]>`
-    select id, conta_id, colecao_id, colecao_nome, registro_id, valores, fotos_referencia,
+    select id, conta_id, colecao_id, colecao_nome, registro_id, valores, campos, fotos_referencia,
            criado_por, criado_por_id, criado_em, atualizado_em,
            apagado_em, apagado_por_id, apagado_por_nome
     from lixeira_registros where id = ${lixeiraId}`;
@@ -402,14 +409,15 @@ export async function restaurarDaLixeira(
       select id from registros where id = ${item.registro_id}`;
     if (conflito[0] !== undefined) return { resultado: 'id-ocupado' };
 
+    const corpo = item.campos == null ? null : tx.json(item.campos as never);
     const inseridos = await tx<LinhaRegistro[]>`
       insert into registros (
-        id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
+        id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
       ) values (
         ${item.registro_id}, ${item.colecao_id}, ${tx.json((item.valores ?? {}) as never)},
-        ${item.criado_por}, ${item.criado_por_id}, ${item.criado_em}, now()
+        ${corpo}, ${item.criado_por}, ${item.criado_por_id}, ${item.criado_em}, now()
       )
-      returning id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em`;
+      returning id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em`;
 
     const reg = inseridos[0];
     if (reg === undefined) throw new Error('restore não retornou registro');
@@ -422,6 +430,7 @@ export async function restaurarDaLixeira(
         id: reg.id,
         colecaoId: reg.colecao_id,
         valores: reg.valores ?? {},
+        campos: Array.isArray(reg.campos) ? (reg.campos as Registro['campos']) : null,
         criadoPor: reg.criado_por,
         criadoPorId: reg.criado_por_id,
         criadoEm: reg.criado_em.toISOString(),

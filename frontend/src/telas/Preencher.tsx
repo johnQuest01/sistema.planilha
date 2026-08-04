@@ -10,7 +10,7 @@ import { ListaDensa } from '../preencher/ListaDensa';
 import { Ficha } from '../preencher/Ficha';
 import { BuscaReferencia } from '../preencher/BuscaReferencia';
 import { RegistroPreview } from '../preencher/RegistroPreview';
-import { tituloDoRegistro } from '../preencher/derivarResumo';
+import { camposDoRegistro, tituloDoRegistro } from '../preencher/derivarResumo';
 import { valoresVaziosDe } from '../preencher/valoresVazios';
 import { FolhaInferior } from '../ui/FolhaInferior';
 import { FormBloco, type DadosBloco } from './FormBloco';
@@ -146,8 +146,20 @@ export function Preencher({
     }
   }
 
-  async function duplicarVazio(): Promise<void> {
-    await novo(valoresVaziosDe(colecao.campos));
+  // Cria um novo registro a partir de outro: em branco com a mesma estrutura ou
+  // duplicando os dados. Quando `campos` vem preenchido, o novo nasce com CORPO
+  // próprio (independente da coleção).
+  async function criarDerivado(base: {
+    campos?: Campo[];
+    valores: Record<string, unknown>;
+  }): Promise<void> {
+    try {
+      const r = await api.criarRegistro(colecao.id, base.valores, base.campos);
+      setRegistros((atual) => (atual === null ? [r] : [r, ...atual]));
+      setAberta(r);
+    } catch (e) {
+      setErro(e instanceof ErroApi ? e.message : 'não foi possível criar');
+    }
   }
 
   const aoAtualizar = useCallback((r: Registro): void => {
@@ -389,7 +401,7 @@ export function Preencher({
 
       {previa !== null && (
         <FolhaInferior
-          titulo={tituloDoRegistro(colecao.campos, previa)}
+          titulo={tituloDoRegistro(camposDoRegistro(colecao, previa), previa)}
           subtitulo={
             edicaoLiberada
               ? 'Prévia — toque em Abrir registro para editar'
@@ -418,7 +430,7 @@ export function Preencher({
           aoFechar={() => setAberta(null)}
           aoAtualizar={aoAtualizar}
           aoApagar={aoApagar}
-          aoDuplicarVazio={() => void duplicarVazio()}
+          aoCriarDerivado={criarDerivado}
         />
       )}
     </>

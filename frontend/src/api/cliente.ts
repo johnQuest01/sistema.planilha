@@ -189,12 +189,23 @@ export const api = {
     pedir<Registro[]>(
       `/api/colecoes/${colecaoId}/registros/busca?q=${encodeURIComponent(termo)}`,
     ),
-  criarRegistro: (colecaoId: string, valores: Record<string, unknown> = {}) =>
-    pedir<Registro>(`/api/colecoes/${colecaoId}/registros`, corpoJson({ valores })),
+  // `campos` opcional: quando enviado (duplicar/novo-a-partir-de outro registro),
+  // o novo registro nasce com CORPO próprio (estrutura independente da coleção).
+  criarRegistro: (colecaoId: string, valores: Record<string, unknown> = {}, campos?: Campo[]) =>
+    pedir<Registro>(
+      `/api/colecoes/${colecaoId}/registros`,
+      corpoJson(campos === undefined ? { valores } : { valores, campos }),
+    ),
   editarRegistro: (id: string, valores: Record<string, unknown>) =>
     pedir<Registro>(`/api/registros/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ valores }),
+    }),
+  // Substitui o corpo (blocos) de UM registro, tornando-o independente da coleção.
+  salvarCorpoRegistro: (id: string, campos: Campo[]) =>
+    pedir<Registro>(`/api/registros/${id}/corpo`, {
+      method: 'PUT',
+      body: JSON.stringify({ campos }),
     }),
   apagarRegistro: (id: string) =>
     pedir<void>(`/api/registros/${id}`, { method: 'DELETE' }),

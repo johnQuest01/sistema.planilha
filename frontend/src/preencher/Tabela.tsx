@@ -8,6 +8,7 @@ import { useAuth } from '../contexto/Auth';
 import { CampoValor } from './CampoValor';
 import {
   alvoTitulo,
+  camposDoRegistro,
   capaDoRegistro,
   formatarValor,
   lerAlvoTitulo,
@@ -37,7 +38,6 @@ interface LinhaProps {
   r: Registro;
   colecao: Colecao;
   temImagem: boolean;
-  podeRenomear: boolean;
   edicao: Edicao | null;
   rascunho: unknown;
   renomeando: boolean;
@@ -66,7 +66,6 @@ const LinhaTabela = memo(function LinhaTabela({
   r,
   colecao,
   temImagem,
-  podeRenomear,
   edicao,
   rascunho,
   renomeando,
@@ -90,8 +89,11 @@ const LinhaTabela = memo(function LinhaTabela({
   aoConfirmarApagar,
   aoCancelarApagar,
 }: LinhaProps): JSX.Element {
-  const capa = capaDoRegistro(colecao.campos, r);
-  const titulo = tituloDoRegistro(colecao.campos, r);
+  // Título/capa/renomear saem do corpo VIGENTE do registro (próprio ou da coleção).
+  const camposReg = camposDoRegistro(colecao, r);
+  const capa = capaDoRegistro(camposReg, r);
+  const titulo = tituloDoRegistro(camposReg, r);
+  const podeRenomear = alvoTitulo(camposReg) !== undefined;
 
   return (
     <tr>
@@ -263,7 +265,6 @@ export function Tabela({
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
   const temImagem = colecao.campos.some((c) => c.tipo === 'imagem');
-  const alvo = alvoTitulo(colecao.campos);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Qualquer usuário logado pode enviar registros para a lixeira (soft-delete).
   const podeApagar = aoApagar !== undefined && estado.fase === 'logado';
@@ -304,13 +305,14 @@ export function Tabela({
 
   const iniciarRenomear = useCallback(
     (r: Registro): void => {
+      const alvo = alvoTitulo(camposDoRegistro(colecao, r));
       if (alvo === undefined) return;
       setEdicao(null);
       setRenomeandoId(r.id);
       setRascunhoTitulo(lerAlvoTitulo(r, alvo));
       setErroTitulo(null);
     },
-    [alvo],
+    [colecao],
   );
 
   const cancelarRenomear = useCallback((): void => {
@@ -320,6 +322,7 @@ export function Tabela({
 
   const salvarTitulo = useCallback(
     async (r: Registro): Promise<void> => {
+      const alvo = alvoTitulo(camposDoRegistro(colecao, r));
       if (alvo === undefined || renomeandoId !== r.id || salvandoTitulo) return;
       const atual = lerAlvoTitulo(r, alvo);
       const novo = rascunhoTitulo.trim();
@@ -339,7 +342,7 @@ export function Tabela({
         setSalvandoTitulo(false);
       }
     },
-    [alvo, renomeandoId, salvandoTitulo, rascunhoTitulo, aoAtualizar],
+    [colecao, renomeandoId, salvandoTitulo, rascunhoTitulo, aoAtualizar],
   );
 
   const aoTeclarTitulo = useCallback(
@@ -411,7 +414,6 @@ export function Tabela({
                 r={r}
                 colecao={colecao}
                 temImagem={temImagem}
-                podeRenomear={alvo !== undefined}
                 edicao={edicao}
                 rascunho={rascunho}
                 renomeando={renomeandoId === r.id}

@@ -54,6 +54,12 @@ export interface Registro {
   id: string;
   colecaoId: string;
   valores: Record<string, unknown>;   // chave = Campo.id
+  /**
+   * Corpo (blocos) PRÓPRIO do registro. Quando presente, este registro tem sua
+   * estrutura independente e editá-la não afeta os demais. Quando null/ausente,
+   * o registro herda o corpo COMPARTILHADO da coleção (Colecao.campos).
+   */
+  campos?: Campo[] | null;
   criadoPor: string | null;           // nome de quem criou (exibição)
   criadoPorId: string | null;         // id de quem criou (permissão de apagar)
   criadoEm: string;

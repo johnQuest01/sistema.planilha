@@ -896,3 +896,65 @@
   border: 1px dashed var(--linha-2);
   border-radius: var(--raio);
 }
+
+/* --- Ações no topo da ficha + editor de blocos por registro --- */
+.ficha__acoes-topo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
+
+.corpo-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.corpo-editor__aviso {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tinta-2);
+}
+.corpo-editor__lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+}
+.corpo-editor__bloco {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2);
+  border: 1px solid var(--linha-2);
+  border-radius: var(--raio);
+  background: var(--papel, rgba(255, 255, 255, 0.02));
+}
+.corpo-editor__mover {
+  display: flex;
+  flex-direction: column;
+}
+.corpo-editor__icone {
+  display: inline-flex;
+  color: var(--tinta-2);
+}
+.corpo-editor__corpo {
+  min-width: 0;
+}
+.corpo-editor__nome {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.corpo-editor__sub {
+  margin-top: 2px;
+}
+.corpo-editor__acoes {
+  display: inline-flex;
+  gap: var(--e1);
+}
+.corpo-editor__item--editar {
+  padding: var(--e2);
+  border: 1px solid var(--linha-2);
+  border-radius: var(--raio);
+}

@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { Trash2, CopyPlus } from 'lucide-react';
+import { Trash2, CopyPlus, Copy, SlidersHorizontal } from 'lucide-react';
 import { api } from '../api/cliente';
-import type { Colecao, Registro } from '../../../shared/tipos';
+import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
 import { FolhaInferior } from '../ui/FolhaInferior';
 import { Botao } from '../ui/Botao';
 import { CampoValor } from './CampoValor';
 import { SecaoEditor, linhasDe } from './SecaoEditor';
 import { Grade } from '../imagens/Grade';
-import { keysDoCampo, tituloDoRegistro } from './derivarResumo';
+import { camposDoRegistro, keysDoCampo, tituloDoRegistro } from './derivarResumo';
+import { valoresVaziosDe } from './valoresVazios';
+import { CorpoRegistroEditor } from './CorpoRegistroEditor';
 import './preencher.css';
 
 const fmtPreenchido = new Intl.DateTimeFormat('pt-BR', {
@@ -26,12 +28,13 @@ interface Props {
   aoFechar: () => void;
   aoAtualizar: (r: Registro) => void;
   aoApagar: (id: string) => void;
-  aoDuplicarVazio: () => void;
+  /** Cria um novo registro a partir deste (mesma estrutura em branco ou duplicado). */
+  aoCriarDerivado: (base: { campos?: Campo[]; valores: Record<string, unknown> }) => Promise<void>;
 }
 
 const DEBOUNCE_MS = 400;
 
-export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDuplicarVazio }: Props): JSX.Element {
+export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCriarDerivado }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   // Qualquer usuário logado pode enviar o registro para a lixeira (soft-delete, dá para
@@ -43,14 +46,25 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDu
   const sujosRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmando, setConfirmando] = useState(false);
-  const [duplicando, setDuplicando] = useState(false);
+  const [criando, setCriando] = useState<null | 'branco' | 'copia'>(null);
+  const [editandoBlocos, setEditandoBlocos] = useState(false);
+  const [salvandoCorpo, setSalvandoCorpo] = useState(false);
+  const [erroCorpo, setErroCorpo] = useState<string | null>(null);
   const fichaRef = useRef<HTMLDivElement>(null);
+
+  // Corpo VIGENTE deste registro (o próprio, se independente; senão o da coleção).
+  const corpo = camposDoRegistro(colecao, registro);
+  // Se o registro já tem corpo próprio, os derivados herdam esse corpo; senão
+  // herdam o corpo COMPARTILHADO da coleção (campos = undefined).
+  const corpoParaDerivar = Array.isArray(registro.campos) ? corpo : undefined;
 
   useEffect(() => {
     setValores(registro.valores);
     valoresRef.current = registro.valores;
     sujosRef.current.clear();
     setConfirmando(false);
+    setEditandoBlocos(false);
+    setErroCorpo(null);
   }, [registro.id]);
 
   // Enter (e a seta "próximo" do teclado do iPhone) avança para o próximo campo, para
@@ -132,18 +146,45 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDu
     aoFechar();
   }
 
-  async function duplicarVazio(): Promise<void> {
-    setDuplicando(true);
+  async function novoEmBranco(): Promise<void> {
+    setCriando('branco');
     await flush();
-    aoDuplicarVazio();
-    setDuplicando(false);
+    await aoCriarDerivado({ campos: corpoParaDerivar, valores: valoresVaziosDe(corpo) });
+    setCriando(null);
+  }
+
+  async function duplicarRegistro(): Promise<void> {
+    setCriando('copia');
+    await flush();
+    // Duplica com os dados atuais (inclui as mesmas fotos, por referência).
+    await aoCriarDerivado({ campos: corpoParaDerivar, valores: { ...valoresRef.current } });
+    setCriando(null);
+  }
+
+  // Persiste o novo corpo (blocos) SÓ deste registro. O servidor poda os valores
+  // que não cabem mais no corpo e devolve o registro já ajustado.
+  async function salvarCorpo(novos: Campo[]): Promise<void> {
+    setErroCorpo(null);
+    setSalvandoCorpo(true);
+    try {
+      await flush();
+      const atualizado = await api.salvarCorpoRegistro(registro.id, novos);
+      valoresRef.current = atualizado.valores;
+      setValores(atualizado.valores);
+      sujosRef.current.clear();
+      aoAtualizarRef.current(atualizado);
+    } catch {
+      setErroCorpo('não foi possível salvar os blocos deste registro');
+    } finally {
+      setSalvandoCorpo(false);
+    }
   }
 
   const registroLocal: Registro = { ...registro, valores };
 
   return (
     <FolhaInferior
-      titulo={tituloDoRegistro(colecao.campos, registroLocal)}
+      titulo={tituloDoRegistro(corpo, registroLocal)}
       subtitulo={
         <>
           {colecao.nome}
@@ -154,14 +195,38 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoDu
       onFechar={fechar}
     >
       <div className="ficha" ref={fichaRef} onKeyDown={aoTeclar}>
-        <div className="ficha__bloco">
-          <Botao variante="padrao" onClick={() => void duplicarVazio()} disabled={duplicando}>
+        <div className="ficha__bloco ficha__acoes-topo">
+          <Botao variante="padrao" onClick={() => void novoEmBranco()} disabled={criando !== null}>
             <CopyPlus size={16} />
-            {duplicando ? 'Criando…' : 'Novo em branco (mesma estrutura)'}
+            {criando === 'branco' ? 'Criando…' : 'Novo em branco (mesma estrutura)'}
+          </Botao>
+          <Botao variante="padrao" onClick={() => void duplicarRegistro()} disabled={criando !== null}>
+            <Copy size={16} />
+            {criando === 'copia' ? 'Duplicando…' : 'Duplicar registro'}
+          </Botao>
+          <Botao
+            variante={editandoBlocos ? 'primario' : 'fantasma'}
+            onClick={() => setEditandoBlocos((v) => !v)}
+            aria-pressed={editandoBlocos}
+          >
+            <SlidersHorizontal size={16} />
+            {editandoBlocos ? 'Concluir blocos' : 'Editar blocos'}
           </Botao>
         </div>
 
-        {colecao.campos.map((campo) => (
+        {editandoBlocos && (
+          <div className="ficha__bloco">
+            {erroCorpo !== null && <p className="aviso-erro">{erroCorpo}</p>}
+            <CorpoRegistroEditor
+              colecaoId={colecao.id}
+              campos={corpo}
+              ocupado={salvandoCorpo}
+              aoAplicar={(novos) => void salvarCorpo(novos)}
+            />
+          </div>
+        )}
+
+        {corpo.map((campo) => (
           <div key={campo.id} className="ficha__bloco">
             {campo.config.titulo !== undefined && campo.config.titulo !== '' && (
               <h3 className="bloco-titulo">{campo.config.titulo}</h3>

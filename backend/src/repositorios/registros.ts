@@ -1,6 +1,6 @@
 import type { Tx } from '../db/comConta';
 import type { Campo, ConfigCampo, Registro, TipoCampo } from '../../../shared/tipos';
-import { schemaDeValores } from '../validacao/valores';
+import { schemaDeValores, schemaDoCampo } from '../validacao/valores';
 import { marcarLixo } from './lixo';
 import { moverRegistroParaLixeira } from './lixeira';
 
@@ -8,6 +8,8 @@ interface LinhaRegistro {
   id: string;
   colecao_id: string;
   valores: Record<string, unknown> | null;
+  // Corpo próprio do registro (jsonb). null = herda o corpo da coleção.
+  campos: Campo[] | null;
   criado_por: string | null;
   criado_por_id: string | null;
   criado_em: Date;
@@ -39,6 +41,7 @@ function mapRegistro(r: LinhaRegistro): Registro {
     id: r.id,
     colecaoId: r.colecao_id,
     valores: r.valores ?? {},
+    campos: Array.isArray(r.campos) ? r.campos : null,
     criadoPor: r.criado_por,
     criadoPorId: r.criado_por_id,
     criadoEm: r.criado_em.toISOString(),
@@ -74,9 +77,66 @@ async function camposDaColecao(tx: Tx, colecaoId: string): Promise<Campo[]> {
 
 async function lerRegistro(tx: Tx, id: string): Promise<LinhaRegistro | null> {
   const linhas = await tx<LinhaRegistro[]>`
-    select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
+    select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
     from registros where id = ${id}`;
   return linhas[0] ?? null;
+}
+
+// Corpo VIGENTE do registro: o próprio (se tiver) ou o compartilhado da coleção.
+async function camposEfetivos(tx: Tx, linha: LinhaRegistro): Promise<Campo[]> {
+  if (Array.isArray(linha.campos) && linha.campos.length > 0) return linha.campos;
+  return camposDaColecao(tx, linha.colecao_id);
+}
+
+// Keys de imagem de TODOS os blocos (topo imagem + subcampos imagem de seção).
+// Usada para detectar fotos que ficaram órfãs ao mudar o corpo/valores.
+function todasKeysImagem(campos: Campo[], valores: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (const c of campos) {
+    if (c.tipo === 'imagem') {
+      out.push(...keysDeImagem(valores, c.id));
+      continue;
+    }
+    if (c.tipo !== 'secao') continue;
+    const subsImg = (c.config.subcampos ?? []).filter((s) => s.tipo === 'imagem');
+    if (subsImg.length === 0) continue;
+    const linhas = valores[c.id];
+    if (!Array.isArray(linhas)) continue;
+    for (const l of linhas) {
+      if (typeof l !== 'object' || l === null) continue;
+      const obj = l as Record<string, unknown>;
+      for (const s of subsImg) {
+        const v = obj[s.id];
+        if (Array.isArray(v)) for (const k of v) if (typeof k === 'string') out.push(k);
+      }
+    }
+  }
+  return out;
+}
+
+// Reaproveita os valores antigos sob um corpo NOVO: mantém só o que ainda existe
+// e continua válido. Blocos removidos somem; seção perde subcampos removidos;
+// valor que não bate mais com o tipo é descartado (sem quebrar o registro).
+function podarValores(campos: Campo[], valores: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const c of campos) {
+    let v = valores[c.id];
+    if (v === undefined) continue;
+    if (c.tipo === 'secao' && Array.isArray(v)) {
+      const subIds = new Set((c.config.subcampos ?? []).map((s) => s.id));
+      v = v.map((l) => {
+        if (typeof l !== 'object' || l === null) return {};
+        const o: Record<string, unknown> = {};
+        for (const [k, val] of Object.entries(l as Record<string, unknown>)) {
+          if (subIds.has(k)) o[k] = val;
+        }
+        return o;
+      });
+    }
+    const res = schemaDoCampo(c).safeParse(v);
+    if (res.success) out[c.id] = res.data as unknown;
+  }
+  return out;
 }
 
 // Só o colecao_id do registro (respeitando RLS). Usado pela rota de upload pra montar
@@ -105,11 +165,11 @@ export async function listarRegistros(
   const linhas =
     before === undefined
       ? await tx<LinhaRegistro[]>`
-          select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
+          select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
           from registros where colecao_id = ${colecaoId}
           order by criado_em desc limit ${LIMITE}`
       : await tx<LinhaRegistro[]>`
-          select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
+          select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
           from registros where colecao_id = ${colecaoId} and criado_em < ${before}
           order by criado_em desc limit ${LIMITE}`;
 
@@ -144,7 +204,7 @@ export async function buscarRegistros(
   const filtroAnd = condicoes.reduce((acc, c) => tx`${acc} and ${c}`);
 
   const linhas = await tx<LinhaRegistro[]>`
-    select id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em
+    select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
     from registros
     where colecao_id = ${colecaoId}
       and ${filtroAnd}
@@ -159,18 +219,57 @@ export async function criarRegistro(
   colecaoId: string,
   valoresBrutos: Record<string, unknown>,
   ator: Ator,
+  // Corpo PRÓPRIO opcional: quando vem (duplicar/novo-a-partir-de outro registro),
+  // o novo registro nasce com estrutura independente. Sem ele, herda o da coleção.
+  camposProprios?: Campo[],
 ): Promise<Registro | null> {
   if (!(await colecaoExiste(tx, colecaoId))) return null;
 
-  const campos = await camposDaColecao(tx, colecaoId);
+  const usaProprio = camposProprios !== undefined && camposProprios.length > 0;
+  const campos = usaProprio ? camposProprios : await camposDaColecao(tx, colecaoId);
   const valores = schemaDeValores(campos).parse(valoresBrutos);
+  const corpo = usaProprio ? tx.json(campos as never) : null;
 
   const linhas = await tx<LinhaRegistro[]>`
-    insert into registros (colecao_id, valores, criado_por, criado_por_id)
-    values (${colecaoId}, ${tx.json(valores)}, ${ator.nome}, ${ator.id})
-    returning id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em`;
+    insert into registros (colecao_id, valores, campos, criado_por, criado_por_id)
+    values (${colecaoId}, ${tx.json(valores)}, ${corpo}, ${ator.nome}, ${ator.id})
+    returning id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) throw new Error('insert de registro não retornou linha');
+  return mapRegistro(linha);
+}
+
+// Substitui o CORPO (blocos) de UM registro, tornando-o independente da coleção.
+// Poda os valores para o novo corpo (mantém o que ainda existe/casa) e envia as
+// fotos que ficaram órfãs para o lixo do R2. Não toca em nenhum outro registro.
+export async function editarCorpoRegistro(
+  tx: Tx,
+  id: string,
+  novosCampos: Campo[],
+): Promise<Registro | null> {
+  const atual = await lerRegistro(tx, id);
+  if (atual === null) return null;
+
+  const camposAntes = await camposEfetivos(tx, atual);
+  const valoresAntes = atual.valores ?? {};
+  const valoresDepois = podarValores(novosCampos, valoresAntes);
+
+  // Fotos que existiam e não sobraram no novo corpo/valores viram órfãs no R2.
+  const antes = new Set(todasKeysImagem(camposAntes, valoresAntes));
+  const depois = new Set(todasKeysImagem(novosCampos, valoresDepois));
+  const removidas = [...antes].filter((k) => !depois.has(k));
+
+  const linhas = await tx<LinhaRegistro[]>`
+    update registros
+    set campos = ${tx.json(novosCampos as never)},
+        valores = ${tx.json(valoresDepois as never)},
+        atualizado_em = now()
+    where id = ${id}
+    returning id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em`;
+  const linha = linhas[0];
+  if (linha === undefined) return null;
+
+  await marcarLixo(tx, removidas, 'corpo-registro-alterado');
   return mapRegistro(linha);
 }
 
@@ -184,7 +283,8 @@ export async function editarRegistro(
   const atual = await lerRegistro(tx, id);
   if (atual === null) return null;
 
-  const campos = await camposDaColecao(tx, atual.colecao_id);
+  // Valida contra o corpo VIGENTE do registro (próprio, se houver; senão o da coleção).
+  const campos = await camposEfetivos(tx, atual);
   const patch = schemaDeValores(campos).parse(patchBrutos);
   const antes = atual.valores ?? {};
 
@@ -202,7 +302,7 @@ export async function editarRegistro(
   const linhas = await tx<LinhaRegistro[]>`
     update registros set valores = valores || ${tx.json(patch)}, atualizado_em = now()
     where id = ${id}
-    returning id, colecao_id, valores, criado_por, criado_por_id, criado_em, atualizado_em`;
+    returning id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) return null;
 

@@ -9,6 +9,7 @@ import { urlMini } from '../imagens/urls';
 import { Botao } from '../ui/Botao';
 import {
   alvoTitulo,
+  camposDoRegistro,
   formatarValor,
   keysDoCampo,
   lerAlvoTitulo,
@@ -153,8 +154,10 @@ export function RegistroPreview({
   // Qualquer usuário logado pode enviar o registro para a lixeira (soft-delete).
   const podeApagar = aoApagar !== undefined && usuario !== null;
 
-  const alvo = alvoTitulo(colecao.campos);
   const [local, setLocal] = useState(registro);
+  // Corpo VIGENTE deste registro (próprio, se independente; senão o da coleção).
+  const campos = camposDoRegistro(colecao, local);
+  const alvo = alvoTitulo(campos);
   const [editando, setEditando] = useState(false);
   const [rascunho, setRascunho] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -226,7 +229,7 @@ export function RegistroPreview({
     }
   }
 
-  const tituloAtual = tituloDoRegistro(colecao.campos, local);
+  const tituloAtual = tituloDoRegistro(campos, local);
 
   return (
     <article className="preview-registro preview-registro--completo">
@@ -351,7 +354,7 @@ export function RegistroPreview({
       </div>
 
       <div className="preview-campos">
-        {colecao.campos.map((campo) => (
+        {campos.map((campo) => (
           <div key={campo.id} className="preview-campo">
             {campo.config.titulo !== undefined && campo.config.titulo !== '' && (
               <span className="preview-campo__titulo-bloco">{campo.config.titulo}</span>

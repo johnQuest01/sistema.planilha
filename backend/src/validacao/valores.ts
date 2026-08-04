@@ -44,7 +44,7 @@ function schemaPorTipo(tipo: TipoCampo, config: ConfigCampo): z.ZodTypeAny {
   }
 }
 
-function schemaDoCampo(c: Campo): z.ZodTypeAny {
+export function schemaDoCampo(c: Campo): z.ZodTypeAny {
   return schemaPorTipo(c.tipo, c.config);
 }
 

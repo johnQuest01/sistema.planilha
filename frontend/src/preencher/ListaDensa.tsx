@@ -6,6 +6,7 @@ import { api, ErroApi } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
 import {
   alvoTitulo,
+  camposDoRegistro,
   capaDoRegistro,
   lerAlvoTitulo,
   patchAlvoTitulo,
@@ -32,7 +33,6 @@ interface ItemProps {
   colecao: Colecao;
   comImagem: boolean;
   lado: number;
-  podeRenomear: boolean;
   editando: boolean;
   rascunho: string;
   salvando: boolean;
@@ -61,7 +61,6 @@ const ItemLista = memo(function ItemLista({
   colecao,
   comImagem,
   lado,
-  podeRenomear,
   editando,
   rascunho,
   salvando,
@@ -74,9 +73,12 @@ const ItemLista = memo(function ItemLista({
   salvarNome,
   cancelarEdicao,
 }: ItemProps): JSX.Element {
-  const capa = capaDoRegistro(colecao.campos, r);
-  const resumo = resumoDoRegistro(colecao.campos, r);
-  const titulo = tituloDoRegistro(colecao.campos, r);
+  // Cada registro pode ter corpo próprio: título/resumo/capa saem do corpo dele.
+  const campos = camposDoRegistro(colecao, r);
+  const capa = capaDoRegistro(campos, r);
+  const resumo = resumoDoRegistro(campos, r);
+  const titulo = tituloDoRegistro(campos, r);
+  const podeRenomear = alvoTitulo(campos) !== undefined;
 
   return (
     <div className="lista-item">
@@ -161,8 +163,11 @@ export function ListaDensa({
   rodape,
   aoAproximarFim,
 }: Props): JSX.Element {
-  const comImagem = temCampoImagem(colecao.campos);
-  const alvo = alvoTitulo(colecao.campos);
+  // Mostra a coluna de capa se a coleção OU algum registro (com corpo próprio)
+  // tiver bloco de imagem.
+  const comImagem =
+    temCampoImagem(colecao.campos) ||
+    registros.some((r) => Array.isArray(r.campos) && temCampoImagem(r.campos));
   const lado = solto ? 72 : 56;
   const altura = alturaLinha(solto, lado);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -206,12 +211,13 @@ export function ListaDensa({
 
   const iniciarEdicao = useCallback(
     (r: Registro): void => {
+      const alvo = alvoTitulo(camposDoRegistro(colecao, r));
       if (alvo === undefined) return;
       setEditandoId(r.id);
       setRascunho(lerAlvoTitulo(r, alvo));
       setErro(null);
     },
-    [alvo],
+    [colecao],
   );
 
   const cancelarEdicao = useCallback((): void => {
@@ -221,6 +227,7 @@ export function ListaDensa({
 
   const salvarNome = useCallback(
     async (r: Registro): Promise<void> => {
+      const alvo = alvoTitulo(camposDoRegistro(colecao, r));
       if (alvo === undefined || editandoId !== r.id || salvando) return;
       const atual = lerAlvoTitulo(r, alvo);
       const novo = rascunho.trim();
@@ -240,7 +247,7 @@ export function ListaDensa({
         setSalvando(false);
       }
     },
-    [alvo, editandoId, salvando, rascunho, aoAtualizar],
+    [colecao, editandoId, salvando, rascunho, aoAtualizar],
   );
 
   const aoTeclarNome = useCallback(
@@ -288,7 +295,6 @@ export function ListaDensa({
                 colecao={colecao}
                 comImagem={comImagem}
                 lado={lado}
-                podeRenomear={alvo !== undefined}
                 editando={editandoId === r.id}
                 rascunho={rascunho}
                 salvando={salvando}
