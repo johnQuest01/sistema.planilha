@@ -1043,6 +1043,16 @@
   opacity: 0.7;
   cursor: default;
 }
+.preview-share-fab--pronto {
+  background: #25d366; /* verde WhatsApp: sinaliza "pronto para enviar" */
+  color: #073b1e;
+}
+.preview-share-bar__ok {
+  margin: 0 0 var(--e2);
+  font-size: 13px;
+  font-weight: 600;
+  color: #128c3e;
+}
 .preview-campo--sel {
   padding: var(--e2);
   border: 1px solid var(--linha-2);

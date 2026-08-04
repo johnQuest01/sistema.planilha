@@ -169,12 +169,27 @@ function quebrarTexto(ctx: CanvasRenderingContext2D, texto: string, maxW: number
   return saida;
 }
 
-async function carregarBitmap(key: string): Promise<ImageBitmap | null> {
+// Baixa e decodifica a foto JÁ REDUZIDA para `alvoW` de largura. Reduzir aqui
+// (e fechar o bitmap original) é essencial no iPhone: evita estourar a memória e
+// o limite de área de canvas do iOS quando há muitas fotos.
+async function carregarBitmap(key: string, alvoW: number): Promise<ImageBitmap | null> {
   try {
     if (typeof createImageBitmap !== 'function') return null;
     const resp = await fetch(urlCheia(key), { mode: 'cors' });
     if (!resp.ok) return null;
-    return await createImageBitmap(await resp.blob());
+    const full = await createImageBitmap(await resp.blob());
+    if (full.width <= alvoW) return full;
+    const escala = alvoW / full.width;
+    const w = Math.round(alvoW);
+    const h = Math.max(1, Math.round(full.height * escala));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const cx = c.getContext('2d');
+    if (cx === null) return full;
+    cx.drawImage(full, 0, 0, w, h);
+    if (typeof full.close === 'function') full.close();
+    return await createImageBitmap(c);
   } catch {
     return null;
   }
@@ -194,11 +209,13 @@ export async function gerarImagemRegistro(
   const ctx = canvas.getContext('2d');
   if (ctx === null) return null;
 
-  const LARGURA = 1080;
-  const M = 44; // margem
+  const LARGURA = 1000;
+  const M = 40; // margem
   const W = LARGURA - M * 2;
   const GAP = 20;
-  const MAXH_FOTO = 1200;
+  const MAXH_FOTO = 1000;
+  // iOS limita a ÁREA total do canvas (~16.7M px). Ficamos com folga.
+  const AREA_MAX = 16000000;
   const FONTE = {
     titulo: '700 46px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
     rotulo: '700 32px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
@@ -213,7 +230,7 @@ export async function gerarImagemRegistro(
     const it = itens[i];
     if (it === undefined || it.k !== 'foto') continue;
     if (nFotos >= MAX_IMAGENS) break;
-    const bmp = await carregarBitmap(it.key);
+    const bmp = await carregarBitmap(it.key, W);
     if (bmp !== null) {
       bitmaps.set(i, bmp);
       nFotos++;
@@ -261,7 +278,7 @@ export async function gerarImagemRegistro(
   }
 
   canvas.width = LARGURA;
-  canvas.height = Math.min(Math.ceil(total), 30000);
+  canvas.height = Math.min(Math.ceil(total), Math.floor(AREA_MAX / LARGURA));
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.textBaseline = 'top';
@@ -288,6 +305,7 @@ export async function gerarImagemRegistro(
   const blob = await new Promise<Blob | null>((res) =>
     canvas.toBlob((b) => res(b), 'image/jpeg', 0.9),
   );
+  for (const bmp of bitmaps.values()) if (typeof bmp.close === 'function') bmp.close();
   if (blob === null) return null;
   return new File([blob], 'registro.jpg', { type: 'image/jpeg' });
 }
@@ -344,6 +362,30 @@ export async function compartilhar(
     // Navegador não anexa arquivos (ex.: desktop): compartilha só o texto.
     await navigator.share({ title: titulo, text: texto });
     return keys.length > 0 ? 'so-texto' : 'ok';
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return 'cancelado';
+    return 'erro';
+  }
+}
+
+// Fase 2 (iPhone-safe): compartilha uma imagem JÁ MONTADA. Deve ser chamada
+// direto do toque do usuário (sem awaits pesados antes), senão o iOS perde a
+// "ativação de gesto" e o menu de compartilhar não abre.
+export async function compartilharArquivo(titulo: string, arquivo: File): Promise<ResultadoShare> {
+  if (typeof navigator.share !== 'function') return 'sem-suporte';
+  const dados: ShareData = { title: titulo, text: titulo, files: [arquivo] };
+  if (typeof navigator.canShare !== 'function' || !navigator.canShare(dados)) {
+    try {
+      await navigator.share({ title: titulo, text: titulo });
+      return 'so-texto';
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return 'cancelado';
+      return 'erro';
+    }
+  }
+  try {
+    await navigator.share(dados);
+    return 'ok';
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') return 'cancelado';
     return 'erro';

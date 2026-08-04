@@ -17,7 +17,7 @@ import {
   tituloDoRegistro,
 } from './derivarResumo';
 import { linhasDe } from './SecaoEditor';
-import { campoTemConteudo, compartilharRegistro } from './compartilhar';
+import { campoTemConteudo, compartilharArquivo, gerarImagemRegistro } from './compartilhar';
 
 interface Props {
   colecao: Colecao;
@@ -167,10 +167,14 @@ export function RegistroPreview({
   const [confirmandoApagar, setConfirmandoApagar] = useState(false);
   const [apagando, setApagando] = useState(false);
   const [erroApagar, setErroApagar] = useState<string | null>(null);
-  // Modo compartilhar: escolhe quais campos entram e envia (texto + fotos) pro WhatsApp.
+  // Modo compartilhar: escolhe quais campos entram e envia (imagem montada) pro WhatsApp.
+  // Fluxo em 2 etapas (iPhone-safe): "Preparar" monta a imagem; "Enviar" chama o
+  // compartilhamento no toque (gesto fresco), senão o iOS não abre o menu.
   const [modoShare, setModoShare] = useState(false);
   const [selShare, setSelShare] = useState<Set<string>>(new Set());
+  const [preparandoShare, setPreparandoShare] = useState(false);
   const [enviandoShare, setEnviandoShare] = useState(false);
+  const [imgShare, setImgShare] = useState<File | null>(null);
   const [avisoShare, setAvisoShare] = useState<string | null>(null);
 
   useEffect(() => {
@@ -180,11 +184,13 @@ export function RegistroPreview({
   function entrarShare(): void {
     // Comeca sem nada marcado: o usuario escolhe manualmente o que compartilhar.
     setSelShare(new Set());
+    setImgShare(null);
     setAvisoShare(null);
     setModoShare(true);
   }
 
   function alternarShare(id: string): void {
+    setImgShare(null); // seleção mudou: a imagem preparada ficou desatualizada.
     setSelShare((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
@@ -194,34 +200,60 @@ export function RegistroPreview({
   }
 
   function marcarTodasShare(): void {
+    setImgShare(null);
     const todas = new Set<string>();
     for (const c of campos) if (campoTemConteudo(c, local)) todas.add(c.id);
     setSelShare(todas);
   }
 
   function limparShare(): void {
+    setImgShare(null);
     setSelShare(new Set());
   }
 
-  async function enviarShare(): Promise<void> {
-    if (enviandoShare) return;
+  function sairShare(): void {
+    setModoShare(false);
+    setImgShare(null);
+    setAvisoShare(null);
+  }
+
+  // Fase 1: monta a imagem (pode demorar com muitas fotos). NÃO compartilha aqui.
+  async function prepararShare(): Promise<void> {
+    if (preparandoShare || enviandoShare) return;
     if (selShare.size === 0) {
       setAvisoShare('Selecione ao menos um campo para compartilhar.');
       return;
     }
-    setEnviandoShare(true);
+    setPreparandoShare(true);
     setAvisoShare(null);
-    const r = await compartilharRegistro(tituloAtual, campos, local, selShare);
+    setImgShare(null);
+    try {
+      const f = await gerarImagemRegistro(tituloAtual, campos, local, selShare);
+      if (f === null) {
+        setAvisoShare('Não consegui montar a imagem. Tente com menos blocos/fotos.');
+        return;
+      }
+      setImgShare(f);
+    } finally {
+      setPreparandoShare(false);
+    }
+  }
+
+  // Fase 2: chamada DIRETO no toque, com a imagem já pronta (iPhone-safe).
+  async function enviarShare(): Promise<void> {
+    if (imgShare === null || enviandoShare) return;
+    setEnviandoShare(true);
+    const r = await compartilharArquivo(tituloAtual, imgShare);
     setEnviandoShare(false);
     if (r === 'ok') {
-      setModoShare(false);
+      sairShare();
+    } else if (r === 'cancelado') {
+      // usuário fechou o menu; mantém a imagem pronta para tentar de novo.
     } else if (r === 'so-texto') {
-      setAvisoShare(
-        'Enviado só o texto — este navegador não anexa imagem. Abra pelo celular (Safari/Chrome) para enviar na ordem com as fotos.',
-      );
+      setAvisoShare('Este navegador não anexa imagem. Abra pelo celular (Safari/Chrome).');
     } else if (r === 'sem-suporte') {
       setAvisoShare('Compartilhamento não suportado aqui. Abra o app pelo celular (Safari/Chrome).');
-    } else if (r === 'erro') {
+    } else {
       setAvisoShare('Não foi possível compartilhar. Tente novamente.');
     }
   }
@@ -491,22 +523,33 @@ export function RegistroPreview({
       {modoShare && (
         <div className="preview-share-bar">
           {avisoShare !== null && <p className="preview-share-bar__aviso">{avisoShare}</p>}
+          {imgShare !== null && (
+            <p className="preview-share-bar__ok">Imagem pronta! Toque em “Enviar pro WhatsApp”.</p>
+          )}
           <div className="preview-share-bar__acoes">
-            <Botao
-              variante="primario"
-              disabled={enviandoShare}
-              onClick={() => void enviarShare()}
-            >
-              <Share2 size={16} aria-hidden />
-              {enviandoShare ? 'Preparando…' : 'Enviar pro WhatsApp'}
-            </Botao>
+            {imgShare === null ? (
+              <Botao
+                variante="primario"
+                disabled={preparandoShare || selShare.size === 0}
+                onClick={() => void prepararShare()}
+              >
+                <Share2 size={16} aria-hidden />
+                {preparandoShare ? 'Montando imagem…' : 'Preparar imagem'}
+              </Botao>
+            ) : (
+              <Botao
+                variante="primario"
+                disabled={enviandoShare}
+                onClick={() => void enviarShare()}
+              >
+                <Share2 size={16} aria-hidden />
+                {enviandoShare ? 'Abrindo…' : 'Enviar pro WhatsApp'}
+              </Botao>
+            )}
             <Botao
               variante="fantasma"
-              disabled={enviandoShare}
-              onClick={() => {
-                setModoShare(false);
-                setAvisoShare(null);
-              }}
+              disabled={preparandoShare || enviandoShare}
+              onClick={sairShare}
             >
               Cancelar
             </Botao>
@@ -517,14 +560,24 @@ export function RegistroPreview({
       {modoShare && selShare.size > 0 && (
         <button
           type="button"
-          className="preview-share-fab"
-          disabled={enviandoShare}
-          onClick={() => void enviarShare()}
-          aria-label={`Compartilhar ${selShare.size} bloco(s) no WhatsApp`}
+          className={`preview-share-fab${imgShare !== null ? ' preview-share-fab--pronto' : ''}`}
+          disabled={preparandoShare || enviandoShare}
+          onClick={() => void (imgShare === null ? prepararShare() : enviarShare())}
+          aria-label={
+            imgShare === null
+              ? `Preparar imagem de ${selShare.size} bloco(s)`
+              : `Enviar ${selShare.size} bloco(s) no WhatsApp`
+          }
         >
           <Share2 size={20} aria-hidden />
           <span className="preview-share-fab__txt">
-            {enviandoShare ? 'Preparando…' : `Compartilhar (${selShare.size})`}
+            {imgShare === null
+              ? preparandoShare
+                ? 'Montando…'
+                : `Preparar (${selShare.size})`
+              : enviandoShare
+                ? 'Abrindo…'
+                : `Enviar (${selShare.size})`}
           </span>
         </button>
       )}
