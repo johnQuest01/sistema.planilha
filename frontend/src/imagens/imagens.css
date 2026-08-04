@@ -160,11 +160,6 @@
   opacity: 0.6;
   cursor: default;
 }
-@media (max-width: 480px) {
-  .visor__baixar-txt {
-    display: none;
-  }
-}
 
 .trilho {
   flex: 1;

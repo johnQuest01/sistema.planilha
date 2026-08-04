@@ -12,6 +12,16 @@ interface Props {
   aoFechar: () => void;
 }
 
+// iPhone/iPad (inclui iPad que se identifica como "MacIntel" com toque). No iOS o
+// atributo download não salva o arquivo; abrir em nova aba é o caminho confiável.
+function ehIOS(): boolean {
+  const nav = navigator;
+  return (
+    /iP(hone|ad|od)/.test(nav.userAgent) ||
+    (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1)
+  );
+}
+
 // Portal no body: se ficar dentro da FolhaInferior, overflow/stacking esconde a foto.
 export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
   const trilhoRef = useRef<HTMLDivElement>(null);
@@ -21,14 +31,21 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
   const [zoomAtivo, setZoomAtivo] = useState(false);
   const [baixando, setBaixando] = useState(false);
 
-  // Baixa a foto ATUAL em alta resolução (a "cheia" do R2). Busca como blob para
-  // forçar o download (o atributo download é ignorado entre origens); se o fetch
-  // falhar (rede/CORS), abre numa aba nova como alternativa.
+  // Baixa a foto ATUAL em alta resolução (a "cheia" do R2). No iPhone/iOS o
+  // atributo `download` é ignorado, então abrimos a imagem numa aba nova para o
+  // usuário segurar o dedo e usar "Salvar em Fotos". Nos demais, busca como blob
+  // e força o download; se falhar (rede/CORS), cai no mesmo abrir-em-nova-aba.
   const baixar = useCallback(async (): Promise<void> => {
     const key = keys[ativo];
     if (key === undefined || baixando) return;
     const url = urlCheia(key);
     const nome = key.split('/').pop() ?? 'foto.jpg';
+
+    if (ehIOS()) {
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+
     setBaixando(true);
     try {
       const resp = await fetch(url, { mode: 'cors' });
@@ -145,7 +162,7 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
             onClick={() => void baixar()}
           >
             <Download size={20} />
-            <span className="visor__baixar-txt">{baixando ? 'Baixando…' : 'Baixar'}</span>
+            <span className="visor__baixar-txt">{baixando ? 'Baixando…' : 'Baixar foto'}</span>
           </button>
           <button type="button" className="visor__fechar" aria-label="Fechar" onClick={aoFechar}>
             <X size={22} />
