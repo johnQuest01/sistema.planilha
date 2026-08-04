@@ -135,11 +135,21 @@ export function Preencher({
     }
   }, [colecao.id]);
 
+  // Insere o novo registro no topo SEM duplicar: o modo ao vivo (WebSocket) pode
+  // ecoar o "criado" quase junto com a resposta do POST, então dedupe por id.
+  const inserirNovo = useCallback((r: Registro): void => {
+    setRegistros((atual) => {
+      if (atual === null) return [r];
+      if (atual.some((x) => x.id === r.id)) return atual.map((x) => (x.id === r.id ? r : x));
+      return [r, ...atual];
+    });
+  }, []);
+
   async function novo(valores?: Record<string, unknown>): Promise<void> {
     try {
       const iniciais = valores ?? valoresVaziosDe(colecao.campos);
       const r = await api.criarRegistro(colecao.id, iniciais);
-      setRegistros((atual) => (atual === null ? [r] : [r, ...atual]));
+      inserirNovo(r);
       setAberta(r);
     } catch (e) {
       setErro(e instanceof ErroApi ? e.message : 'não foi possível criar');
@@ -155,7 +165,7 @@ export function Preencher({
   }): Promise<void> {
     try {
       const r = await api.criarRegistro(colecao.id, base.valores, base.campos);
-      setRegistros((atual) => (atual === null ? [r] : [r, ...atual]));
+      inserirNovo(r);
       setAberta(r);
     } catch (e) {
       setErro(e instanceof ErroApi ? e.message : 'não foi possível criar');
