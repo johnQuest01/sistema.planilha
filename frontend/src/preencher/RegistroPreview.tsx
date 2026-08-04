@@ -17,7 +17,7 @@ import {
   tituloDoRegistro,
 } from './derivarResumo';
 import { linhasDe } from './SecaoEditor';
-import { compartilhar, montarCompartilhamento } from './compartilhar';
+import { campoTemConteudo, compartilhar, montarCompartilhamento } from './compartilhar';
 
 interface Props {
   colecao: Colecao;
@@ -191,6 +191,16 @@ export function RegistroPreview({
       else n.add(id);
       return n;
     });
+  }
+
+  function marcarTodasShare(): void {
+    const todas = new Set<string>();
+    for (const c of campos) if (campoTemConteudo(c, local)) todas.add(c.id);
+    setSelShare(todas);
+  }
+
+  function limparShare(): void {
+    setSelShare(new Set());
   }
 
   async function enviarShare(): Promise<void> {
@@ -409,8 +419,28 @@ export function RegistroPreview({
 
       {modoShare && (
         <div className="preview-share-topo">
-          <Share2 size={16} aria-hidden />
-          <span>Marque os campos que vão no WhatsApp (fotos vão em alta resolução).</span>
+          <div className="preview-share-topo__info">
+            <Share2 size={16} aria-hidden />
+            <span>Marque os campos que vão no WhatsApp (fotos vão em alta resolução).</span>
+          </div>
+          <div className="preview-share-topo__acoes">
+            <span className="preview-share-topo__contador">{selShare.size} selecionado(s)</span>
+            <button
+              type="button"
+              className="preview-share-topo__btn"
+              onClick={marcarTodasShare}
+            >
+              Marcar todas
+            </button>
+            <button
+              type="button"
+              className="preview-share-topo__btn"
+              disabled={selShare.size === 0}
+              onClick={limparShare}
+            >
+              Limpar
+            </button>
+          </div>
         </div>
       )}
 

@@ -963,6 +963,8 @@
 .preview-share-topo {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--e2);
   margin: 0 var(--e3);
   padding: var(--e2) var(--e3);
@@ -972,9 +974,44 @@
   border: 1px solid rgba(217, 138, 61, 0.3);
   border-radius: var(--raio);
 }
+.preview-share-topo__info {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  min-width: 0;
+}
 .preview-share-topo svg {
   flex: none;
   color: var(--fita-forte);
+}
+.preview-share-topo__acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  flex: none;
+}
+.preview-share-topo__contador {
+  font-size: 12px;
+  color: var(--tinta-3, var(--tinta-2));
+  white-space: nowrap;
+}
+.preview-share-topo__btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fita-forte);
+  background: var(--papel, #fff);
+  border: 1px solid rgba(217, 138, 61, 0.5);
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.preview-share-topo__btn:hover:not(:disabled) {
+  background: rgba(217, 138, 61, 0.12);
+}
+.preview-share-topo__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 .preview-campo--sel {
   padding: var(--e2);
