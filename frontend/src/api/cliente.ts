@@ -211,9 +211,9 @@ export const api = {
     pedir<void>(`/api/registros/${id}`, { method: 'DELETE' }),
 
   // --- link público de compartilhamento ---
-  // Gera um token assinado (só dos blocos selecionados) para montar a URL /r/<token>.
+  // Gera um CÓDIGO curto (só dos blocos selecionados) para montar a URL /r/<codigo>.
   criarLinkRegistro: (registroId: string, campos: string[]) =>
-    pedir<{ token: string }>(`/api/registros/${registroId}/link`, corpoJson({ campos })),
+    pedir<{ codigo: string }>(`/api/registros/${registroId}/link`, corpoJson({ campos })),
   // Busca o registro público (sem login) só com os blocos que foram compartilhados.
   registroPublico: (token: string) =>
     pedir<{ campos: Campo[]; valores: Record<string, unknown>; r2PublicBase: string }>(

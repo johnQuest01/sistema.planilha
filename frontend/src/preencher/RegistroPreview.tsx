@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ExternalLink, Link as LinkIcon, Lock, Pencil, Share2, Trash2 } from 'lucide-react';
+import { ExternalLink, Image as ImageIcon, Link as LinkIcon, Lock, Pencil, Share2, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
@@ -252,8 +252,8 @@ export function RegistroPreview({
     setGerandoLink(true);
     setAvisoShare(null);
     try {
-      const { token } = await api.criarLinkRegistro(registro.id, [...selShare]);
-      const url = `${window.location.origin}/r/${token}`;
+      const { codigo } = await api.criarLinkRegistro(registro.id, [...selShare]);
+      const url = `${window.location.origin}/r/${codigo}`;
       if (typeof navigator.share === 'function') {
         try {
           await navigator.share({ title: tituloAtual, text: tituloAtual, url });
@@ -488,8 +488,8 @@ export function RegistroPreview({
       {modoShare && (
         <div className="preview-share-topo">
           <div className="preview-share-topo__info">
-            <Share2 size={16} aria-hidden />
-            <span>Marque os campos que vão no WhatsApp (fotos vão em alta resolução).</span>
+            <LinkIcon size={16} aria-hidden />
+            <span>Marque as áreas e toque em “Compartilhar link”. O link abre só esses blocos, com as fotos em alta resolução.</span>
           </div>
           <div className="preview-share-topo__acoes">
             <span className="preview-share-topo__contador">{selShare.size} selecionado(s)</span>
@@ -561,36 +561,36 @@ export function RegistroPreview({
         <div className="preview-share-bar">
           {avisoShare !== null && <p className="preview-share-bar__aviso">{avisoShare}</p>}
           {imgShare !== null && (
-            <p className="preview-share-bar__ok">Imagem pronta! Toque em “Enviar pro WhatsApp”.</p>
+            <p className="preview-share-bar__ok">Imagem pronta! Toque em “Enviar imagem”.</p>
           )}
           <div className="preview-share-bar__acoes">
-            {imgShare === null ? (
-              <Botao
-                variante="primario"
-                disabled={preparandoShare || selShare.size === 0}
-                onClick={() => void prepararShare()}
-              >
-                <Share2 size={16} aria-hidden />
-                {preparandoShare ? 'Montando imagem…' : 'Preparar imagem'}
-              </Botao>
-            ) : (
-              <Botao
-                variante="primario"
-                disabled={enviandoShare}
-                onClick={() => void enviarShare()}
-              >
-                <Share2 size={16} aria-hidden />
-                {enviandoShare ? 'Abrindo…' : 'Enviar pro WhatsApp'}
-              </Botao>
-            )}
             <Botao
-              variante="padrao"
+              variante="primario"
               disabled={gerandoLink || selShare.size === 0}
               onClick={() => void enviarLink()}
             >
               <LinkIcon size={16} aria-hidden />
-              {gerandoLink ? 'Gerando link…' : 'Enviar link'}
+              {gerandoLink ? 'Gerando link…' : 'Compartilhar link'}
             </Botao>
+            {imgShare === null ? (
+              <Botao
+                variante="fantasma"
+                disabled={preparandoShare || selShare.size === 0}
+                onClick={() => void prepararShare()}
+              >
+                <ImageIcon size={16} aria-hidden />
+                {preparandoShare ? 'Montando imagem…' : 'Enviar como imagem'}
+              </Botao>
+            ) : (
+              <Botao
+                variante="padrao"
+                disabled={enviandoShare}
+                onClick={() => void enviarShare()}
+              >
+                <Share2 size={16} aria-hidden />
+                {enviandoShare ? 'Abrindo…' : 'Enviar imagem'}
+              </Botao>
+            )}
             <Botao
               variante="fantasma"
               disabled={preparandoShare || enviandoShare || gerandoLink}
@@ -605,24 +605,14 @@ export function RegistroPreview({
       {modoShare && selShare.size > 0 && (
         <button
           type="button"
-          className={`preview-share-fab${imgShare !== null ? ' preview-share-fab--pronto' : ''}`}
-          disabled={preparandoShare || enviandoShare}
-          onClick={() => void (imgShare === null ? prepararShare() : enviarShare())}
-          aria-label={
-            imgShare === null
-              ? `Preparar imagem de ${selShare.size} bloco(s)`
-              : `Enviar ${selShare.size} bloco(s) no WhatsApp`
-          }
+          className="preview-share-fab preview-share-fab--pronto"
+          disabled={gerandoLink}
+          onClick={() => void enviarLink()}
+          aria-label={`Compartilhar link de ${selShare.size} bloco(s)`}
         >
-          <Share2 size={20} aria-hidden />
+          <LinkIcon size={20} aria-hidden />
           <span className="preview-share-fab__txt">
-            {imgShare === null
-              ? preparandoShare
-                ? 'Montando…'
-                : `Preparar (${selShare.size})`
-              : enviandoShare
-                ? 'Abrindo…'
-                : `Enviar (${selShare.size})`}
+            {gerandoLink ? 'Gerando…' : `Link (${selShare.size})`}
           </span>
         </button>
       )}
