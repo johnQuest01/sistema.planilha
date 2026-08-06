@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { travarScroll } from './travaScroll';
 import './ui.css';
 
 // Folha inferior modal (bottom sheet). O foco é aplicado apenas na montagem para
@@ -30,12 +31,11 @@ export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo 
       if (e.key === 'Escape') onFecharRef.current();
     }
     document.addEventListener('keydown', aoTeclar);
-    const anterior = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const liberarScroll = travarScroll();
     folhaRef.current?.focus();
     return () => {
       document.removeEventListener('keydown', aoTeclar);
-      document.body.style.overflow = anterior;
+      liberarScroll();
     };
   }, []);
 

@@ -178,6 +178,20 @@
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: var(--e3);
 }
+.inicio-secao-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: var(--e4) 0 var(--e2);
+  color: var(--giz);
+  font-size: 15px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+.cartao-colecao--unida {
+  border-color: var(--marca, #6d4aff);
+  box-shadow: 0 0 0 1px var(--marca, #6d4aff) inset, var(--sombra);
+}
 .cartao-colecao {
   position: relative;
   overflow: hidden;

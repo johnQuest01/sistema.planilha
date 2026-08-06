@@ -2,6 +2,7 @@ import type {
   Campo,
   Colecao,
   ConfigCampo,
+  Integracao,
   ItemLixeira,
   Registro,
   TipoCampo,
@@ -9,7 +10,7 @@ import type {
   UsuarioResumo,
 } from '../../../shared/tipos';
 
-export type { Usuario, UsuarioResumo, ItemLixeira } from '../../../shared/tipos';
+export type { Usuario, UsuarioResumo, ItemLixeira, Integracao } from '../../../shared/tipos';
 
 // Resumo devolvido por GET /api/colecoes (sem campos). O detalhe (com campos) vem
 // por GET /api/colecoes/:id como Colecao.
@@ -219,6 +220,22 @@ export const api = {
     pedir<{ campos: Campo[]; valores: Record<string, unknown>; r2PublicBase: string }>(
       `/api/publico/r/${encodeURIComponent(token)}`,
     ),
+
+  // --- integrações (unir planilhas por referência) ---
+  listarIntegracoes: () => pedir<Integracao[]>('/api/integracoes'),
+  obterIntegracao: (id: string) => pedir<Integracao>(`/api/integracoes/${id}`),
+  criarIntegracao: (dados: { nome: string; colecaoIds: string[]; ativo?: boolean }) =>
+    pedir<Integracao>('/api/integracoes', corpoJson(dados)),
+  editarIntegracao: (
+    id: string,
+    patch: { nome?: string; colecaoIds?: string[]; ativo?: boolean },
+  ) =>
+    pedir<Integracao>(`/api/integracoes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  apagarIntegracao: (id: string) =>
+    pedir<void>(`/api/integracoes/${id}`, { method: 'DELETE' }),
 
   // --- lixeira ---
   listarLixeira: () => pedir<ItemLixeira[]>('/api/lixeira'),

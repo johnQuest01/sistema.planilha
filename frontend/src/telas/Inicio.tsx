@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Lock, Plus, Trash2 } from 'lucide-react';
-import { api, ErroApi, type ColecaoResumo } from '../api/cliente';
+import { Layers, Lock, Plus, Trash2 } from 'lucide-react';
+import { api, ErroApi, type ColecaoResumo, type Integracao } from '../api/cliente';
 import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
@@ -16,6 +16,7 @@ export function Inicio(): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   const [colecoes, setColecoes] = useState<ColecaoResumo[] | null>(null);
+  const [integracoes, setIntegracoes] = useState<Integracao[]>([]);
   const [falhaCarga, setFalhaCarga] = useState(false);
   const [nome, setNome] = useState('');
   const [erro, setErro] = useState<string | null>(null);
@@ -45,6 +46,11 @@ export function Inicio(): JSX.Element {
     setColecoes(null);
     setFalhaCarga(false);
     setErro(null);
+    // Integrações são um extra: se falharem (ex.: tabela não migrada), a Home segue.
+    void api
+      .listarIntegracoes()
+      .then((is) => setIntegracoes(is))
+      .catch(() => setIntegracoes([]));
     void api
       .listarColecoes()
       .then((cs) => {
@@ -61,6 +67,14 @@ export function Inicio(): JSX.Element {
     let vivo = true;
     setColecoes(null);
     setFalhaCarga(false);
+    void api
+      .listarIntegracoes()
+      .then((is) => {
+        if (vivo) setIntegracoes(is);
+      })
+      .catch(() => {
+        if (vivo) setIntegracoes([]);
+      });
     void api
       .listarColecoes()
       .then((cs) => {
@@ -170,6 +184,9 @@ export function Inicio(): JSX.Element {
           <>
             <div className="inicio-cabeca">
               <h1 className="inicio-cabeca__titulo">Suas planilhas</h1>
+              <Link to="/integracoes" className="btn">
+                <Layers size={18} /> Integrações
+              </Link>
               <form className="inicio-criar" onSubmit={criar}>
                 <Campo
                   aria-label="Nome da nova planilha"
@@ -184,6 +201,31 @@ export function Inicio(): JSX.Element {
               </form>
             </div>
             {erro !== null && <p className="aviso-erro">{erro}</p>}
+            {integracoes.filter((i) => i.ativo).length > 0 && (
+              <>
+                <h2 className="inicio-secao-titulo">
+                  <Layers size={18} aria-hidden /> Planilhas unidas
+                </h2>
+                <div className="grade-cartoes">
+                  {integracoes
+                    .filter((i) => i.ativo)
+                    .map((i) => (
+                      <div key={i.id} className="cartao-colecao cartao-colecao--unida">
+                        <Link to={`/i/${i.id}`} className="cartao-colecao__link">
+                          <span className="cartao-colecao__nome">
+                            <Layers size={15} className="cartao-colecao__cadeado-inline" aria-hidden />
+                            {i.nome}
+                          </span>
+                          <span className="etiqueta cartao-colecao__meta">
+                            {i.colecaoIds.length} planilhas unidas
+                          </span>
+                        </Link>
+                      </div>
+                    ))}
+                </div>
+                <h2 className="inicio-secao-titulo">Suas planilhas separadas</h2>
+              </>
+            )}
             <div className="grade-cartoes">
               {colecoes.map((c) => {
                 const mostrarCadeado = c.protegida;

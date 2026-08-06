@@ -13,6 +13,10 @@ import { Presenca } from './ui/Presenca';
 const Colecao = lazy(() => import('./telas/Colecao').then((m) => ({ default: m.Colecao })));
 const Config = lazy(() => import('./telas/Config').then((m) => ({ default: m.Config })));
 const Lixeira = lazy(() => import('./telas/Lixeira').then((m) => ({ default: m.Lixeira })));
+const Integracoes = lazy(() =>
+  import('./telas/Integracoes').then((m) => ({ default: m.Integracoes })),
+);
+const Integrado = lazy(() => import('./telas/Integrado').then((m) => ({ default: m.Integrado })));
 // Página pública (sem login) do link de compartilhamento.
 const RegistroPublico = lazy(() =>
   import('./publico/RegistroPublico').then((m) => ({ default: m.RegistroPublico })),
@@ -48,6 +52,22 @@ function Rotas(): JSX.Element {
           element={
             <Protegida>
               <Colecao />
+            </Protegida>
+          }
+        />
+        <Route
+          path="/integracoes"
+          element={
+            <Protegida>
+              <Integracoes />
+            </Protegida>
+          }
+        />
+        <Route
+          path="/i/:id"
+          element={
+            <Protegida>
+              <Integrado />
             </Protegida>
           }
         />

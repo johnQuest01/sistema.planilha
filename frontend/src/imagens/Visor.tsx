@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Download, X } from 'lucide-react';
 import { FotoZoomavel } from './FotoZoomavel';
 import { urlCheia, urlMini } from './urls';
+import { travarScroll } from '../ui/travaScroll';
 import './imagens.css';
 
 interface Props {
@@ -76,10 +77,9 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
   useEffect(() => {
     const origem = document.activeElement as HTMLElement | null;
     dialogoRef.current?.focus();
-    const corpoAntes = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const liberarScroll = travarScroll();
     return () => {
-      document.body.style.overflow = corpoAntes;
+      liberarScroll();
       origem?.focus?.();
     };
   }, []);

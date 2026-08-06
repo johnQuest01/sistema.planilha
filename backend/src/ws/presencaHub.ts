@@ -24,9 +24,20 @@ interface ClienteWs {
   contaId: string;
   nome: string;
   ultimoVisto: number;
+  // Último instante em que gravamos `visto_em` no banco para este socket. Serve
+  // para não escrever no Postgres a cada ping (heartbeat = write amplification).
+  ultimoVistoBanco: number;
 }
 
 const TICKET_TTL_MS = 60_000;
+// Janela de coalescência do broadcast de presença. Vários conectar/desconectar
+// quase simultâneos (surto de reconexão no cold start) colapsam num único
+// snapshot + fan-out, em vez de O(N) queries e O(N²) mensagens.
+const COALESCE_PRESENCA_MS = 300;
+// Só regravamos `visto_em` se passou esse tempo desde a última escrita deste
+// socket. A fonte da verdade de "online" é a memória (onlineAoVivo), então o
+// banco só precisa de um carimbo aproximado para "entradas recentes".
+const HEARTBEAT_DB_MS = 60_000;
 // Sem sinal (ping) do cliente por esse tempo → conexão considerada morta. O
 // cliente faz ping a cada ~25s (e ~60s quando a aba está em segundo plano),
 // então 90s tolera um ping perdido sem derrubar quem ainda está por perto.
@@ -35,7 +46,23 @@ const SWEEP_MS = 30_000;
 
 const tickets = new Map<string, TicketPresenca>();
 const salas = new Map<string, Set<ClienteWs>>();
+const broadcastPendente = new Map<string, ReturnType<typeof setTimeout>>();
 let varredor: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Agenda um broadcast de presença coalescido: se já houver um pendente para a
+ * conta, não empilha outro — o disparo (em COALESCE_PRESENCA_MS) já lerá o estado
+ * final. Evita o O(N²) de mensagens + O(N) de queries em surtos de churn.
+ */
+function agendarBroadcastPresenca(contaId: string): void {
+  if (broadcastPendente.has(contaId)) return;
+  const t = setTimeout(() => {
+    broadcastPendente.delete(contaId);
+    void broadcastPresenca(contaId);
+  }, COALESCE_PRESENCA_MS);
+  (t as unknown as { unref?: () => void }).unref?.();
+  broadcastPendente.set(contaId, t);
+}
 
 export function emitirTicketPresenca(
   usuarioId: string,
@@ -150,7 +177,7 @@ export async function anunciarEntradaWs(
   for (const c of sala) {
     if (aberto(c.socket)) c.socket.send(payload);
   }
-  await broadcastPresenca(contaId);
+  agendarBroadcastPresenca(contaId);
 }
 
 /** Remove o cliente da sala. Retorna true se ele estava lá (evita broadcast duplo). */
@@ -179,7 +206,7 @@ function varrerMortos(): void {
       }
     }
   }
-  for (const contaId of afetadas) void broadcastPresenca(contaId);
+  for (const contaId of afetadas) agendarBroadcastPresenca(contaId);
   if (salas.size === 0 && varredor !== null) {
     clearInterval(varredor);
     varredor = null;
@@ -204,6 +231,7 @@ export function conectarPresencaWs(socket: SocketPresenca, ticket: TicketPresenc
     contaId: ticket.contaId,
     nome: ticket.nome,
     ultimoVisto: Date.now(),
+    ultimoVistoBanco: 0,
   };
 
   let sala = salas.get(ticket.contaId);
@@ -215,12 +243,18 @@ export function conectarPresencaWs(socket: SocketPresenca, ticket: TicketPresenc
   garantirVarredor();
 
   socket.on('message', (raw: unknown) => {
-    cliente.ultimoVisto = Date.now();
+    const agora = Date.now();
+    cliente.ultimoVisto = agora;
     void (async () => {
       try {
         const msg = JSON.parse(textoDaMensagem(raw)) as { tipo?: string };
         if (msg.tipo === 'ping') {
-          await marcarVisto(ticket.usuarioId);
+          // Só grava no banco se passou tempo suficiente desde a última escrita:
+          // com muita gente online, gravar a cada ping saturaria o pool do Neon.
+          if (agora - cliente.ultimoVistoBanco >= HEARTBEAT_DB_MS) {
+            cliente.ultimoVistoBanco = agora;
+            await marcarVisto(ticket.usuarioId);
+          }
           enviar(socket, { tipo: 'pong' });
         }
       } catch {
@@ -230,17 +264,19 @@ export function conectarPresencaWs(socket: SocketPresenca, ticket: TicketPresenc
   });
 
   const aoSair = (): void => {
-    if (removerCliente(cliente)) void broadcastPresenca(ticket.contaId);
+    if (removerCliente(cliente)) agendarBroadcastPresenca(ticket.contaId);
   };
   socket.on('close', aoSair);
   socket.on('error', aoSair);
 
   void (async () => {
     try {
+      cliente.ultimoVistoBanco = Date.now();
       await marcarVisto(ticket.usuarioId);
       const dados = await snapshot(ticket.contaId);
       enviar(socket, { tipo: 'presenca', ...dados });
-      await broadcastPresenca(ticket.contaId);
+      // Avisa os demais de forma coalescida (surto de reconexão vira 1 fan-out).
+      agendarBroadcastPresenca(ticket.contaId);
     } catch {
       socket.close(1011, 'falha na presença');
     }

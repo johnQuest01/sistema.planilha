@@ -95,6 +95,20 @@ export interface Colecao {
   bloqueada: boolean;
 }
 
+// Integração de planilhas: une várias coleções numa "planilha só" na prévia e no
+// preenchimento, casando registros por referência. É só configuração/visão — nunca
+// altera coleções/registros. `colecaoIds` é ORDENADO (define a ordem dos blocos).
+// `ativo` liga/desliga: desligar volta cada planilha ao estado anterior, sem tocar
+// no banco.
+export interface Integracao {
+  id: string;
+  nome: string;
+  colecaoIds: string[];
+  ativo: boolean;
+  criadoEm: string;
+  atualizadoEm: string;
+}
+
 // Usuário logado (pessoa). Papel 'dono' pode apagar tudo; 'membro' preenche e cria.
 export interface Usuario {
   id: string;

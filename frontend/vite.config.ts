@@ -71,4 +71,17 @@ export default defineConfig({
       '/ws': { target: 'ws://localhost:3333', ws: true },
     },
   },
+  build: {
+    // Separa as libs de terceiros num chunk próprio e estável: entre deploys, só
+    // muda o código da app, e o vendor (React, Router, virtual, ícones) continua
+    // em cache no navegador — carregamento mais rápido em visitas seguintes.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['@tanstack/react-virtual', 'lucide-react'],
+        },
+      },
+    },
+  },
 });
