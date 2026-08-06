@@ -16,7 +16,6 @@ import {
   chaveReferencia,
   camposDaParte,
   codigoInicial,
-  type ParteIntegrada,
   type RegistroIntegrado,
 } from '../integracao/merge';
 import { PreviewIntegrado } from '../integracao/PreviewIntegrado';
@@ -36,7 +35,10 @@ function agruparPorReferencia(
   cols: Colecao[],
   porColecao: Registro[][],
 ): { grupos: RegistroIntegrado[]; soltos: RegistroIntegrado[] } {
-  const mapa = new Map<string, ParteIntegrada[]>();
+  // Por chave, guardamos uma LISTA de registros POR planilha (não um só). Assim,
+  // quando a mesma planilha tem 2+ registros com o mesmo código (ex.: dois "4506"
+  // no Caderno = produtos diferentes), NENHUM some — cada um vira um cartão.
+  const mapa = new Map<string, Registro[][]>();
   const soltos: RegistroIntegrado[] = [];
   cols.forEach((c, idx) => {
     for (const r of porColecao[idx] ?? []) {
@@ -48,16 +50,27 @@ function agruparPorReferencia(
         });
         continue;
       }
-      let partes = mapa.get(chave);
-      if (partes === undefined) {
-        partes = cols.map((cc) => ({ colecao: cc, registro: null }));
-        mapa.set(chave, partes);
+      let listas = mapa.get(chave);
+      if (listas === undefined) {
+        listas = cols.map(() => []);
+        mapa.set(chave, listas);
       }
-      const alvo = partes[idx];
-      if (alvo !== undefined && alvo.registro === null) partes[idx] = { colecao: c, registro: r };
+      listas[idx]?.push(r);
     }
   });
-  const grupos = [...mapa.entries()].map(([chave, partes]) => ({ chave, partes }));
+  // "Zip": para cada chave, emite max(qtd por planilha) cartões, casando por posição
+  // (Caderno[i] com Modelagem[i]); sobras ficam com a outra parte null. Todo
+  // registro aparece exatamente uma vez.
+  const grupos: RegistroIntegrado[] = [];
+  for (const [chave, listas] of mapa) {
+    const max = Math.max(...listas.map((l) => l.length));
+    for (let i = 0; i < max; i += 1) {
+      grupos.push({
+        chave,
+        partes: cols.map((cc, ci) => ({ colecao: cc, registro: listas[ci]?.[i] ?? null })),
+      });
+    }
+  }
   return { grupos, soltos };
 }
 

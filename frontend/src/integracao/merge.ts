@@ -52,9 +52,15 @@ export function chaveReferencia(campos: Campo[], registro: Registro): string | n
     const cod = codigoInicial(formatarValor(c, registro.valores[c.id]));
     if (cod !== '') return cod;
   }
-  const titulo = codigoInicial(tituloDoRegistro(campos, registro));
-  if (titulo === '' || titulo === 'sem nome') return null;
-  return titulo;
+  // Sem bloco de referência preenchido: tenta o título BRUTO. Se for vazio ou
+  // "Sem nome", o registro NÃO tem referência -> null (vira "solto", aparece
+  // sozinho em "Geral"). Antes reduzíamos o título com codigoInicial ANTES de
+  // checar: "Sem nome" virava "sem" e escapava do guard, colapsando todos os
+  // registros vazios num só grupo "sem" (escondia os demais).
+  const tituloBruto = tituloDoRegistro(campos, registro).trim().toLowerCase();
+  if (tituloBruto === '' || tituloBruto === 'sem nome') return null;
+  const cod = codigoInicial(tituloBruto);
+  return cod === '' ? null : cod;
 }
 
 // Campos vigentes de uma parte: os do registro (corpo próprio, se houver) ou, sem
