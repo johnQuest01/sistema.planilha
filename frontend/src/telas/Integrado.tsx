@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, PencilLine, Plus, Search } from 'lucide-react';
+import { ArrowLeft, ImageOff, PencilLine, Plus, Search } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import { assinarRealtime } from '../api/realtime';
 import type { Colecao, Integracao, Registro } from '../../../shared/tipos';
@@ -11,7 +11,6 @@ import { FolhaInferior } from '../ui/FolhaInferior';
 import { TopoApp } from './TopoApp';
 import { camposDoRegistro, capaDoRegistro, tituloDoRegistro } from '../preencher/derivarResumo';
 import { valoresVaziosDe } from '../preencher/valoresVazios';
-import { urlMini } from '../imagens/urls';
 import {
   chaveReferencia,
   camposDaParte,
@@ -20,6 +19,7 @@ import {
 } from '../integracao/merge';
 import { PreviewIntegrado } from '../integracao/PreviewIntegrado';
 import { FichaIntegrada } from '../integracao/FichaIntegrada';
+import { Miniatura } from '../preencher/Miniatura';
 import './telas.css';
 import './integracao.css';
 import '../preencher/preencher.css';
@@ -555,26 +555,26 @@ function ListaGrupos({
   return (
     <>
       <p className="integ-dica">{titulo}</p>
-      <div className="grade-cartoes">
+      <div className="lista integ-lista-registros">
         {grupos.map((g) => (
-          <button key={g.chave} type="button" className="cartao-colecao" onClick={() => aoAbrir(g)}>
-            <CartaoConteudo capa={capaDoGrupo(g)} titulo={tituloDoGrupo(g)} grupo={g} />
-          </button>
+          <CartaoRegistro key={g.chave} grupo={g} aoAbrir={() => aoAbrir(g)} />
         ))}
       </div>
     </>
   );
 }
 
-function CartaoConteudo({
-  capa,
-  titulo,
+/** Card de registro no padrão dos blocos das planilhas (Modelagem/Caderno):
+ *  miniatura à esquerda, título da(s) referência(s) e a linha "X/N planilhas". */
+function CartaoRegistro({
   grupo,
+  aoAbrir,
 }: {
-  capa: string | null;
-  titulo: string;
   grupo: RegistroIntegrado;
+  aoAbrir: () => void;
 }): JSX.Element {
+  const capa = capaDoGrupo(grupo);
+  const titulo = tituloDoGrupo(grupo);
   const presentesArr = grupo.partes.filter((p) => p.registro !== null);
   const presentes = presentesArr.length;
   // Cartão com uma parte só (ex.: modo "Geral" separado): mostra a planilha de
@@ -584,17 +584,29 @@ function CartaoConteudo({
       ? presentesArr[0].colecao.nome
       : `${presentes}/${grupo.partes.length} planilhas`;
   return (
-    <span className="cartao-colecao__nome">
-      {capa !== null && (
-        <img
-          src={urlMini(capa)}
-          alt=""
-          loading="lazy"
-          style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', marginRight: 8 }}
-        />
-      )}
-      {titulo}
-      <span className="etiqueta cartao-colecao__meta">{meta}</span>
-    </span>
+    <button type="button" className="lista-item integ-lista-item" onClick={aoAbrir}>
+      <span className="lista-item__capa-btn" aria-hidden="true">
+        {capa !== null ? (
+          <Miniatura fotoKey={capa} tamanho={56} />
+        ) : (
+          <span
+            className="capa capa--vazia"
+            style={{
+              width: 56,
+              height: 56,
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: 8,
+            }}
+          >
+            <ImageOff size={20} />
+          </span>
+        )}
+      </span>
+      <div className="lista-item__corpo">
+        <span className="lista-item__titulo">{titulo}</span>
+        <span className="lista-item__resumo">{meta}</span>
+      </div>
+    </button>
   );
 }

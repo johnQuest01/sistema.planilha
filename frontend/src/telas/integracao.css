@@ -304,3 +304,32 @@
 .integ-salvo--ok {
   color: var(--fita, #7bd88f);
 }
+
+/* Cards de registro no padrão dos blocos das planilhas (mesmo visual do
+   .lista-item da Modelagem/Caderno), porém clicáveis para abrir a prévia. */
+.integ-lista-registros {
+  gap: var(--e2);
+}
+.lista-item.integ-lista-item {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease;
+}
+.lista-item.integ-lista-item:hover {
+  transform: translateY(-1px);
+  border-color: var(--marca, #6d4aff);
+}
+.lista-item.integ-lista-item:focus-visible {
+  outline: 2px solid var(--marca, #6d4aff);
+  outline-offset: 2px;
+}
+.lista-item.integ-lista-item .capa--vazia {
+  border: 1px solid var(--linha);
+  color: var(--tinta-3);
+  background: rgba(23, 32, 28, 0.03);
+}
