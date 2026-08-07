@@ -192,6 +192,10 @@
   border-color: var(--marca, #6d4aff);
   box-shadow: 0 0 0 1px var(--marca, #6d4aff) inset, var(--sombra);
 }
+.cartao-colecao--arquivada {
+  border-style: dashed;
+  opacity: 0.75;
+}
 .cartao-colecao {
   position: relative;
   overflow: hidden;

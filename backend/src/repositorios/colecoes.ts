@@ -1,6 +1,7 @@
 import type { Tx } from '../db/comConta';
 import type { Campo, Colecao, ConfigCampo, TipoCampo } from '../../../shared/tipos';
 import {
+  ehDonoWorkspace,
   usuarioComAcessoLivre,
   usuarioJaDesbloqueou,
 } from '../auth/acessoColecao';
@@ -14,6 +15,7 @@ export interface ColecaoResumo {
   atualizadoEm: string;
   protegida: boolean;
   bloqueada: boolean;
+  arquivada: boolean;
 }
 
 export type AcessoUsuario = {
@@ -29,6 +31,7 @@ interface LinhaColecao {
   criado_em: Date | string;
   atualizado_em: Date | string;
   senha_hash: string | null;
+  arquivada: boolean;
 }
 
 interface LinhaCampo {
@@ -61,6 +64,7 @@ function mapColecao(
     atualizadoEm: iso(r.atualizado_em),
     protegida,
     bloqueada,
+    arquivada: r.arquivada,
   };
 }
 
@@ -84,7 +88,7 @@ export async function criarColecao(
 ): Promise<ColecaoResumo> {
   const linhas = await tx<LinhaColecao[]>`
     insert into colecoes (conta_id, nome, criado_por) values (${contaId}, ${nome}, ${criadoPor})
-    returning id, nome, criado_por, criado_em, atualizado_em, senha_hash`;
+    returning id, nome, criado_por, criado_em, atualizado_em, senha_hash, arquivada`;
   const linha = linhas[0];
   if (linha === undefined) throw new Error('insert de coleção não retornou linha');
   return mapColecao(linha, { ...acesso, jaDesbloqueou: false });
@@ -96,14 +100,17 @@ export async function listarColecoes(
   acesso: AcessoUsuario,
 ): Promise<ColecaoResumo[]> {
   const linhas = await tx<LinhaColecao[]>`
-    select id, nome, criado_por, criado_em, atualizado_em, senha_hash
+    select id, nome, criado_por, criado_em, atualizado_em, senha_hash, arquivada
     from colecoes where conta_id = ${contaId}
     order by criado_em desc`;
 
+  // Só o dono do workspace enxerga arquivadas; para os demais, elas somem da lista.
+  const dono = ehDonoWorkspace(acesso.email);
   // Dono/whitelist não precisam consultar colecao_acessos.
   const livre = usuarioComAcessoLivre({ email: acesso.email, papel: acesso.papel });
   const resultado: ColecaoResumo[] = [];
   for (const linha of linhas) {
+    if (linha.arquivada && !dono) continue;
     const jaDesbloqueou =
       livre || linha.senha_hash === null
         ? false
@@ -119,10 +126,20 @@ export async function obterColecao(
   acesso: AcessoUsuario,
 ): Promise<Colecao | null> {
   const cols = await tx<
-    { id: string; nome: string; criado_por: string | null; senha_hash: string | null }[]
-  >`select id, nome, criado_por, senha_hash from colecoes where id = ${id}`;
+    {
+      id: string;
+      nome: string;
+      criado_por: string | null;
+      senha_hash: string | null;
+      arquivada: boolean;
+    }[]
+  >`select id, nome, criado_por, senha_hash, arquivada from colecoes where id = ${id}`;
   const col = cols[0];
   if (col === undefined) return null;
+
+  // Arquivada só existe para o dono do workspace; para os demais, 404 (como se
+  // não existisse) — assim ninguém abre, lista registros ou busca nela.
+  if (col.arquivada && !ehDonoWorkspace(acesso.email)) return null;
 
   const protegida = col.senha_hash !== null;
   const livre = usuarioComAcessoLivre({ email: acesso.email, papel: acesso.papel });
@@ -140,6 +157,7 @@ export async function obterColecao(
       campos: [],
       protegida: true,
       bloqueada: true,
+      arquivada: col.arquivada,
     };
   }
 
@@ -155,7 +173,21 @@ export async function obterColecao(
     campos: campos.map(mapCampo),
     protegida,
     bloqueada: false,
+    arquivada: col.arquivada,
   };
+}
+
+// Arquivar/desarquivar (só o dono do workspace, garantido na rota).
+export async function definirArquivada(
+  tx: Tx,
+  id: string,
+  arquivada: boolean,
+): Promise<'ok' | 'nao-encontrado'> {
+  const linhas = await tx<{ id: string }[]>`
+    update colecoes set arquivada = ${arquivada}, atualizado_em = now()
+    where id = ${id}
+    returning id`;
+  return linhas[0] === undefined ? 'nao-encontrado' : 'ok';
 }
 
 export async function renomearColecao(
@@ -167,7 +199,7 @@ export async function renomearColecao(
   const linhas = await tx<LinhaColecao[]>`
     update colecoes set nome = ${nome}, atualizado_em = now()
     where id = ${id}
-    returning id, nome, criado_por, criado_em, atualizado_em, senha_hash`;
+    returning id, nome, criado_por, criado_em, atualizado_em, senha_hash, arquivada`;
   const linha = linhas[0];
   if (linha === undefined) return null;
   const acessos = await tx<{ ok: number }[]>`
@@ -246,5 +278,6 @@ export async function duplicarColecao(
     campos: camposCopiados,
     protegida: false,
     bloqueada: false,
+    arquivada: false,
   };
 }

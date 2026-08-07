@@ -14,6 +14,15 @@ export function usuarioComAcessoLivre(usuario: { email: string; papel?: 'dono' |
   return emailComAcessoLivre(usuario.email);
 }
 
+/**
+ * Dono DO WORKSPACE (só o Bruno, config.workspaceOwnerEmail). É o único que
+ * arquiva/desarquiva e o único que enxerga planilhas arquivadas. Diferente de
+ * `usuarioComAcessoLivre` (que inclui whitelist e papel 'dono' de qualquer conta).
+ */
+export function ehDonoWorkspace(email: string): boolean {
+  return email.trim().toLowerCase() === config.workspaceOwnerEmail;
+}
+
 export type ResultadoAcesso = 'ok' | 'nao-encontrado' | 'bloqueado';
 
 /** Planilha com senha_hash exige desbloqueio, exceto whitelist/dono. */
@@ -22,10 +31,13 @@ export async function verificarAcessoColecao(
   colecaoId: string,
   usuario: UsuarioAcesso,
 ): Promise<ResultadoAcesso> {
-  const linhas = await tx<{ senha_hash: string | null }[]>`
-    select senha_hash from colecoes where id = ${colecaoId}`;
+  const linhas = await tx<{ senha_hash: string | null; arquivada: boolean }[]>`
+    select senha_hash, arquivada from colecoes where id = ${colecaoId}`;
   const col = linhas[0];
   if (col === undefined) return 'nao-encontrado';
+  // Arquivada é invisível para todos, menos o dono do workspace: some como se não
+  // existisse (404), bloqueando registros/edição/busca por qualquer outro usuário.
+  if (col.arquivada && !ehDonoWorkspace(usuario.email)) return 'nao-encontrado';
   if (col.senha_hash === null) return 'ok';
   if (usuarioComAcessoLivre(usuario)) return 'ok';
 

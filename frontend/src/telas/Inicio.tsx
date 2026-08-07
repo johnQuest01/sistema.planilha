@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Layers, Lock, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Layers, Lock, Plus, Trash2 } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo, type Integracao } from '../api/cliente';
 import { prefetchColecoes } from '../api/prefetch';
 import { useAuth } from '../contexto/Auth';
@@ -24,9 +24,44 @@ export function Inicio(): JSX.Element {
   const [criando, setCriando] = useState(false);
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
+  const [arquivandoId, setArquivandoId] = useState<string | null>(null);
+
+  // Só o dono do workspace (Bruno) arquiva/desarquiva e vê as arquivadas.
+  const ehDono = usuario?.podeGerirSenhas === true;
 
   function podeApagar(c: ColecaoResumo): boolean {
     return usuario !== null && (usuario.papel === 'dono' || c.criadoPor === usuario.id);
+  }
+
+  async function arquivar(id: string): Promise<void> {
+    setArquivandoId(id);
+    setErro(null);
+    try {
+      await api.arquivarColecao(id);
+      setColecoes((cs) =>
+        cs === null ? cs : cs.map((c) => (c.id === id ? { ...c, arquivada: true } : c)),
+      );
+      setConfirmando(null);
+    } catch (e) {
+      setErro(e instanceof ErroApi ? e.message : 'não foi possível arquivar');
+    } finally {
+      setArquivandoId(null);
+    }
+  }
+
+  async function desarquivar(id: string): Promise<void> {
+    setArquivandoId(id);
+    setErro(null);
+    try {
+      await api.desarquivarColecao(id);
+      setColecoes((cs) =>
+        cs === null ? cs : cs.map((c) => (c.id === id ? { ...c, arquivada: false } : c)),
+      );
+    } catch (e) {
+      setErro(e instanceof ErroApi ? e.message : 'não foi possível desarquivar');
+    } finally {
+      setArquivandoId(null);
+    }
   }
 
   async function apagar(id: string): Promise<void> {
@@ -154,6 +189,8 @@ export function Inicio(): JSX.Element {
   }
 
   const vazio = colecoes.length === 0;
+  const ativas = colecoes.filter((c) => !c.arquivada);
+  const arquivadas = colecoes.filter((c) => c.arquivada);
 
   return (
     <div className="pagina">
@@ -232,9 +269,10 @@ export function Inicio(): JSX.Element {
               </>
             )}
             <div className="grade-cartoes">
-              {colecoes.map((c) => {
+              {ativas.map((c) => {
                 const mostrarCadeado = c.protegida;
                 const mostrarLixeira = podeApagar(c) && !c.bloqueada;
+                const mostrarArquivar = ehDono && !c.bloqueada;
                 return (
                 <div key={c.id} className="cartao-colecao">
                   <Link to={`/c/${c.id}`} className="cartao-colecao__link">
@@ -254,7 +292,7 @@ export function Inicio(): JSX.Element {
                         : fmtData.format(new Date(c.atualizadoEm))}
                     </span>
                   </Link>
-                  {(mostrarCadeado || mostrarLixeira) && (
+                  {(mostrarCadeado || mostrarLixeira || mostrarArquivar) && (
                     <div className="cartao-colecao__acoes">
                       {mostrarCadeado && (
                         <span
@@ -264,6 +302,18 @@ export function Inicio(): JSX.Element {
                         >
                           <Lock size={18} aria-hidden />
                         </span>
+                      )}
+                      {mostrarArquivar && (
+                        <button
+                          type="button"
+                          className="btn btn--icone cartao-colecao__apagar"
+                          aria-label={`Arquivar planilha ${c.nome}`}
+                          title="Arquivar (só você vê até desarquivar)"
+                          disabled={arquivandoId === c.id}
+                          onClick={() => void arquivar(c.id)}
+                        >
+                          <Archive size={16} />
+                        </button>
                       )}
                       {mostrarLixeira && (
                         <button
@@ -306,6 +356,43 @@ export function Inicio(): JSX.Element {
                 );
               })}
             </div>
+
+            {ehDono && arquivadas.length > 0 && (
+              <>
+                <h2 className="inicio-secao-titulo">
+                  <Archive size={18} aria-hidden /> Arquivadas (só você vê)
+                </h2>
+                <div className="grade-cartoes">
+                  {arquivadas.map((c) => (
+                    <div key={c.id} className="cartao-colecao cartao-colecao--arquivada">
+                      <Link to={`/c/${c.id}`} className="cartao-colecao__link">
+                        <span className="cartao-colecao__nome">
+                          <Archive
+                            size={15}
+                            className="cartao-colecao__cadeado-inline"
+                            aria-hidden
+                          />
+                          {c.nome}
+                        </span>
+                        <span className="etiqueta cartao-colecao__meta">arquivada</span>
+                      </Link>
+                      <div className="cartao-colecao__acoes">
+                        <button
+                          type="button"
+                          className="btn btn--icone cartao-colecao__apagar"
+                          aria-label={`Desarquivar planilha ${c.nome}`}
+                          title="Desarquivar (volta a aparecer para todos)"
+                          disabled={arquivandoId === c.id}
+                          onClick={() => void desarquivar(c.id)}
+                        >
+                          <ArchiveRestore size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

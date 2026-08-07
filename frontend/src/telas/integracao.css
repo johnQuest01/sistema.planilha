@@ -235,6 +235,19 @@
   font-size: 13px;
   color: var(--tinta-3);
 }
+/* RegistroPreview dentro do cartão da parte: sem "cartão dentro de cartão"
+   (o integ-previa-parte já é o cartão). Mantém o compartilhar/renomear/blocos. */
+.integ-previa-parte .preview-registro {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.integ-previa-parte .preview-registro__cabecalho {
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+}
 .integ-previa-parte--ausente {
   box-shadow: none;
   border-style: dashed;

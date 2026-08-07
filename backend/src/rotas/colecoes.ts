@@ -18,6 +18,7 @@ import { criarColecaoSchema, renomearColecaoSchema } from '../validacao/colecao'
 import {
   apagarColecao,
   criarColecao,
+  definirArquivada,
   duplicarColecao,
   listarColecoes,
   obterColecao,
@@ -176,6 +177,38 @@ export async function rotasColecoes(app: FastifyInstance): Promise<void> {
       );
       if (colecao === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       return reply.send(colecao);
+    },
+  );
+
+  // Arquivar / desarquivar — só o dono do workspace (brunoacre07). Arquivada some
+  // para todos os demais; só o dono desarquiva.
+  app.post<{ Params: { id: string } }>(
+    '/api/colecoes/:id/arquivar',
+    { preHandler: [exigeDono, validaIdParam] },
+    async (req, reply) => {
+      const u = usuarioObrigatorio(req);
+      if (!podeGerirSenhaPlanilha(u.email)) {
+        return reply.code(403).send({ erro: 'só o dono do workspace pode arquivar planilhas' });
+      }
+      const contaId = contaObrigatoria(req);
+      const r = await comConta(contaId, (tx) => definirArquivada(tx, req.params.id, true));
+      if (r === 'nao-encontrado') return reply.code(404).send({ erro: 'coleção não encontrada' });
+      return reply.send({ ok: true });
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/colecoes/:id/desarquivar',
+    { preHandler: [exigeDono, validaIdParam] },
+    async (req, reply) => {
+      const u = usuarioObrigatorio(req);
+      if (!podeGerirSenhaPlanilha(u.email)) {
+        return reply.code(403).send({ erro: 'só o dono do workspace pode desarquivar planilhas' });
+      }
+      const contaId = contaObrigatoria(req);
+      const r = await comConta(contaId, (tx) => definirArquivada(tx, req.params.id, false));
+      if (r === 'nao-encontrado') return reply.code(404).send({ erro: 'coleção não encontrada' });
+      return reply.send({ ok: true });
     },
   );
 

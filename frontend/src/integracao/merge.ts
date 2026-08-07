@@ -82,6 +82,7 @@ export function colecaoVirtual(integracao: Integracao, partes: ParteIntegrada[])
     campos,
     protegida: false,
     bloqueada: false,
+    arquivada: false,
   };
 }
 

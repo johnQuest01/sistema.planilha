@@ -18,9 +18,9 @@ import {
   codigoInicial,
   type RegistroIntegrado,
 } from '../integracao/merge';
-import { PreviewIntegrado } from '../integracao/PreviewIntegrado';
 import { FichaIntegrada } from '../integracao/FichaIntegrada';
 import { Miniatura } from '../preencher/Miniatura';
+import { RegistroPreview } from '../preencher/RegistroPreview';
 import './telas.css';
 import './integracao.css';
 import '../preencher/preencher.css';
@@ -487,6 +487,10 @@ export function Integrado(): JSX.Element {
                       setEditando(g);
                     }}
                     aoApagar={apagarNaBusca}
+                    aoAtualizarRegistro={(r) => {
+                      const idx = g.partes.findIndex((p) => p.colecao.id === r.colecaoId);
+                      if (idx >= 0) atualizarParte(idx, r);
+                    }}
                   />
                 ))}
               </div>
@@ -553,7 +557,13 @@ export function Integrado(): JSX.Element {
               <AcaoApagarIntegrado grupo={previa} podeApagar={podeApagar} aoApagar={apagarNaPrevia} />
             </div>
           )}
-          <PreviaCorpo grupo={previa} />
+          <PreviaCorpo
+            grupo={previa}
+            aoAtualizarRegistro={(r) => {
+              const i = previa.partes.findIndex((p) => p.colecao.id === r.colecaoId);
+              if (i >= 0) atualizarParte(i, r);
+            }}
+          />
         </FolhaInferior>
       )}
 
@@ -640,9 +650,16 @@ function CartaoRegistro({
   );
 }
 
-/** Corpo da prévia unida: cada parte vira um cartão (planilha + título) com o
- *  PreviewIntegrado abaixo. Reutilizado na folha inferior e nos resultados da busca. */
-function PreviaCorpo({ grupo }: { grupo: RegistroIntegrado }): JSX.Element {
+/** Corpo da prévia unida: cada parte vira um cartão (planilha + registro). Usa o
+ *  RegistroPreview padrão — assim traz o COMPARTILHAR (link/imagem) e o renomear
+ *  que já existem nas outras planilhas. Reutilizado na folha inferior e na busca. */
+function PreviaCorpo({
+  grupo,
+  aoAtualizarRegistro,
+}: {
+  grupo: RegistroIntegrado;
+  aoAtualizarRegistro?: (r: Registro) => void;
+}): JSX.Element {
   return (
     <div className="integ-previa">
       {grupo.partes.map((parte) =>
@@ -650,11 +667,12 @@ function PreviaCorpo({ grupo }: { grupo: RegistroIntegrado }): JSX.Element {
           <article key={parte.colecao.id} className="integ-previa-parte">
             <div className="integ-previa-parte__cabecalho">
               <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
-              <h3 className="integ-previa-parte__titulo">
-                {tituloDoRegistro(camposDaParte(parte), parte.registro)}
-              </h3>
             </div>
-            <PreviewIntegrado campos={camposDaParte(parte)} registro={parte.registro} />
+            <RegistroPreview
+              colecao={parte.colecao}
+              registro={parte.registro}
+              aoAtualizar={aoAtualizarRegistro}
+            />
           </article>
         ) : (
           <article
@@ -742,12 +760,14 @@ function BlocoIntegrado({
   podeApagar,
   aoEditar,
   aoApagar,
+  aoAtualizarRegistro,
 }: {
   grupo: RegistroIntegrado;
   integracaoNome: string;
   podeApagar: boolean;
   aoEditar: (g: RegistroIntegrado) => void;
   aoApagar: (g: RegistroIntegrado) => Promise<void>;
+  aoAtualizarRegistro?: (r: Registro) => void;
 }): JSX.Element {
   const presentes = partesPresentes(grupo);
   return (
@@ -766,7 +786,7 @@ function BlocoIntegrado({
           <AcaoApagarIntegrado grupo={grupo} podeApagar={podeApagar} aoApagar={aoApagar} />
         </div>
       </div>
-      <PreviaCorpo grupo={grupo} />
+      <PreviaCorpo grupo={grupo} aoAtualizarRegistro={aoAtualizarRegistro} />
     </article>
   );
 }

@@ -93,6 +93,8 @@ export interface Colecao {
   protegida: boolean;
   /** true quando o usuário logado ainda precisa digitar a senha. */
   bloqueada: boolean;
+  /** true quando a planilha está arquivada (some para todos, menos o dono do workspace). */
+  arquivada: boolean;
 }
 
 // Integração de planilhas: une várias coleções numa "planilha só" na prévia e no

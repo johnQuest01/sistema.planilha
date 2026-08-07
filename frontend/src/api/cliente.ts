@@ -22,6 +22,7 @@ export interface ColecaoResumo {
   atualizadoEm: string;
   protegida: boolean;
   bloqueada: boolean;
+  arquivada: boolean;
 }
 
 export interface RespostaUpload {
@@ -162,6 +163,12 @@ export const api = {
     pedir<Colecao>(`/api/colecoes/${id}/duplicar`, { method: 'POST' }),
   apagarColecao: (id: string) =>
     pedir<void>(`/api/colecoes/${id}`, { method: 'DELETE' }),
+  // Arquivar/desarquivar: só o dono do workspace. Arquivada some para todos os
+  // demais (lista, abertura, registros) até ser desarquivada.
+  arquivarColecao: (id: string) =>
+    pedir<{ ok: boolean }>(`/api/colecoes/${id}/arquivar`, { method: 'POST' }),
+  desarquivarColecao: (id: string) =>
+    pedir<{ ok: boolean }>(`/api/colecoes/${id}/desarquivar`, { method: 'POST' }),
 
   // --- campos ---
   criarCampo: (colecaoId: string, dados: { nome: string; tipo: TipoCampo; config?: ConfigCampo }) =>
