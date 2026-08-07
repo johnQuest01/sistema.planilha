@@ -11,7 +11,6 @@ import {
   lerAlvoTitulo,
   patchAlvoTitulo,
   resumoDoRegistro,
-  temCampoImagem,
   tituloDoRegistro,
 } from './derivarResumo';
 import { Miniatura } from './Miniatura';
@@ -163,11 +162,10 @@ export function ListaDensa({
   rodape,
   aoAproximarFim,
 }: Props): JSX.Element {
-  // Mostra a coluna de capa se a coleção OU algum registro (com corpo próprio)
-  // tiver bloco de imagem.
-  const comImagem =
-    temCampoImagem(colecao.campos) ||
-    registros.some((r) => Array.isArray(r.campos) && temCampoImagem(r.campos));
+  // Sempre reserva o slot de capa (placeholder quando não há foto) para os cartões
+  // ficarem alinhados no mesmo padrão da Modelagem, com ou sem imagem — assim o
+  // título/resumo nunca encostam na borda nem ficam "espremidos".
+  const comImagem = true;
   const lado = solto ? 72 : 56;
   const altura = alturaLinha(solto, lado);
   const [editandoId, setEditandoId] = useState<string | null>(null);

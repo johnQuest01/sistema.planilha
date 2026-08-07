@@ -226,11 +226,26 @@ export function Integrado(): JSX.Element {
 
   // Deriva os grupos unidos (e os soltos) dos registros crus. Recalcula sozinho
   // sempre que `regs` muda — inclusive por eventos do realtime.
-  const { todos, soltos } = useMemo<{ todos: RegistroIntegrado[] | null; soltos: RegistroIntegrado[] }>(() => {
-    if (regs === null || colecoes === null) return { todos: null, soltos: [] };
+  // `separados` = TODOS os registros, um cartão por registro (sem unir): é o que o
+  // modo "Geral" mostra, para a contagem bater com o total real das planilhas
+  // (ex.: 131 + 26 = 157), em vez de contar cartões unidos.
+  const { todos, separados } = useMemo<{
+    todos: RegistroIntegrado[] | null;
+    separados: RegistroIntegrado[];
+  }>(() => {
+    if (regs === null || colecoes === null) return { todos: null, separados: [] };
     const r = agruparPorReferencia(colecoes, regs);
     r.grupos.sort((a, b) => partesPresentes(b) - partesPresentes(a));
-    return { todos: r.grupos, soltos: r.soltos };
+    const sep: RegistroIntegrado[] = [];
+    colecoes.forEach((c, idx) => {
+      for (const reg of regs[idx] ?? []) {
+        sep.push({
+          chave: `sep:${c.id}:${reg.id}`,
+          partes: colecoes.map((cc, i) => ({ colecao: cc, registro: i === idx ? reg : null })),
+        });
+      }
+    });
+    return { todos: r.grupos, separados: sep };
   }, [regs, colecoes]);
 
   // Upsert/remoção de um registro na planilha certa (por índice). Idempotente por id,
@@ -365,7 +380,8 @@ export function Integrado(): JSX.Element {
   if (integracao === null || colecoes === null) return <Carregando />;
 
   const unidosLista = todos === null ? [] : todos.filter((g) => partesPresentes(g) >= 2);
-  const geralLista = todos === null ? [] : [...todos, ...soltos];
+  // "Geral" = cada registro separado (sem unir) → conta o total real de registros.
+  const geralLista = separados;
   const listaTodos =
     todos === null
       ? null
@@ -482,22 +498,32 @@ export function Integrado(): JSX.Element {
             </Botao>
           }
         >
-          <div className="preview-registro preview-registro--completo">
-            {previa.partes.map((parte) => (
-              <div key={parte.colecao.id}>
-                <div
-                  className={`integ-parte-rotulo${parte.registro === null ? ' integ-parte-rotulo--ausente' : ''}`}
-                >
-                  <span>
-                    {parte.colecao.nome}
-                    {parte.registro === null && ' · sem registro para esta referência'}
-                  </span>
-                </div>
-                {parte.registro !== null && (
+          <div className="integ-previa">
+            {previa.partes.map((parte) =>
+              parte.registro !== null ? (
+                <article key={parte.colecao.id} className="integ-previa-parte">
+                  <div className="integ-previa-parte__cabecalho">
+                    <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
+                    <h3 className="integ-previa-parte__titulo">
+                      {tituloDoRegistro(camposDaParte(parte), parte.registro)}
+                    </h3>
+                  </div>
                   <PreviewIntegrado campos={camposDaParte(parte)} registro={parte.registro} />
-                )}
-              </div>
-            ))}
+                </article>
+              ) : (
+                <article
+                  key={parte.colecao.id}
+                  className="integ-previa-parte integ-previa-parte--ausente"
+                >
+                  <div className="integ-previa-parte__cabecalho">
+                    <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
+                    <span className="integ-previa-parte__vazio">
+                      Sem registro para esta referência
+                    </span>
+                  </div>
+                </article>
+              ),
+            )}
           </div>
         </FolhaInferior>
       )}
@@ -549,7 +575,14 @@ function CartaoConteudo({
   titulo: string;
   grupo: RegistroIntegrado;
 }): JSX.Element {
-  const presentes = grupo.partes.filter((p) => p.registro !== null).length;
+  const presentesArr = grupo.partes.filter((p) => p.registro !== null);
+  const presentes = presentesArr.length;
+  // Cartão com uma parte só (ex.: modo "Geral" separado): mostra a planilha de
+  // origem em vez de "1/N planilhas".
+  const meta =
+    presentes === 1 && presentesArr[0] !== undefined
+      ? presentesArr[0].colecao.nome
+      : `${presentes}/${grupo.partes.length} planilhas`;
   return (
     <span className="cartao-colecao__nome">
       {capa !== null && (
@@ -561,9 +594,7 @@ function CartaoConteudo({
         />
       )}
       {titulo}
-      <span className="etiqueta cartao-colecao__meta">
-        {presentes}/{grupo.partes.length} planilhas
-      </span>
+      <span className="etiqueta cartao-colecao__meta">{meta}</span>
     </span>
   );
 }

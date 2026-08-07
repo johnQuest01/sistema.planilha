@@ -175,7 +175,7 @@ export function FichaIntegrada({
       }
     >
       <div className="ficha">
-        <div className="integ-editor-barra">
+        <div className="ficha__bloco ficha__acoes-topo">
           <Botao variante="primario" onClick={() => void salvarTudo()} disabled={salvando || ocupado}>
             <Save size={16} />
             Salvar tudo
