@@ -253,6 +253,21 @@
   color: var(--perigo);
   opacity: 1;
 }
+/* Botão de olho (ocultar/mostrar): maior e mais visível que a lixeira, pois é a
+   ação principal do dono para esconder/reexibir planilhas e planilhas unidas. */
+.cartao-colecao__olho {
+  color: var(--tinta-2);
+  opacity: 0.95;
+  width: 40px;
+  height: 40px;
+}
+.cartao-colecao__olho:hover {
+  color: var(--marca, #6d4aff);
+  opacity: 1;
+}
+.cartao-colecao__olho:disabled {
+  opacity: 0.5;
+}
 .cartao-colecao__confirma {
   position: absolute;
   inset: 0;

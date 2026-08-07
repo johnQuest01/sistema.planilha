@@ -185,6 +185,10 @@ textarea.campo__controle {
   padding: var(--e3) var(--e4);
   border-bottom: 1px solid var(--linha);
 }
+.folha__voltar {
+  flex: none;
+  color: var(--giz);
+}
 .folha__tituloArea {
   flex: 1;
   min-width: 0;

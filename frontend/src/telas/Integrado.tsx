@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ImageOff, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import { assinarRealtime } from '../api/realtime';
+import { chaveIntegrado, gravarCache, lerCache } from '../api/cache';
 import { useAuth } from '../contexto/Auth';
 import type { Colecao, Integracao, Registro } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
@@ -21,6 +22,7 @@ import {
 import { FichaIntegrada } from '../integracao/FichaIntegrada';
 import { Miniatura } from '../preencher/Miniatura';
 import { RegistroPreview } from '../preencher/RegistroPreview';
+import { useFecharAoVoltar } from '../ui/useVoltar';
 import './telas.css';
 import './integracao.css';
 import '../preencher/preencher.css';
@@ -117,21 +119,30 @@ function capaDoGrupo(grupo: RegistroIntegrado): string | null {
   return null;
 }
 
+// Snapshot da planilha unificada guardado em cache (SWR) para reabrir instantâneo.
+interface IntegradoSnap {
+  integracao: Integracao;
+  colecoes: Colecao[];
+  regs: Registro[][];
+}
+
 export function Integrado(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const { estado } = useAuth();
   // Qualquer usuário logado pode enviar registros para a lixeira (soft-delete),
   // igual às planilhas normais (RegistroPreview).
   const podeApagar = estado.fase === 'logado';
-  const [integracao, setIntegracao] = useState<Integracao | null>(null);
-  const [colecoes, setColecoes] = useState<Colecao[] | null>(null);
+  // Semeia com o último snapshot conhecido para pintar na hora (sem skeleton).
+  const snapInicial = id !== undefined ? lerCache<IntegradoSnap>(chaveIntegrado(id)) : null;
+  const [integracao, setIntegracao] = useState<Integracao | null>(snapInicial?.integracao ?? null);
+  const [colecoes, setColecoes] = useState<Colecao[] | null>(snapInicial?.colecoes ?? null);
   const [inacessiveis, setInacessiveis] = useState<number>(0);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
 
   // Registros CRUS por planilha (mesma ordem de `colecoes`). Os grupos unidos são
   // derivados disso — assim, quando um registro chega/atualiza pelo realtime, o
   // casamento é recalculado AO VIVO.
-  const [regs, setRegs] = useState<Registro[][] | null>(null);
+  const [regs, setRegs] = useState<Registro[][] | null>(snapInicial?.regs ?? null);
   const [filtro, setFiltro] = useState<'unidos' | 'todos' | 'geral'>('unidos');
   const [termo, setTermo] = useState('');
   const [buscando, setBuscando] = useState(false);
@@ -141,13 +152,26 @@ export function Integrado(): JSX.Element {
   const [editando, setEditando] = useState<RegistroIntegrado | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
 
-  // Carrega a integração e as coleções membro (na ordem do grupo). Coleções com
-  // senha/bloqueadas são puladas (não dá para unir sem acesso).
+  // Botão VOLTAR (nativo/gesto) fecha a prévia ou o editor unido em vez de sair da
+  // planilha unificada. Um booleano só: a troca prévia→editar não mexe no histórico.
+  useFecharAoVoltar(previa !== null || editando !== null, () => {
+    setPrevia(null);
+    setEditando(null);
+  });
+
+  // Carrega a integração, as coleções membro e TODOS os registros — tudo em um
+  // fluxo SWR: pinta o cache na hora (se houver) e revalida em segundo plano, para
+  // reabrir a Oficina sem espera. Coleções com senha/bloqueadas são puladas.
   useEffect(() => {
     if (id === undefined) return;
     let vivo = true;
-    setIntegracao(null);
-    setColecoes(null);
+    // Re-semeia do cache ao trocar de integração (evita mostrar dados da anterior).
+    const cache = lerCache<IntegradoSnap>(chaveIntegrado(id));
+    setIntegracao(cache?.integracao ?? null);
+    setColecoes(cache?.colecoes ?? null);
+    setRegs(cache?.regs ?? null);
+    setInacessiveis(0);
+    setErroCarga(null);
     void (async () => {
       try {
         const integ = await api.obterIntegracao(id);
@@ -165,6 +189,21 @@ export function Integrado(): JSX.Element {
         }
         setColecoes(ok);
         setInacessiveis(semAcesso);
+        // Registros de todas as planilhas (paginando por cursor). Se falhar, mantém
+        // o que já estava (stale) em vez de derrubar a tela.
+        try {
+          const porColecao = await Promise.all(ok.map((c) => carregarTodosDe(c.id)));
+          if (!vivo) return;
+          setRegs(porColecao);
+          gravarCache<IntegradoSnap>(chaveIntegrado(id), {
+            integracao: integ,
+            colecoes: ok,
+            regs: porColecao,
+          });
+        } catch {
+          if (!vivo) return;
+          setRegs((prev) => prev ?? ok.map(() => []));
+        }
       } catch (e) {
         if (!vivo) return;
         setErroCarga(e instanceof ErroApi ? e.message : 'falha ao carregar a integração');
@@ -173,6 +212,7 @@ export function Integrado(): JSX.Element {
     return () => {
       vivo = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const primaria = colecoes?.[0] ?? null;
@@ -209,25 +249,6 @@ export function Integrado(): JSX.Element {
     }
     return acc;
   }
-
-  // Carrega todos os registros de todas as planilhas do grupo (crus, por planilha).
-  useEffect(() => {
-    const cols = colecoes;
-    if (cols === null || cols.length === 0) return;
-    let vivo = true;
-    setRegs(null);
-    void Promise.all(cols.map((c) => carregarTodosDe(c.id)))
-      .then((porColecao) => {
-        if (vivo) setRegs(porColecao);
-      })
-      .catch(() => {
-        if (vivo) setRegs(cols.map(() => []));
-      });
-    return () => {
-      vivo = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colecoes]);
 
   // Deriva os grupos unidos (e os soltos) dos registros crus. Recalcula sozinho
   // sempre que `regs` muda — inclusive por eventos do realtime.

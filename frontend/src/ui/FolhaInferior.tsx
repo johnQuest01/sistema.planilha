@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { travarScroll } from './travaScroll';
 import './ui.css';
 
@@ -55,6 +55,15 @@ export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo 
         ref={folhaRef}
       >
         <div className="folha__topo">
+          <button
+            type="button"
+            className="btn btn--icone folha__voltar"
+            aria-label="Voltar"
+            title="Voltar"
+            onClick={onFechar}
+          >
+            <ArrowLeft size={20} />
+          </button>
           <div className="folha__tituloArea">
             <h2 className="folha__titulo">{titulo}</h2>
             {subtitulo !== undefined && <p className="folha__subtitulo">{subtitulo}</p>}

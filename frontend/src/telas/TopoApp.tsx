@@ -1,14 +1,35 @@
-import { Link } from 'react-router-dom';
-import { LogOut, Scissors, Settings, Trash2 } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, LogOut, Scissors, Settings, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexto/Auth';
 import './telas.css';
 
 export function TopoApp(): JSX.Element {
   const { estado, sair } = useAuth();
+  const navegar = useNavigate();
+  const local = useLocation();
   const nome = estado.fase === 'logado' ? estado.usuario.nome : '';
   const ehDono = estado.fase === 'logado' && estado.usuario.papel === 'dono';
+  // Botão voltar: some na Home ("/"). Volta para a tela anterior sem recarregar o
+  // app do zero; se não houver histórico (link direto), cai na Home.
+  const naHome = local.pathname === '/';
+  function voltar(): void {
+    if (window.history.length > 1) navegar(-1);
+    else navegar('/');
+  }
   return (
     <header className="topo-app">
+      {!naHome && (
+        <button
+          type="button"
+          className="btn btn--icone topo-app__voltar"
+          style={{ color: 'inherit' }}
+          aria-label="Voltar para a tela anterior"
+          title="Voltar"
+          onClick={voltar}
+        >
+          <ArrowLeft size={20} />
+        </button>
+      )}
       <Link to="/" className="topo-app__marca" style={{ color: 'inherit', textDecoration: 'none' }}>
         <Scissors size={18} />
         Mostruário

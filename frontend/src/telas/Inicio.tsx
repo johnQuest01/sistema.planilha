@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Archive, ArchiveRestore, Layers, Lock, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Layers, Lock, Plus, Trash2 } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo, type Integracao } from '../api/cliente';
 import { prefetchColecoes } from '../api/prefetch';
 import { useAuth } from '../contexto/Auth';
@@ -25,6 +25,7 @@ export function Inicio(): JSX.Element {
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
   const [arquivandoId, setArquivandoId] = useState<string | null>(null);
+  const [arquivandoIntegId, setArquivandoIntegId] = useState<string | null>(null);
 
   // Só o dono do workspace (Bruno) arquiva/desarquiva e vê as arquivadas.
   const ehDono = usuario?.podeGerirSenhas === true;
@@ -61,6 +62,32 @@ export function Inicio(): JSX.Element {
       setErro(e instanceof ErroApi ? e.message : 'não foi possível desarquivar');
     } finally {
       setArquivandoId(null);
+    }
+  }
+
+  async function arquivarInteg(id: string): Promise<void> {
+    setArquivandoIntegId(id);
+    setErro(null);
+    try {
+      await api.arquivarIntegracao(id);
+      setIntegracoes((is) => is.map((i) => (i.id === id ? { ...i, arquivada: true } : i)));
+    } catch (e) {
+      setErro(e instanceof ErroApi ? e.message : 'não foi possível arquivar');
+    } finally {
+      setArquivandoIntegId(null);
+    }
+  }
+
+  async function desarquivarInteg(id: string): Promise<void> {
+    setArquivandoIntegId(id);
+    setErro(null);
+    try {
+      await api.desarquivarIntegracao(id);
+      setIntegracoes((is) => is.map((i) => (i.id === id ? { ...i, arquivada: false } : i)));
+    } catch (e) {
+      setErro(e instanceof ErroApi ? e.message : 'não foi possível desarquivar');
+    } finally {
+      setArquivandoIntegId(null);
     }
   }
 
@@ -191,6 +218,8 @@ export function Inicio(): JSX.Element {
   const vazio = colecoes.length === 0;
   const ativas = colecoes.filter((c) => !c.arquivada);
   const arquivadas = colecoes.filter((c) => c.arquivada);
+  const integracoesVisiveis = integracoes.filter((i) => i.ativo && !i.arquivada);
+  const integracoesArquivadas = integracoes.filter((i) => i.arquivada);
 
   return (
     <div className="pagina">
@@ -243,27 +272,39 @@ export function Inicio(): JSX.Element {
               </form>
             </div>
             {erro !== null && <p className="aviso-erro">{erro}</p>}
-            {integracoes.filter((i) => i.ativo).length > 0 && (
+            {integracoesVisiveis.length > 0 && (
               <>
                 <h2 className="inicio-secao-titulo">
                   <Layers size={18} aria-hidden /> Planilhas unidas
                 </h2>
                 <div className="grade-cartoes">
-                  {integracoes
-                    .filter((i) => i.ativo)
-                    .map((i) => (
-                      <div key={i.id} className="cartao-colecao cartao-colecao--unida">
-                        <Link to={`/i/${i.id}`} className="cartao-colecao__link">
-                          <span className="cartao-colecao__nome">
-                            <Layers size={15} className="cartao-colecao__cadeado-inline" aria-hidden />
-                            {i.nome}
-                          </span>
-                          <span className="etiqueta cartao-colecao__meta">
-                            {i.colecaoIds.length} planilhas unidas
-                          </span>
-                        </Link>
-                      </div>
-                    ))}
+                  {integracoesVisiveis.map((i) => (
+                    <div key={i.id} className="cartao-colecao cartao-colecao--unida">
+                      <Link to={`/i/${i.id}`} className="cartao-colecao__link">
+                        <span className="cartao-colecao__nome">
+                          <Layers size={15} className="cartao-colecao__cadeado-inline" aria-hidden />
+                          {i.nome}
+                        </span>
+                        <span className="etiqueta cartao-colecao__meta">
+                          {i.colecaoIds.length} planilhas unidas
+                        </span>
+                      </Link>
+                      {ehDono && (
+                        <div className="cartao-colecao__acoes">
+                          <button
+                            type="button"
+                            className="btn btn--icone cartao-colecao__olho"
+                            aria-label={`Ocultar planilha unida ${i.nome}`}
+                            title="Ocultar (só você vê até mostrar de novo)"
+                            disabled={arquivandoIntegId === i.id}
+                            onClick={() => void arquivarInteg(i.id)}
+                          >
+                            <Eye size={20} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
                 <h2 className="inicio-secao-titulo">Suas planilhas separadas</h2>
               </>
@@ -306,13 +347,13 @@ export function Inicio(): JSX.Element {
                       {mostrarArquivar && (
                         <button
                           type="button"
-                          className="btn btn--icone cartao-colecao__apagar"
-                          aria-label={`Arquivar planilha ${c.nome}`}
-                          title="Arquivar (só você vê até desarquivar)"
+                          className="btn btn--icone cartao-colecao__olho"
+                          aria-label={`Ocultar planilha ${c.nome}`}
+                          title="Ocultar (só você vê até mostrar de novo)"
                           disabled={arquivandoId === c.id}
                           onClick={() => void arquivar(c.id)}
                         >
-                          <Archive size={16} />
+                          <Eye size={20} />
                         </button>
                       )}
                       {mostrarLixeira && (
@@ -357,35 +398,60 @@ export function Inicio(): JSX.Element {
               })}
             </div>
 
-            {ehDono && arquivadas.length > 0 && (
+            {ehDono && (arquivadas.length > 0 || integracoesArquivadas.length > 0) && (
               <>
                 <h2 className="inicio-secao-titulo">
-                  <Archive size={18} aria-hidden /> Arquivadas (só você vê)
+                  <EyeOff size={18} aria-hidden /> Ocultas (só você vê)
                 </h2>
                 <div className="grade-cartoes">
+                  {integracoesArquivadas.map((i) => (
+                    <div key={i.id} className="cartao-colecao cartao-colecao--unida cartao-colecao--arquivada">
+                      <Link to={`/i/${i.id}`} className="cartao-colecao__link">
+                        <span className="cartao-colecao__nome">
+                          <Layers size={15} className="cartao-colecao__cadeado-inline" aria-hidden />
+                          {i.nome}
+                        </span>
+                        <span className="etiqueta cartao-colecao__meta">
+                          oculta · {i.colecaoIds.length} planilhas unidas
+                        </span>
+                      </Link>
+                      <div className="cartao-colecao__acoes">
+                        <button
+                          type="button"
+                          className="btn btn--icone cartao-colecao__olho"
+                          aria-label={`Mostrar planilha unida ${i.nome}`}
+                          title="Mostrar (volta a aparecer para todos)"
+                          disabled={arquivandoIntegId === i.id}
+                          onClick={() => void desarquivarInteg(i.id)}
+                        >
+                          <EyeOff size={20} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                   {arquivadas.map((c) => (
                     <div key={c.id} className="cartao-colecao cartao-colecao--arquivada">
                       <Link to={`/c/${c.id}`} className="cartao-colecao__link">
                         <span className="cartao-colecao__nome">
-                          <Archive
+                          <EyeOff
                             size={15}
                             className="cartao-colecao__cadeado-inline"
                             aria-hidden
                           />
                           {c.nome}
                         </span>
-                        <span className="etiqueta cartao-colecao__meta">arquivada</span>
+                        <span className="etiqueta cartao-colecao__meta">oculta</span>
                       </Link>
                       <div className="cartao-colecao__acoes">
                         <button
                           type="button"
-                          className="btn btn--icone cartao-colecao__apagar"
-                          aria-label={`Desarquivar planilha ${c.nome}`}
-                          title="Desarquivar (volta a aparecer para todos)"
+                          className="btn btn--icone cartao-colecao__olho"
+                          aria-label={`Mostrar planilha ${c.nome}`}
+                          title="Mostrar (volta a aparecer para todos)"
                           disabled={arquivandoId === c.id}
                           onClick={() => void desarquivar(c.id)}
                         >
-                          <ArchiveRestore size={16} />
+                          <EyeOff size={20} />
                         </button>
                       </div>
                     </div>

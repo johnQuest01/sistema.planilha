@@ -243,6 +243,11 @@ export const api = {
     }),
   apagarIntegracao: (id: string) =>
     pedir<void>(`/api/integracoes/${id}`, { method: 'DELETE' }),
+  // Arquivar/desarquivar planilha unida: só o dono do workspace. Some para os demais.
+  arquivarIntegracao: (id: string) =>
+    pedir<{ ok: boolean }>(`/api/integracoes/${id}/arquivar`, { method: 'POST' }),
+  desarquivarIntegracao: (id: string) =>
+    pedir<{ ok: boolean }>(`/api/integracoes/${id}/desarquivar`, { method: 'POST' }),
 
   // --- lixeira ---
   listarLixeira: () => pedir<ItemLixeira[]>('/api/lixeira'),

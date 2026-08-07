@@ -15,6 +15,7 @@ import { RegistroPreview } from '../preencher/RegistroPreview';
 import { camposDoRegistro, tituloDoRegistro } from '../preencher/derivarResumo';
 import { valoresVaziosDe } from '../preencher/valoresVazios';
 import { FolhaInferior } from '../ui/FolhaInferior';
+import { useFecharAoVoltar } from '../ui/useVoltar';
 import { FormBloco, type DadosBloco } from './FormBloco';
 import '../preencher/preencher.css';
 
@@ -75,6 +76,14 @@ export function Preencher({
   const registrosRef = useRef(registros);
   fimRef.current = fim;
   registrosRef.current = registros;
+
+  // Botão VOLTAR (nativo/gesto) fecha a prévia ou o preenchimento em vez de sair
+  // da planilha. Um booleano só p/ prévia+edição: a troca entre elas não mexe no
+  // histórico. Fechar seta os dois como null (o desmontar da Ficha salva o resto).
+  useFecharAoVoltar(previa !== null || aberta !== null, () => {
+    setPrevia(null);
+    setAberta(null);
+  });
 
   async function adicionarCampo(d: DadosBloco): Promise<void> {
     const criado = await api.criarCampo(colecao.id, d);

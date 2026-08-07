@@ -1,11 +1,13 @@
 import type { Tx } from '../db/comConta';
 import type { Integracao } from '../../../shared/tipos';
+import { ehDonoWorkspace } from '../auth/acessoColecao';
 
 interface LinhaIntegracao {
   id: string;
   nome: string;
   colecao_ids: unknown;
   ativo: boolean;
+  arquivada: boolean;
   criado_em: Date | string;
   atualizado_em: Date | string;
 }
@@ -24,6 +26,7 @@ function mapIntegracao(r: LinhaIntegracao): Integracao {
     nome: r.nome,
     colecaoIds: idsDe(r.colecao_ids),
     ativo: r.ativo,
+    arquivada: r.arquivada,
     criadoEm: iso(r.criado_em),
     atualizadoEm: iso(r.atualizado_em),
   };
@@ -35,23 +38,43 @@ function mapIntegracao(r: LinhaIntegracao): Integracao {
 // try/catch em volta do select não segura: o erro propaga e a tela dá 500. Por isso
 // checamos a existência ANTES com to_regclass (devolve NULL sem erro, não aborta
 // nada). Sem a tabela, a LISTAGEM degrada para [] em vez de derrubar a página.
-export async function listarIntegracoes(tx: Tx, contaId: string): Promise<Integracao[]> {
+export async function listarIntegracoes(
+  tx: Tx,
+  contaId: string,
+  email?: string,
+): Promise<Integracao[]> {
   const existe = await tx<{ reg: string | null }[]>`select to_regclass('public.integracoes') as reg`;
   if (existe[0]?.reg == null) return [];
 
   const linhas = await tx<LinhaIntegracao[]>`
-    select id, nome, colecao_ids, ativo, criado_em, atualizado_em
+    select id, nome, colecao_ids, ativo, arquivada, criado_em, atualizado_em
     from integracoes where conta_id = ${contaId}
     order by criado_em desc`;
-  return linhas.map(mapIntegracao);
+  // Arquivadas somem para todos, menos o dono do workspace (que desarquiva).
+  const dono = email !== undefined && ehDonoWorkspace(email);
+  const visiveis = dono ? linhas : linhas.filter((l) => !l.arquivada);
+  return visiveis.map(mapIntegracao);
 }
 
 export async function obterIntegracao(tx: Tx, id: string): Promise<Integracao | null> {
   const linhas = await tx<LinhaIntegracao[]>`
-    select id, nome, colecao_ids, ativo, criado_em, atualizado_em
+    select id, nome, colecao_ids, ativo, arquivada, criado_em, atualizado_em
     from integracoes where id = ${id}`;
   const linha = linhas[0];
   return linha === undefined ? null : mapIntegracao(linha);
+}
+
+// Arquivar/desarquivar a planilha unida — só o dono do workspace (checado na rota).
+export async function definirIntegracaoArquivada(
+  tx: Tx,
+  id: string,
+  arquivada: boolean,
+): Promise<'ok' | 'nao-encontrado'> {
+  const linhas = await tx<{ id: string }[]>`
+    update integracoes set arquivada = ${arquivada}, atualizado_em = now()
+    where id = ${id}
+    returning id`;
+  return linhas[0] === undefined ? 'nao-encontrado' : 'ok';
 }
 
 // Só aceita coleções que EXISTEM e são da conta (a RLS já filtra por conta, então
@@ -77,7 +100,7 @@ export async function criarIntegracao(
   const linhas = await tx<LinhaIntegracao[]>`
     insert into integracoes (conta_id, nome, colecao_ids, ativo, criado_por)
     values (${contaId}, ${dados.nome}, ${tx.json(validas)}, ${dados.ativo ?? false}, ${criadoPor})
-    returning id, nome, colecao_ids, ativo, criado_em, atualizado_em`;
+    returning id, nome, colecao_ids, ativo, arquivada, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) throw new Error('insert de integração não retornou linha');
   return mapIntegracao(linha);
@@ -104,7 +127,7 @@ export async function editarIntegracao(
     update integracoes
     set nome = ${nome}, colecao_ids = ${tx.json(colecaoIds)}, ativo = ${ativo}, atualizado_em = now()
     where id = ${id}
-    returning id, nome, colecao_ids, ativo, criado_em, atualizado_em`;
+    returning id, nome, colecao_ids, ativo, arquivada, criado_em, atualizado_em`;
   const linha = linhas[0];
   return linha === undefined ? null : mapIntegracao(linha);
 }

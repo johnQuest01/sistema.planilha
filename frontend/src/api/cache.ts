@@ -57,3 +57,6 @@ export function limparCache(): void {
 // Chaves centralizadas para não divergirem entre quem grava e quem lê.
 export const chaveColecao = (id: string): string => `colecao:${id}`;
 export const chaveRegistros = (id: string): string => `registros:${id}`;
+// Planilha unificada (Oficina): snapshot da integração + coleções + registros crus,
+// para reabrir instantâneo (SWR) sem re-paginar tudo de novo.
+export const chaveIntegrado = (id: string): string => `integrado:${id}`;

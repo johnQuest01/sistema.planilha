@@ -107,6 +107,8 @@ export interface Integracao {
   nome: string;
   colecaoIds: string[];
   ativo: boolean;
+  /** true quando a planilha unida está arquivada (some para todos, menos o dono do workspace). */
+  arquivada: boolean;
   criadoEm: string;
   atualizadoEm: string;
 }
