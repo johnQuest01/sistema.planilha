@@ -572,9 +572,12 @@
   color: var(--tinta);
   min-width: 0;
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Nunca corta o título na prévia: quebra em várias linhas (inclusive no mobile). */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .preview-registro__titulo-btn {
   display: block;

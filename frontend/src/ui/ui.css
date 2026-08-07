@@ -192,9 +192,11 @@ textarea.campo__controle {
 .folha__titulo {
   font-size: 16px;
   font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Mostra o título inteiro (nunca corta com "…"): referências longas com
+     "4819 | 309 | …" quebram em várias linhas em vez de serem truncadas. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .folha__subtitulo {
   margin-top: 2px;
