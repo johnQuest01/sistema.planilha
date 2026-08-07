@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Trash2, CopyPlus, Copy, SlidersHorizontal } from 'lucide-react';
-import { api } from '../api/cliente';
+import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
 import { FolhaInferior } from '../ui/FolhaInferior';
@@ -173,8 +173,14 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
       setValores(atualizado.valores);
       sujosRef.current.clear();
       aoAtualizarRef.current(atualizado);
-    } catch {
-      setErroCorpo('não foi possível salvar os blocos deste registro');
+    } catch (e) {
+      // Mostra o motivo REAL (ex.: "erro 400: validação", "erro 503", ou falha de
+      // rede) para não esconder o que aconteceu — antes só dizia "não foi possível".
+      setErroCorpo(
+        e instanceof ErroApi
+          ? `Não foi possível salvar os blocos: ${e.message}`
+          : 'Não foi possível salvar os blocos (falha de conexão). Tente novamente.',
+      );
     } finally {
       setSalvandoCorpo(false);
     }

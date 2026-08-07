@@ -148,8 +148,12 @@ export function FichaIntegrada({
       await refs.current[indice]?.flush();
       const atualizado = await api.salvarCorpoRegistro(parte.registro.id, novos);
       aoAtualizarParte(indice, atualizado);
-    } catch {
-      setErro('não foi possível salvar os blocos desta parte');
+    } catch (e) {
+      setErro(
+        e instanceof ErroApi
+          ? `Não foi possível salvar os blocos de ${parte.colecao.nome}: ${e.message}`
+          : `Não foi possível salvar os blocos de ${parte.colecao.nome} (falha de conexão). Tente novamente.`,
+      );
     } finally {
       setSalvandoBlocos(false);
     }

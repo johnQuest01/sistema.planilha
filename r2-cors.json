@@ -4,8 +4,8 @@
       "https://sistema-planilha-backend.vercel.app",
       "http://localhost:5173"
     ],
-    "AllowedMethods": ["GET", "PUT"],
-    "AllowedHeaders": ["content-type"],
+    "AllowedMethods": ["GET", "HEAD", "PUT"],
+    "AllowedHeaders": ["content-type", "cache-control"],
     "ExposeHeaders": ["ETag"],
     "MaxAgeSeconds": 3600
   }

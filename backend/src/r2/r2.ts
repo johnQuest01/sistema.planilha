@@ -95,16 +95,17 @@ export function urlPublica(key: string): string {
   return `${ctx().cfg.publicBase}/${key}`;
 }
 
-// Cache eterno e imutável: as keys são content-addressed (nano21, nunca
-// reusadas), então o objeto naquela URL nunca muda. Assim o navegador para de
-// revalidar a cada scroll/recarga — grande ganho de velocidade sem tocar na
-// qualidade. Precisa ser IDÊNTICO ao header enviado pelo cliente no PUT
-// (frontend/src/imagens/enviar.ts), senão a assinatura do presign quebra.
+// Cache eterno e imutável (keys content-addressed nunca mudam). NÃO é mais
+// ASSINADO no presign: assinar CacheControl obriga o navegador a enviar o header
+// `cache-control` no PUT, e esse header dispara um preflight CORS que o bucket R2
+// (r2-cors.json permite só `content-type`) NEGA — o PUT falhava com "Failed to
+// fetch" e a foto nunca subia. Mantido aqui só como referência; para reativar o
+// cache imutável, prefira uma Cache Rule no domínio r2.dev (sem exigir CORS).
 export const CACHE_CONTROL_IMUTAVEL = 'public, max-age=31536000, immutable';
 
-// Presigned PUT com ContentLength, ContentType e CacheControl assinados: o cliente
-// precisa mandar exatamente esse tamanho, tipo e cache-control, o que limita o
-// upload (4 MB cheia / 200 KB mini) e grava o cache no objeto.
+// Presigned PUT com ContentLength e ContentType assinados: o cliente manda
+// exatamente esse tamanho e tipo (limita o upload) e SÓ o header `content-type`,
+// que o CORS do bucket já libera — sem `cache-control` para não quebrar o preflight.
 export async function presignPut(key: string, mime: string, tamanho: number): Promise<string> {
   const { s3, cfg } = ctx();
   const cmd = new PutObjectCommand({
@@ -112,7 +113,6 @@ export async function presignPut(key: string, mime: string, tamanho: number): Pr
     Key: key,
     ContentType: mime,
     ContentLength: tamanho,
-    CacheControl: CACHE_CONTROL_IMUTAVEL,
   });
   // Reforço: caso alguma versão do SDK ainda insira o header de checksum, ele NÃO entra
   // na assinatura, evitando o "SignatureDoesNotMatch" do R2 no PUT do navegador.

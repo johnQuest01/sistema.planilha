@@ -172,12 +172,30 @@ export function Integrado(): JSX.Element {
 
   const primaria = colecoes?.[0] ?? null;
 
+  // Uma página com RETRY: sem isso, um único erro de rede (o banco costuma ficar
+  // longe → blips/timeouts) fazia o .catch devolver [] e a paginação PARAVA ali,
+  // truncando SILENCIOSAMENTE o resto da coleção — o total unido aparecia menor do
+  // que o real. Agora tenta de novo antes de desistir (e, se falhar de vez, propaga
+  // para o chamador tratar, em vez de mostrar um número errado sem avisar).
+  async function listarPaginaComRetry(colecaoId: string, cursor: string | undefined): Promise<Registro[]> {
+    let ultimoErro: unknown;
+    for (let tentativa = 0; tentativa < 3; tentativa += 1) {
+      try {
+        return await api.listarRegistros(colecaoId, cursor);
+      } catch (e) {
+        ultimoErro = e;
+        await new Promise((r) => setTimeout(r, 300 * (tentativa + 1)));
+      }
+    }
+    throw ultimoErro;
+  }
+
   // Carrega TODOS os registros de uma coleção (paginando por cursor até o fim).
   async function carregarTodosDe(colecaoId: string): Promise<Registro[]> {
     const acc: Registro[] = [];
     let cursor: string | undefined;
     for (let i = 0; i < 500; i += 1) {
-      const pagina = await api.listarRegistros(colecaoId, cursor).catch(() => [] as Registro[]);
+      const pagina = await listarPaginaComRetry(colecaoId, cursor);
       acc.push(...pagina);
       if (pagina.length < PAGINA) break;
       const ultimo = pagina[pagina.length - 1];

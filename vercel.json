@@ -4,8 +4,8 @@
   "outputDirectory": "frontend/dist",
   "installCommand": "npm install",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://mostruario-api.onrender.com/api/:path*" },
-    { "source": "/health", "destination": "https://mostruario-api.onrender.com/health" },
+    { "source": "/api/:path*", "destination": "https://mostruario-api.fly.dev/api/:path*" },
+    { "source": "/health", "destination": "https://mostruario-api.fly.dev/health" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
