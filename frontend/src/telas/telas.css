@@ -268,6 +268,34 @@
 .cartao-colecao__olho:disabled {
   opacity: 0.5;
 }
+/* Desktop: os ícones (cadeado/olho/lixeira) saem da sobreposição absoluta e passam
+   a ocupar uma COLUNA própria ao lado do título. Assim nunca sobrepõem o nome —
+   o título ocupa o espaço restante e quebra linha se precisar. No mobile a regra
+   original (ícones absolutos no canto) continua igual. */
+@media (min-width: 769px) {
+  .cartao-colecao {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cartao-colecao__acoes {
+    position: static;
+    align-self: start;
+    gap: var(--e2);
+    padding: var(--e3) var(--e3) 0 0;
+  }
+  /* Sem sobreposição, o título não precisa mais reservar espaço à direita. */
+  .cartao-colecao__nome {
+    padding-right: 0;
+  }
+  /* O link (título + meta) fica na 1ª coluna e ocupa a altura toda (meta no rodapé). */
+  .cartao-colecao__link {
+    grid-column: 1;
+  }
+  /* A capa/confirmação continuam cobrindo o card inteiro. */
+  .cartao-colecao__confirma {
+    grid-column: 1 / -1;
+  }
+}
 .cartao-colecao__confirma {
   position: absolute;
   inset: 0;
