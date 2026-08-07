@@ -1,0 +1,17 @@
+# Não copiar para a imagem: acelera o build e evita vazar segredos (.env) e lixo.
+.git
+node_modules
+**/node_modules
+dist
+**/dist
+frontend/dist
+*.log
+# segredos locais — os de produção entram como Fly secrets, nunca na imagem
+.env
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+# material que o backend não precisa em runtime
+testes-opus
+docs

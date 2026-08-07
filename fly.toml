@@ -1,0 +1,39 @@
+# Fly.io — backend Mostruário em São Paulo (gru), junto do Neon (sa-east-1).
+# O nome do app deve ser único no Fly; se "mostruario-api" estiver em uso, o
+# `fly launch` sugere outro (ajuste aqui e no WS_PUBLIC_BASE / vercel.json).
+app = "mostruario-api"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Valores NÃO-secretos (segredos vão por `fly secrets set`, ver runbook).
+[env]
+  PORT = "3333"
+  NODE_ENV = "production"
+  CORS_ORIGIN = "https://sistema-planilha-backend.vercel.app"
+  R2_BUCKET = "mostruario-midia"
+  R2_PUBLIC_BASE = "https://pub-856c1e1b6dc645308495de9e44b391e0.r2.dev"
+  LINK_PUBLICO_DIAS = "30"
+  # Base pública do WebSocket de presença (troque se mudar o nome do app):
+  WS_PUBLIC_BASE = "wss://mostruario-api.fly.dev"
+
+[http_service]
+  internal_port = 3333
+  force_https = true
+  # Sempre 1 máquina ligada: SEM cold start (o "fecha e abre e fica carregando").
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
