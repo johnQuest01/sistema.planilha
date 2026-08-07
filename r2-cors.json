@@ -2,6 +2,7 @@
   {
     "AllowedOrigins": [
       "https://sistema-planilha-backend.vercel.app",
+      "https://*.vercel.app",
       "http://localhost:5173"
     ],
     "AllowedMethods": ["GET", "HEAD", "PUT"],
