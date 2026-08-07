@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ImageOff, PencilLine, Plus, Search } from 'lucide-react';
+import { ArrowLeft, ImageOff, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import { assinarRealtime } from '../api/realtime';
+import { useAuth } from '../contexto/Auth';
 import type { Colecao, Integracao, Registro } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import { Segmentado } from '../ui/Segmentado';
@@ -118,6 +119,10 @@ function capaDoGrupo(grupo: RegistroIntegrado): string | null {
 
 export function Integrado(): JSX.Element {
   const { id } = useParams<{ id: string }>();
+  const { estado } = useAuth();
+  // Qualquer usuário logado pode enviar registros para a lixeira (soft-delete),
+  // igual às planilhas normais (RegistroPreview).
+  const podeApagar = estado.fase === 'logado';
   const [integracao, setIntegracao] = useState<Integracao | null>(null);
   const [colecoes, setColecoes] = useState<Colecao[] | null>(null);
   const [inacessiveis, setInacessiveis] = useState<number>(0);
@@ -363,6 +368,33 @@ export function Integrado(): JSX.Element {
     }
   }
 
+  // Apaga o registro unificado: envia para a lixeira TODAS as partes presentes do
+  // grupo (ex.: Modelagem + Caderno do Hugo de uma mesma referência). A remoção na
+  // lista crua faz os grupos recalcularem; o eco do realtime é idempotente.
+  async function apagarGrupo(grupo: RegistroIntegrado): Promise<void> {
+    const alvos: { indice: number; reg: Registro }[] = [];
+    grupo.partes.forEach((p, i) => {
+      if (p.registro !== null) alvos.push({ indice: i, reg: p.registro });
+    });
+    for (const { indice, reg } of alvos) {
+      await api.apagarRegistro(reg.id);
+      aplicarNaLista(indice, 'remover', reg);
+    }
+  }
+
+  // Apagar a partir dos RESULTADOS de busca: remove o bloco da lista de resultados
+  // (por identidade do objeto, já que a mesma referência pode ter vários grupos).
+  async function apagarNaBusca(grupo: RegistroIntegrado): Promise<void> {
+    await apagarGrupo(grupo);
+    setResultados((rs) => (rs === null ? rs : rs.filter((g) => g !== grupo)));
+  }
+
+  // Apagar a partir da PRÉVIA (folha inferior): fecha a folha ao concluir.
+  async function apagarNaPrevia(grupo: RegistroIntegrado): Promise<void> {
+    await apagarGrupo(grupo);
+    setPrevia(null);
+  }
+
   if (erroCarga !== null) {
     return (
       <div className="pagina">
@@ -437,11 +469,29 @@ export function Integrado(): JSX.Element {
         </div>
 
         {resultados !== null ? (
-          <ListaGrupos
-            titulo={buscando ? 'Buscando…' : `${resultados.length} referência(s) encontrada(s)`}
-            grupos={resultados}
-            aoAbrir={setPrevia}
-          />
+          <>
+            <p className="integ-dica">
+              {buscando ? 'Buscando…' : `${resultados.length} resultado(s) para “${termo.trim()}”`}
+            </p>
+            {!buscando && resultados.length === 0 ? (
+              <p className="integ-vazio">Nenhum registro com esses dados nas planilhas do grupo.</p>
+            ) : (
+              <div className="integ-resultados">
+                {resultados.map((g, i) => (
+                  <BlocoIntegrado
+                    key={`${g.chave}:${i}`}
+                    grupo={g}
+                    integracaoNome={integracao.nome}
+                    podeApagar={podeApagar}
+                    aoEditar={() => {
+                      setEditando(g);
+                    }}
+                    aoApagar={apagarNaBusca}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         ) : listaTodos === null ? (
           <Carregando />
         ) : (
@@ -498,33 +548,12 @@ export function Integrado(): JSX.Element {
             </Botao>
           }
         >
-          <div className="integ-previa">
-            {previa.partes.map((parte) =>
-              parte.registro !== null ? (
-                <article key={parte.colecao.id} className="integ-previa-parte">
-                  <div className="integ-previa-parte__cabecalho">
-                    <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
-                    <h3 className="integ-previa-parte__titulo">
-                      {tituloDoRegistro(camposDaParte(parte), parte.registro)}
-                    </h3>
-                  </div>
-                  <PreviewIntegrado campos={camposDaParte(parte)} registro={parte.registro} />
-                </article>
-              ) : (
-                <article
-                  key={parte.colecao.id}
-                  className="integ-previa-parte integ-previa-parte--ausente"
-                >
-                  <div className="integ-previa-parte__cabecalho">
-                    <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
-                    <span className="integ-previa-parte__vazio">
-                      Sem registro para esta referência
-                    </span>
-                  </div>
-                </article>
-              ),
-            )}
-          </div>
+          {podeApagar && (
+            <div className="integ-previa-apagar">
+              <AcaoApagarIntegrado grupo={previa} podeApagar={podeApagar} aoApagar={apagarNaPrevia} />
+            </div>
+          )}
+          <PreviaCorpo grupo={previa} />
         </FolhaInferior>
       )}
 
@@ -608,5 +637,136 @@ function CartaoRegistro({
         <span className="lista-item__resumo">{meta}</span>
       </div>
     </button>
+  );
+}
+
+/** Corpo da prévia unida: cada parte vira um cartão (planilha + título) com o
+ *  PreviewIntegrado abaixo. Reutilizado na folha inferior e nos resultados da busca. */
+function PreviaCorpo({ grupo }: { grupo: RegistroIntegrado }): JSX.Element {
+  return (
+    <div className="integ-previa">
+      {grupo.partes.map((parte) =>
+        parte.registro !== null ? (
+          <article key={parte.colecao.id} className="integ-previa-parte">
+            <div className="integ-previa-parte__cabecalho">
+              <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
+              <h3 className="integ-previa-parte__titulo">
+                {tituloDoRegistro(camposDaParte(parte), parte.registro)}
+              </h3>
+            </div>
+            <PreviewIntegrado campos={camposDaParte(parte)} registro={parte.registro} />
+          </article>
+        ) : (
+          <article
+            key={parte.colecao.id}
+            className="integ-previa-parte integ-previa-parte--ausente"
+          >
+            <div className="integ-previa-parte__cabecalho">
+              <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
+              <span className="integ-previa-parte__vazio">Sem registro para esta referência</span>
+            </div>
+          </article>
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Botão de lixeira que expande para confirmação. Apaga o registro em TODAS as
+ *  planilhas do grupo (Modelagem + Caderno do Hugo). */
+function AcaoApagarIntegrado({
+  grupo,
+  podeApagar,
+  aoApagar,
+}: {
+  grupo: RegistroIntegrado;
+  podeApagar: boolean;
+  aoApagar: (g: RegistroIntegrado) => Promise<void>;
+}): JSX.Element | null {
+  const [confirmando, setConfirmando] = useState(false);
+  const [apagando, setApagando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  if (!podeApagar) return null;
+
+  async function confirmar(): Promise<void> {
+    setApagando(true);
+    setErro(null);
+    try {
+      await aoApagar(grupo);
+    } catch (e) {
+      setErro(e instanceof ErroApi ? e.message : 'não foi possível apagar');
+      setApagando(false);
+    }
+  }
+
+  if (!confirmando) {
+    return (
+      <button
+        type="button"
+        className="btn btn--icone integ-apagar-btn"
+        title="Enviar para a lixeira (em todas as planilhas)"
+        aria-label="Apagar registro"
+        onClick={() => {
+          setConfirmando(true);
+          setErro(null);
+        }}
+      >
+        <Trash2 size={18} aria-hidden />
+      </button>
+    );
+  }
+
+  return (
+    <div className="integ-apagar-confirma">
+      <span className="integ-apagar-confirma__txt">
+        Mover para a lixeira em todas as planilhas? Dados e fotos ficam salvos até apagar definitivo.
+      </span>
+      <div className="integ-apagar-confirma__acoes">
+        <Botao variante="perigo" disabled={apagando} onClick={() => void confirmar()}>
+          {apagando ? 'Apagando…' : 'Lixeira'}
+        </Botao>
+        <Botao variante="fantasma" disabled={apagando} onClick={() => setConfirmando(false)}>
+          Cancelar
+        </Botao>
+      </div>
+      {erro !== null && <p className="aviso-erro">{erro}</p>}
+    </div>
+  );
+}
+
+/** Resultado de busca no padrão das outras planilhas: já mostra a prévia inteira
+ *  (sem precisar clicar), com ações de preencher/alterar e apagar. */
+function BlocoIntegrado({
+  grupo,
+  integracaoNome,
+  podeApagar,
+  aoEditar,
+  aoApagar,
+}: {
+  grupo: RegistroIntegrado;
+  integracaoNome: string;
+  podeApagar: boolean;
+  aoEditar: (g: RegistroIntegrado) => void;
+  aoApagar: (g: RegistroIntegrado) => Promise<void>;
+}): JSX.Element {
+  const presentes = partesPresentes(grupo);
+  return (
+    <article className="integ-resultado">
+      <div className="integ-resultado__cabecalho">
+        <div className="integ-resultado__titulo-area">
+          <h3 className="integ-resultado__titulo">{tituloDoGrupo(grupo)}</h3>
+          <span className="etiqueta">
+            {integracaoNome} — {presentes}/{grupo.partes.length} planilhas
+          </span>
+        </div>
+        <div className="integ-resultado__acoes">
+          <Botao variante="primario" onClick={() => aoEditar(grupo)}>
+            <PencilLine size={16} /> Preencher / alterar
+          </Botao>
+          <AcaoApagarIntegrado grupo={grupo} podeApagar={podeApagar} aoApagar={aoApagar} />
+        </div>
+      </div>
+      <PreviaCorpo grupo={grupo} />
+    </article>
   );
 }

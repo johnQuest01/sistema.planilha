@@ -333,3 +333,80 @@
   color: var(--tinta-3);
   background: rgba(23, 32, 28, 0.03);
 }
+
+/* Resultados da busca: já mostram a prévia inteira (padrão das outras planilhas),
+   com título/planilhas e ações de preencher/alterar e apagar. */
+.integ-resultados {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4, 1rem);
+}
+.integ-resultado {
+  background: var(--papel);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-2);
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+.integ-resultado__cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--e2);
+  flex-wrap: wrap;
+  padding: var(--e3);
+  border-bottom: 1px solid var(--linha);
+}
+.integ-resultado__titulo-area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.integ-resultado__titulo {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--tinta);
+  word-break: break-word;
+}
+.integ-resultado__acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  flex-wrap: wrap;
+}
+.integ-resultado .integ-previa {
+  padding: var(--e3);
+}
+
+/* Ação de apagar (lixeira → confirmação) do registro unificado. */
+.integ-previa-apagar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--e2);
+}
+.integ-apagar-btn {
+  color: var(--tinta-3);
+}
+.integ-apagar-btn:hover {
+  color: var(--perigo, #e5484d);
+}
+.integ-apagar-confirma {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e2);
+  max-width: 340px;
+  padding: var(--e2);
+  border: 1px solid color-mix(in srgb, var(--perigo, #e5484d) 40%, transparent);
+  border-radius: var(--raio);
+  background: color-mix(in srgb, var(--perigo, #e5484d) 8%, transparent);
+}
+.integ-apagar-confirma__txt {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.integ-apagar-confirma__acoes {
+  display: flex;
+  gap: var(--e2);
+}
