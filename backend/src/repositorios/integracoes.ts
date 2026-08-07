@@ -29,23 +29,21 @@ function mapIntegracao(r: LinhaIntegracao): Integracao {
   };
 }
 
-// Postgres estoura 42P01 quando a tabela ainda não existe (migration 015 não
-// rodada). Detectamos para a LISTAGEM degradar para [] em vez de derrubar a Home.
-function tabelaAusente(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '42P01';
-}
-
+// A tabela `integracoes` só nasce na migration 015. Se um deploy subir ANTES de
+// migrar (ou a migration falhar), consultá-la estoura 42P01 — e como tudo roda
+// dentro de uma transação (comConta), o erro ABORTA a transação inteira, então um
+// try/catch em volta do select não segura: o erro propaga e a tela dá 500. Por isso
+// checamos a existência ANTES com to_regclass (devolve NULL sem erro, não aborta
+// nada). Sem a tabela, a LISTAGEM degrada para [] em vez de derrubar a página.
 export async function listarIntegracoes(tx: Tx, contaId: string): Promise<Integracao[]> {
-  try {
-    const linhas = await tx<LinhaIntegracao[]>`
-      select id, nome, colecao_ids, ativo, criado_em, atualizado_em
-      from integracoes where conta_id = ${contaId}
-      order by criado_em desc`;
-    return linhas.map(mapIntegracao);
-  } catch (err) {
-    if (tabelaAusente(err)) return [];
-    throw err;
-  }
+  const existe = await tx<{ reg: string | null }[]>`select to_regclass('public.integracoes') as reg`;
+  if (existe[0]?.reg == null) return [];
+
+  const linhas = await tx<LinhaIntegracao[]>`
+    select id, nome, colecao_ids, ativo, criado_em, atualizado_em
+    from integracoes where conta_id = ${contaId}
+    order by criado_em desc`;
+  return linhas.map(mapIntegracao);
 }
 
 export async function obterIntegracao(tx: Tx, id: string): Promise<Integracao | null> {
