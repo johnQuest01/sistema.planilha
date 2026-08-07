@@ -39,10 +39,13 @@ const COALESCE_PRESENCA_MS = 300;
 // banco só precisa de um carimbo aproximado para "entradas recentes".
 const HEARTBEAT_DB_MS = 60_000;
 // Sem sinal (ping) do cliente por esse tempo → conexão considerada morta. O
-// cliente faz ping a cada ~25s (e ~60s quando a aba está em segundo plano),
-// então 90s tolera um ping perdido sem derrubar quem ainda está por perto.
-const CLIENTE_TIMEOUT_MS = 90_000;
-const SWEEP_MS = 30_000;
+// cliente faz ping a cada ~25s, então 60s tolera um ping perdido sem derrubar
+// quem ainda está por perto — e faz "quem saiu" sumir mais rápido do online
+// quando a saída NÃO é graciosa (queda de rede, app morto pelo SO sem fechar o
+// socket). Fechar a aba/app normalmente dispara 'close' e some na hora.
+const CLIENTE_TIMEOUT_MS = 60_000;
+// Varre conexões mortas com frequência para o "saiu" refletir rápido no status.
+const SWEEP_MS = 15_000;
 
 const tickets = new Map<string, TicketPresenca>();
 const salas = new Map<string, Set<ClienteWs>>();

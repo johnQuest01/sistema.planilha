@@ -21,9 +21,13 @@ primary_region = "gru"
 [http_service]
   internal_port = 3333
   force_https = true
-  # Sempre 1 máquina ligada: SEM cold start (o "fecha e abre e fica carregando").
+  # UMA máquina só (fly scale count 1). A presença/tempo real é mantida EM MEMÓRIA
+  # por máquina (salas em presencaHub.ts); com 2+ máquinas o fly-proxy divide as
+  # conexões WebSocket e quem está em máquinas diferentes NÃO se enxerga (online,
+  # entrou/saiu e eventos ao vivo quebram). Manter 1 evita esse split-brain sem
+  # precisar de backplane (Redis/NOTIFY). Sempre ligada: SEM cold start.
   auto_stop_machines = false
-  auto_start_machines = true
+  auto_start_machines = false
   min_machines_running = 1
   processes = ["app"]
 
