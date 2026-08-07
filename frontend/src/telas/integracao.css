@@ -361,12 +361,14 @@
   box-shadow: var(--sombra);
   overflow: hidden;
 }
+/* Mobile-first: título em cima (largura total, mostrado por inteiro) e as ações
+   embaixo — mesmo padrão das outras planilhas (RegistroPreview). Assim o título
+   nunca é cortado nem sobrepõe o botão grande de "Preencher / alterar". */
 .integ-resultado__cabecalho {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--e2);
-  flex-wrap: wrap;
   padding: var(--e3);
   border-bottom: 1px solid var(--linha);
 }
@@ -381,6 +383,11 @@
   font-size: 16px;
   font-weight: 700;
   color: var(--tinta);
+  min-width: 0;
+  /* Nunca corta o título: quebra em várias linhas e parte tokens longos
+     ("4819 | 309…") em vez de vazar por cima do botão. */
+  white-space: normal;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 .integ-resultado__acoes {
@@ -388,6 +395,26 @@
   align-items: center;
   gap: var(--e2);
   flex-wrap: wrap;
+}
+
+/* Desktop: título ocupa TODO o espaço à esquerda (sem sobra à direita) e o botão
+   fica à direita, sem sobrepor. Se o título for muito longo, ele quebra em linhas
+   e o botão continua no lugar. */
+@media (min-width: 769px) {
+  .integ-resultado__cabecalho {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  .integ-resultado__titulo-area {
+    flex: 1 1 auto;
+  }
+  .integ-resultado__titulo {
+    font-size: 18px;
+  }
+  .integ-resultado__acoes {
+    flex: none;
+    margin-left: auto;
+  }
 }
 .integ-resultado .integ-previa {
   padding: var(--e3);
