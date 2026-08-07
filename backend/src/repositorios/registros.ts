@@ -172,8 +172,11 @@ export async function listarRegistros(
   colecaoId: string,
   before: string | undefined,
 ): Promise<Registro[] | null> {
-  if (!(await colecaoExiste(tx, colecaoId))) return null;
-
+  // Otimização de latência: o banco costuma ficar longe do servidor, então cada
+  // ida custa caro. Consultamos os registros DIRETO; se vier pelo menos 1, a
+  // coleção existe e é da conta (a RLS já filtra) — não gastamos a ida extra do
+  // `colecaoExiste`. Só quando volta VAZIO precisamos distinguir "coleção
+  // inexistente/sem acesso" (→ null/404) de "coleção realmente vazia" (→ []).
   const linhas =
     before === undefined
       ? await tx<LinhaRegistro[]>`
@@ -185,7 +188,9 @@ export async function listarRegistros(
           from registros where colecao_id = ${colecaoId} and criado_em < ${before}
           order by criado_em desc limit ${LIMITE}`;
 
-  return linhas.map(mapRegistro);
+  if (linhas.length > 0) return linhas.map(mapRegistro);
+  if (!(await colecaoExiste(tx, colecaoId))) return null;
+  return [];
 }
 
 // Busca em TODOS os registros da coleção no Neon — não depende do "Ver mais"

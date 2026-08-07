@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Copy, Lock, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
+import { chaveColecao, chaveRegistros, gravarCache, lerCache } from '../api/cache';
 import type { Campo, Colecao as TColecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
 import { Segmentado } from '../ui/Segmentado';
@@ -37,8 +38,11 @@ export function Colecao(): JSX.Element {
   const navegar = useNavigate();
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
-  const [colecao, setColecao] = useState<TColecao | null>(null);
-  const [regsIniciais, setRegsIniciais] = useState<PrefetchRegs>(undefined);
+  // Semeia com o último dado conhecido (cache) para pintar na hora, sem skeleton.
+  const [colecao, setColecao] = useState<TColecao | null>(() => lerCache<TColecao>(chaveColecao(id)));
+  const [regsIniciais, setRegsIniciais] = useState<PrefetchRegs>(
+    () => lerCache<Registro[]>(chaveRegistros(id)) ?? undefined,
+  );
   const [bloqueada, setBloqueada] = useState<{ nome: string } | null>(null);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [senha, setSenha] = useState('');
@@ -58,8 +62,11 @@ export function Colecao(): JSX.Element {
     setColecao(col);
     setNomeEdit(col.nome);
     nomeSalvo.current = col.nome;
+    gravarCache(chaveColecao(id), col);
     try {
-      setRegsIniciais(await api.listarRegistros(id));
+      const rs = await api.listarRegistros(id);
+      setRegsIniciais(rs);
+      gravarCache(chaveRegistros(id), rs);
     } catch {
       setRegsIniciais(null);
     }
@@ -71,10 +78,19 @@ export function Colecao(): JSX.Element {
 
   useEffect(() => {
     let vivo = true;
-    setColecao(null);
-    setRegsIniciais(undefined);
+    // Stale-while-revalidate: pinta o cache na hora (se houver) e revalida a seguir.
+    // Sem cache, cai no skeleton normal (colecao=null / regs=undefined).
+    const colCache = lerCache<TColecao>(chaveColecao(id));
+    const regsCache = lerCache<Registro[]>(chaveRegistros(id));
+    setColecao(colCache);
+    setRegsIniciais(regsCache ?? undefined);
     setBloqueada(null);
     setErroCarga(null);
+    if (colCache !== null) {
+      setNomeEdit(colCache.nome);
+      nomeSalvo.current = colCache.nome;
+      setModo(colCache.campos.length === 0 ? 'criar' : 'preencher');
+    }
     // Coleção + 1ª página de registros em paralelo (corta a cascata obter→listar).
     void api
       .obterColecao(id)
@@ -84,11 +100,13 @@ export function Colecao(): JSX.Element {
         setNomeEdit(col.nome);
         nomeSalvo.current = col.nome;
         setModo(col.campos.length === 0 ? 'criar' : 'preencher');
+        gravarCache(chaveColecao(id), col);
       })
       .catch((e: unknown) => {
         if (!vivo) return;
         if (e instanceof ErroApi && e.status === 403) {
           setBloqueada({ nome: nomeDoErroBloqueio(e) });
+          setColecao(null); // stale desatualizado: agora está protegida
           setRegsIniciais(null);
           return;
         }
@@ -96,16 +114,22 @@ export function Colecao(): JSX.Element {
           navegar('/', { replace: true });
           return;
         }
-        setErroCarga(e instanceof ErroApi ? e.message : 'falha ao carregar a planilha');
-        setRegsIniciais(null);
+        // Rede falhou mas temos cache: mantém o stale na tela em vez de dar erro.
+        if (colCache === null) {
+          setErroCarga(e instanceof ErroApi ? e.message : 'falha ao carregar a planilha');
+          setRegsIniciais(null);
+        }
       });
     void api
       .listarRegistros(id)
       .then((rs) => {
-        if (vivo) setRegsIniciais(rs);
+        if (!vivo) return;
+        setRegsIniciais(rs);
+        gravarCache(chaveRegistros(id), rs);
       })
       .catch(() => {
-        if (vivo) setRegsIniciais(null);
+        // Sem cache anterior, marca falha; com cache, mantém o que está na tela.
+        if (vivo && regsCache === null) setRegsIniciais(null);
       });
     return () => {
       vivo = false;
@@ -131,9 +155,12 @@ export function Colecao(): JSX.Element {
       setNomeEdit(col.nome);
       nomeSalvo.current = col.nome;
       setModo(col.campos.length === 0 ? 'criar' : 'preencher');
+      gravarCache(chaveColecao(id), col);
       setRegsIniciais(undefined);
       try {
-        setRegsIniciais(await api.listarRegistros(id));
+        const rs = await api.listarRegistros(id);
+        setRegsIniciais(rs);
+        gravarCache(chaveRegistros(id), rs);
       } catch {
         setRegsIniciais(null);
       }

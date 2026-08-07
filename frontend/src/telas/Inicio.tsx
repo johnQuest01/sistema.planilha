@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Layers, Lock, Plus, Trash2 } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo, type Integracao } from '../api/cliente';
+import { prefetchColecoes } from '../api/prefetch';
 import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
@@ -55,6 +56,8 @@ export function Inicio(): JSX.Element {
       .listarColecoes()
       .then((cs) => {
         setColecoes(cs);
+        // Aquece o cache das primeiras planilhas p/ o clique ficar instantâneo.
+        prefetchColecoes(cs.filter((c) => !c.bloqueada).map((c) => c.id));
       })
       .catch((e: unknown) => {
         setErro(e instanceof ErroApi ? e.message : 'falha ao carregar');
@@ -80,6 +83,8 @@ export function Inicio(): JSX.Element {
       .then((cs) => {
         if (!vivo) return;
         setColecoes(cs);
+        // Aquece o cache das primeiras planilhas p/ o clique ficar instantâneo.
+        prefetchColecoes(cs.filter((c) => !c.bloqueada).map((c) => c.id));
       })
       .catch((e: unknown) => {
         if (!vivo) return;

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api, type Usuario } from '../api/cliente';
+import { limparCache } from '../api/cache';
 import { definirWsBase } from '../api/runtime';
 import { definirBaseR2 } from '../imagens/urls';
 
@@ -66,6 +67,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
 
   const sair = useCallback(async () => {
     await api.sair();
+    limparCache(); // não vazar dados em cache para a próxima conta neste navegador
     setEstado({ fase: 'deslogado' });
   }, []);
 

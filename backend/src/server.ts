@@ -58,19 +58,16 @@ export function buildServer() {
     return reply.code(codigo).send({ erro: codigo >= 500 ? 'erro interno' : err.message });
   });
 
+  // Health LEVE: só confirma que o banco responde (1 ida). O check pesado de
+  // schema (várias consultas ao information_schema) roda no boot em main() — se o
+  // schema estiver velho, o processo nem sobe. Tirar o schema daqui deixa o
+  // health-check do Render e o "ping" anti cold start baratos e rápidos.
   app.get('/health', async (_req, reply) => {
-    const linhas = await sql<{ ok: number }[]>`select 1 as ok`;
-    const db = linhas[0]?.ok === 1;
     try {
-      await garantirSchemaPronto();
-      return { status: 'ok', db, schema: true };
-    } catch (err) {
-      return reply.code(503).send({
-        status: 'schema_desatualizado',
-        db,
-        schema: false,
-        erro: err instanceof Error ? err.message : 'schema incompleto',
-      });
+      const linhas = await sql<{ ok: number }[]>`select 1 as ok`;
+      return { status: 'ok', db: linhas[0]?.ok === 1 };
+    } catch {
+      return reply.code(503).send({ status: 'sem_banco', db: false });
     }
   });
 
