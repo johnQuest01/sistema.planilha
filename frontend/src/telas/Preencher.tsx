@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ListPlus, Lock, Plus, Rows2, Rows3, Unlock } from 'lucide-react';
+import { Download, ListPlus, Lock, Plus, Rows2, Rows3, Unlock } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import { assinarRealtime } from '../api/realtime';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
+import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
 import { useMedia } from '../ui/useMedia';
+import { exportarColecao, type ProgressoExport } from '../backup/exportarColecao';
 import { Tabela } from '../preencher/Tabela';
 import { ListaDensa } from '../preencher/ListaDensa';
 import { Ficha } from '../preencher/Ficha';
@@ -43,6 +45,12 @@ export function Preencher({
   registrosIniciais?: Registro[] | null;
 }): JSX.Element {
   const ehMobile = useMedia('(max-width: 768px)');
+  const { estado } = useAuth();
+  // Só o dono do workspace (Bruno) enxerga/usa o backup completo da planilha.
+  const ehDono = estado.fase === 'logado' && estado.usuario.papel === 'dono';
+  const [exportando, setExportando] = useState(false);
+  const [progExport, setProgExport] = useState<ProgressoExport | null>(null);
+  const [erroExport, setErroExport] = useState<string | null>(null);
   const [registros, setRegistros] = useState<Registro[] | null>(() =>
     Array.isArray(registrosIniciais) ? registrosIniciais : null,
   );
@@ -72,6 +80,30 @@ export function Preencher({
     const criado = await api.criarCampo(colecao.id, d);
     aoMudarCampos((cs) => [...cs, criado]);
     setAdicionandoCampo(false);
+  }
+
+  // Backup local (dono): baixa TODAS as imagens em alta + textos/JSON num .zip.
+  async function baixarBackup(): Promise<void> {
+    if (exportando) return;
+    setExportando(true);
+    setErroExport(null);
+    setProgExport(null);
+    try {
+      await exportarColecao(colecao, setProgExport);
+    } catch {
+      setErroExport('Não foi possível gerar o backup. Tente novamente.');
+    } finally {
+      setExportando(false);
+      setProgExport(null);
+    }
+  }
+
+  function textoProgresso(p: ProgressoExport | null): string {
+    if (p === null) return 'Preparando…';
+    if (p.fase === 'carregando') return 'Lendo registros…';
+    if (p.fase === 'imagens') return `Baixando imagens ${p.feito}/${p.total}`;
+    if (p.fase === 'compactando') return 'Compactando…';
+    return 'Concluído';
   }
 
   useEffect(() => {
@@ -343,6 +375,17 @@ export function Preencher({
             {edicaoLiberada ? 'Edição liberada' : 'Edição travada'}
           </span>
         </button>
+        {ehDono && (
+          <Botao
+            variante="padrao"
+            onClick={() => void baixarBackup()}
+            disabled={exportando || registros === null}
+            title="Baixar todas as imagens (alta definição) e os dados desta planilha num .zip"
+          >
+            <Download size={18} />
+            {exportando ? textoProgresso(progExport) : 'Baixar backup'}
+          </Botao>
+        )}
         <span className="preencher-barra__espaco" />
         <span className="preencher-contagem">
           {registros === null ? '…' : `${registros.length} registro(s)`}
@@ -362,6 +405,7 @@ export function Preencher({
       </div>
 
       {erro !== null && <p className="aviso-erro">{erro}</p>}
+      {erroExport !== null && <p className="aviso-erro">{erroExport}</p>}
 
       <BuscaReferencia
         colecao={colecao}
