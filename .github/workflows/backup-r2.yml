@@ -1,0 +1,31 @@
+name: Backup R2 (fotos)
+
+# Backup incremental e só-adição do bucket de fotos para o bucket de backup.
+# Roda todo dia e também pode ser disparado na mão (Actions -> Backup R2 -> Run workflow).
+on:
+  schedule:
+    - cron: '0 6 * * *' # 06:00 UTC = 03:00 no horário de Brasília
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar backup
+        working-directory: backend
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET || 'mostruario-midia' }}
+          R2_BACKUP_BUCKET: ${{ vars.R2_BACKUP_BUCKET || 'mostruario-midia-backup' }}
+        run: node scripts/backup-r2.mjs

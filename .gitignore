@@ -29,3 +29,6 @@ Thumbs.db
 # uploads locais / temporários
 tmp/
 *.local
+
+# backups locais (dados privados dos registros) — nunca commitar
+backend/backups/

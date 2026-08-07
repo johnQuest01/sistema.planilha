@@ -8,6 +8,7 @@
     "start": "node dist/backend/src/server.js",
     "migrate": "tsx migrations/run.ts",
     "limpar-r2": "tsx src/scripts/limparR2.ts",
+    "backup-r2": "node scripts/backup-r2.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
