@@ -24,8 +24,12 @@ jobs:
         working-directory: backend
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ vars.R2_BUCKET || 'mostruario-midia' }}
-          R2_BACKUP_BUCKET: ${{ vars.R2_BACKUP_BUCKET || 'mostruario-midia-backup' }}
+          R2_BACKUP_BUCKET: ${{ vars.R2_BACKUP_BUCKET }}
+          # Token que LÊ a origem (mostruario-midia)
+          R2_SRC_ACCESS_KEY_ID: ${{ secrets.R2_SRC_ACCESS_KEY_ID }}
+          R2_SRC_SECRET_ACCESS_KEY: ${{ secrets.R2_SRC_SECRET_ACCESS_KEY }}
+          # Token que ESCREVE no backup
+          R2_DST_ACCESS_KEY_ID: ${{ secrets.R2_DST_ACCESS_KEY_ID }}
+          R2_DST_SECRET_ACCESS_KEY: ${{ secrets.R2_DST_SECRET_ACCESS_KEY }}
         run: node scripts/backup-r2.mjs

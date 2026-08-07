@@ -1,28 +1,25 @@
 // Backup INCREMENTAL e SÓ-ADIÇÃO do bucket de fotos do R2 para um bucket de backup.
-// - Copia server-side (dentro do próprio R2, sem baixar/subir) tudo que ainda não
-//   existe no backup (ou que mudou de tamanho).
-// - NUNCA apaga nada do backup: mesmo que o bucket principal seja esvaziado por engano,
-//   o backup preserva o histórico. É essa a proteção contra o que aconteceu.
+// Usa DOIS tokens (os do R2 são escopados por bucket): um LÊ a origem e outro ESCREVE
+// no backup. Copia client-side (GET na origem -> PUT no backup) apenas o que ainda não
+// existe (ou mudou de tamanho). NUNCA apaga do backup — é a proteção contra o bucket
+// principal ser esvaziado por engano.
 //
-// Roda no GitHub Actions (diário) e também dá pra rodar na mão:
-//   node scripts/backup-r2.mjs
+// Uso local:  node scripts/backup-r2.mjs   (com as env vars abaixo definidas)
 //
 // Variáveis (env):
-//   R2_ACCOUNT_ID          conta Cloudflare (o hash do endpoint)
-//   R2_ACCESS_KEY_ID       token com Object Read&Write nos DOIS buckets
-//   R2_SECRET_ACCESS_KEY
-//   R2_BUCKET              origem   (default: mostruario-midia)
-//   R2_BACKUP_BUCKET       destino  (default: mostruario-midia-backup)
+//   R2_ACCOUNT_ID            conta Cloudflare (hash do endpoint)
+//   R2_BUCKET                origem  (default: mostruario-midia)
+//   R2_SRC_ACCESS_KEY_ID     token que LÊ a origem
+//   R2_SRC_SECRET_ACCESS_KEY
+//   R2_BACKUP_BUCKET         destino (ex.: sistema-backup-mostruario1)
+//   R2_DST_ACCESS_KEY_ID     token que ESCREVE no destino
+//   R2_DST_SECRET_ACCESS_KEY
 import {
   S3Client,
   ListObjectsV2Command,
-  HeadObjectCommand,
-  CopyObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
 } from '@aws-sdk/client-s3';
-
-const accountId = req('R2_ACCOUNT_ID');
-const origem = process.env.R2_BUCKET?.trim() || 'mostruario-midia';
-const destino = process.env.R2_BACKUP_BUCKET?.trim() || 'mostruario-midia-backup';
 
 function req(nome) {
   const v = process.env[nome];
@@ -33,20 +30,27 @@ function req(nome) {
   return v.trim();
 }
 
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: req('R2_ACCESS_KEY_ID'),
-    secretAccessKey: req('R2_SECRET_ACCESS_KEY'),
-  },
-  // R2 rejeita o checksum CRC32 automático do SDK v3 — desligamos (igual ao backend).
-  requestChecksumCalculation: 'WHEN_REQUIRED',
-  responseChecksumValidation: 'WHEN_REQUIRED',
-});
+const accountId = req('R2_ACCOUNT_ID');
+const origem = process.env.R2_BUCKET?.trim() || 'mostruario-midia';
+const destino = req('R2_BACKUP_BUCKET');
+const ENDPOINT = `https://${accountId}.r2.cloudflarestorage.com`;
 
-// Lista TODAS as chaves de um bucket -> Map(key -> size). Se o bucket não existe, avisa.
-async function indexar(bucket) {
+function cliente(ak, sk) {
+  return new S3Client({
+    region: 'auto',
+    endpoint: ENDPOINT,
+    credentials: { accessKeyId: ak, secretAccessKey: sk },
+    // R2 rejeita o checksum CRC32 automático do SDK v3 — desligamos (igual ao backend).
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+  });
+}
+
+const src = cliente(req('R2_SRC_ACCESS_KEY_ID'), req('R2_SRC_SECRET_ACCESS_KEY'));
+const dst = cliente(req('R2_DST_ACCESS_KEY_ID'), req('R2_DST_SECRET_ACCESS_KEY'));
+
+// Lista TODAS as chaves de um bucket -> Map(key -> size).
+async function indexar(s3, bucket, quem) {
   const mapa = new Map();
   let token;
   try {
@@ -59,41 +63,39 @@ async function indexar(bucket) {
     } while (token);
   } catch (e) {
     if (e.name === 'NoSuchBucket') {
-      console.error(
-        `\nO bucket de destino "${bucket}" não existe. Crie-o no painel do R2 ` +
-          `(Overview -> Create bucket) com esse nome e rode de novo.\n`,
-      );
+      console.error(`\nBucket "${bucket}" (${quem}) nao existe. Crie-o no R2 e rode de novo.\n`);
       process.exit(2);
     }
-    throw e;
+    console.error(`Falha ao listar ${bucket} (${quem}): ${e.name} ${e.message}`);
+    process.exit(3);
   }
   return mapa;
 }
 
 console.log(`Backup R2: ${origem}  ->  ${destino}`);
 
-const src = await indexar(origem);
-const dst = await indexar(destino);
-console.log(`Origem: ${src.size} objetos | Backup atual: ${dst.size} objetos`);
+const mapaSrc = await indexar(src, origem, 'origem');
+const mapaDst = await indexar(dst, destino, 'destino');
+console.log(`Origem: ${mapaSrc.size} objetos | Backup atual: ${mapaDst.size} objetos`);
 
 let copiados = 0;
 let pulados = 0;
 let erros = 0;
 
-for (const [key, size] of src) {
-  const jaTem = dst.get(key);
-  if (jaTem !== undefined && jaTem === size) {
+for (const [key, size] of mapaSrc) {
+  if (mapaDst.get(key) === size) {
     pulados += 1;
     continue;
   }
   try {
-    // CopySource = "<bucket>/<key>". Barras da key são separador de caminho (não codificar);
-    // os demais caracteres das nossas keys (uuid/uuid/nano_t.ext) são seguros.
-    await s3.send(
-      new CopyObjectCommand({
+    const obj = await src.send(new GetObjectCommand({ Bucket: origem, Key: key }));
+    await dst.send(
+      new PutObjectCommand({
         Bucket: destino,
         Key: key,
-        CopySource: `${origem}/${key}`,
+        Body: obj.Body,
+        ContentType: obj.ContentType,
+        ContentLength: obj.ContentLength,
       }),
     );
     copiados += 1;
@@ -104,6 +106,5 @@ for (const [key, size] of src) {
   }
 }
 
-console.log(`\nResultado: ${copiados} copiados, ${pulados} já existiam, ${erros} erros.`);
-console.log(`Backup agora tem >= ${dst.size + copiados} objetos.`);
+console.log(`\nResultado: ${copiados} copiados, ${pulados} ja existiam, ${erros} erros.`);
 if (erros > 0) process.exit(1);
