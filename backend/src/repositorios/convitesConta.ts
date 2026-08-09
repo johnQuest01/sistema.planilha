@@ -118,6 +118,7 @@ export async function listarConvitesConta(contaId: string): Promise<ConviteConta
     select *
     from convites_conta
     where conta_id = ${contaId}
+      and revogado_em is null
     order by criado_em desc`;
   return linhas.map(mapear);
 }

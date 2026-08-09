@@ -222,11 +222,8 @@ export function Config(): JSX.Element {
     setErroTokens(null);
     try {
       await api.revogarTokenConvite(token);
-      setTokens((prev) =>
-        (prev ?? []).map((t) =>
-          t.token === token ? { ...t, revogadoEm: new Date().toISOString() } : t,
-        ),
-      );
+      // Some da lista (não fica como "revogado").
+      setTokens((prev) => (prev ?? []).filter((t) => t.token !== token));
       // Recarrega usuários/pedidos (podem ter caído).
       const [listaU, listaP] = await Promise.all([
         api.listarUsuarios().catch(() => null),
@@ -449,26 +446,21 @@ export function Config(): JSX.Element {
 
           {tokens !== null && tokens.length > 0 && (
             <ul className="config__usuarios" style={{ marginTop: '1rem' }}>
-              {tokens.map((t) => {
-                const morto = t.revogadoEm !== null;
-                return (
+              {tokens
+                .filter((t) => t.revogadoEm === null)
+                .map((t) => (
                   <li key={t.token} className="config__usuario">
                     <div className="config__usuario-info">
                       <code>{t.token}</code>
                       <span className="config__usuario-papel">
-                        {morto
-                          ? 'revogado'
-                          : `${t.usos} uso(s)${t.maxUsos !== null ? ` / máx ${t.maxUsos}` : ''}`}
+                        {`${t.usos} uso(s)${t.maxUsos !== null ? ` / máx ${t.maxUsos}` : ''}`}
                       </span>
                     </div>
-                    {!morto && (
-                      <Botao variante="fantasma" onClick={() => void revogarToken(t.token)}>
-                        Revogar
-                      </Botao>
-                    )}
+                    <Botao variante="fantasma" onClick={() => void revogarToken(t.token)}>
+                      Revogar
+                    </Botao>
                   </li>
-                );
-              })}
+                ))}
             </ul>
           )}
 
