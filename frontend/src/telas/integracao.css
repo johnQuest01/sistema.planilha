@@ -348,7 +348,7 @@
   gap: 2px;
   padding: var(--e3);
   border-bottom: 1px solid var(--linha);
-  background: rgba(23, 32, 28, 0.03);
+  background: transparent;
 }
 .integ-previa-parte__fonte {
   font-family: var(--mono);
@@ -376,21 +376,19 @@
   box-shadow: none;
   background: transparent;
 }
-/* Prévia UNIDA: cada parte tem o MESMO topo fixo da Modelagem — o cabeçalho (nome da
-   planilha + título + botões) fica grudado no topo ao rolar, com fundo limpo (papel) e
-   SEM a faixa translúcida. Sem margem negativa (que causava sobreposição/corte).
-   O nome da planilha vai como um selo (.preview-registro__fonte) dentro do cabeçalho. */
+/* Prévia UNIDA = MESMO topo da Modelagem: sticky, título em cima, botões
+   (Renomear/Compartilhar/Abrir) logo abaixo, fundo papel limpo (sem faixa cinza,
+   sem sombra de "toolbar"). Só não usa margem negativa (estaria dentro do cartão). */
 .folha__corpo .integ-previa-parte .preview-registro__cabecalho {
   position: sticky;
   top: 0;
   z-index: 3;
-  margin: 0;
+  margin: 0 0 var(--e3);
   padding: var(--e3);
   background: var(--papel);
   border-bottom: 1px solid var(--linha);
-  box-shadow: 0 3px 8px rgba(23, 32, 28, 0.05);
-  border-top-left-radius: var(--raio-2);
-  border-top-right-radius: var(--raio-2);
+  box-shadow: none;
+  border-radius: 0;
 }
 .integ-previa-parte--ausente {
   box-shadow: none;

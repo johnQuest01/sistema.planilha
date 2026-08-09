@@ -496,9 +496,9 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
   completa** (folha grande com X). Se a busca acha **exatamente 1** registro, a prévia
   **abre sozinha**. (Mesmo padrão vale na planilha unida.)
 - **`RegistroPreview.tsx`** — prévia de um registro. Dentro da folha, o cabeçalho
-  (título + Renomear/Compartilhar/Abrir/Lixeira) fica **fixo no topo** (sticky), fundo
-  limpo (papel). Prop opcional `fonte` mostra o nome da planilha como selo no topo
-  (usada na prévia unida, para TODAS as partes terem o MESMO topo fixo). Modo
+  (título +, abaixo, Renomear/Compartilhar/Abrir/Lixeira) fica **fixo no topo**
+  (sticky), fundo papel, **sem faixa cinza/sombra de “barra de UI”**. Prop opcional
+  `fonte` mostra o nome da planilha como selo no topo (prévia unida). Modo
   compartilhar: seleciona blocos e gera link (`criarLinkRegistro`) ou imagem; o botão de
   link (FAB) fica fixo enquanto seleciona.
 - **`derivarResumo.ts`** — deriva **título**, **resumo**, **capa** e o **corpo efetivo**
@@ -538,8 +538,9 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
   passo "criar registro". Navegação por planilha (chips) e foco inicial na planilha
   escolhida pelo "Preencher" da prévia.
 - **Consistência do topo (importante):** cada parte da prévia unida usa o MESMO
-  cabeçalho fixo e limpo da Modelagem (via `RegistroPreview` + `fonte`), sem faixa
-  translúcida — todas as planilhas têm o registro com o mesmo topo fixo com botões.
+  cabeçalho sticky da Modelagem (`RegistroPreview` + `fonte` + `aoAbrir` → Preencher
+  naquela planilha): título em cima, botões logo abaixo, fundo papel sem faixa
+  translúcida.
 
 ### Importação e backup
 

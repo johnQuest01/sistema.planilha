@@ -794,6 +794,14 @@ function PreviaCorpo({
                 registro={parte.registro}
                 fonte={parte.colecao.nome}
                 aoAtualizar={aoAtualizarRegistro}
+                aoAbrir={
+                  aoPreencher !== undefined
+                    ? () => {
+                        setAlvo(i);
+                        aoPreencher(i);
+                      }
+                    : undefined
+                }
                 aoModoShare={(ativo) =>
                   setCompartilhando((prev) => {
                     const n = new Set(prev);

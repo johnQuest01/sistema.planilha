@@ -355,16 +355,12 @@
   justify-content: center;
   gap: 2px;
 }
-/* Prévia aberta pela lista: sem “cartão dentro do cartão”. */
+/* Prévia aberta pela lista: sem “cartão dentro do cartão”.
+   O sticky + fundo papel do cabeçalho está mais abaixo (não resetar aqui). */
 .folha__corpo .preview-registro {
   border: none;
   border-radius: 0;
   box-shadow: none;
-  background: transparent;
-}
-.folha__corpo .preview-registro__cabecalho {
-  padding-left: 0;
-  padding-right: 0;
   background: transparent;
 }
 .lista-item__titulo-btn {
@@ -681,8 +677,9 @@
   border-radius: var(--raio-2);
   overflow: hidden;
 }
-/* Dentro da folha (prévia), o cabeçalho com Renomear/Compartilhar/Abrir/Lixeira fica
-   FIXO no topo e só o conteúdo do registro rola — não precisa subir para achar os botões. */
+/* Dentro da folha (prévia), o cabeçalho (título + Renomear/Compartilhar/Abrir/Lixeira)
+   fica FIXO no topo — só o conteúdo do registro rola. Visual limpo (papel), SEM faixa
+   cinza/translúcida que parecia "barra de UI". Padrão único: Modelagem e unificadas. */
 .folha__corpo .preview-registro {
   overflow: visible;
 }
@@ -690,12 +687,12 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  /* Barra full-width e colada no topo (cobre o padding da folha), visual limpo. */
+  /* Full-width colado no topo da folha (cobre o padding). */
   margin: calc(var(--e4) * -1) calc(var(--e4) * -1) var(--e3);
   padding: var(--e3) var(--e4);
   background: var(--papel);
   border-bottom: 1px solid var(--linha);
-  box-shadow: 0 3px 8px rgba(23, 32, 28, 0.05);
+  box-shadow: none;
 }
 .preview-registro__cabecalho {
   display: flex;
@@ -705,7 +702,8 @@
   width: 100%;
   padding: var(--e3);
   border-bottom: 1px solid var(--linha);
-  background: rgba(23, 32, 28, 0.03);
+  /* Sem faixa cinza — mesmo fundo do registro (não "barra de botões"). */
+  background: transparent;
   box-sizing: border-box;
 }
 .preview-registro__cabecalho-linha {
