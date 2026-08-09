@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { api, type ContaAcessivel, type Usuario } from '../api/cliente';
 import { limparCache } from '../api/cache';
+import { desligarRealtime } from '../api/realtime';
 import { definirWsBase } from '../api/runtime';
 import { definirBaseR2 } from '../imagens/urls';
 
@@ -115,12 +116,13 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
   const trocarConta = useCallback(async (contaId: string) => {
     const usuario = await api.trocarConta(contaId);
     limparCache();
+    // contaId no estado faz Presenca/Inicio/WS remontarem ao vivo.
     setEstado({ fase: 'logado', usuario });
     setAvisoPedido(null);
-    // Contas não mudam ao trocar; só a sessão.
   }, []);
 
   const sair = useCallback(async () => {
+    desligarRealtime();
     await api.sair();
     limparCache();
     setContas([]);

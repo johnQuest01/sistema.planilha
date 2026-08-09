@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Scissors } from 'lucide-react';
 import { useAuth } from '../contexto/Auth';
 import { api, ErroApi } from '../api/cliente';
@@ -28,12 +29,14 @@ function tokenPareceCompleto(t: string): boolean {
 
 export function Entrar(): JSX.Element {
   const { entrar, registrar } = useAuth();
+  const [params] = useSearchParams();
   const [modo, setModo] = useState<'entrar' | 'registrar'>('entrar');
   const [modoCadastro, setModoCadastro] = useState<ModoCadastro>('token');
   const [nome, setNome] = useState('');
   const [nomeConta, setNomeConta] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [senha2, setSenha2] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [token, setToken] = useState('');
   const [erro, setErro] = useState<string | null>(null);
@@ -41,6 +44,20 @@ export function Entrar(): JSX.Element {
   const [previaToken, setPreviaToken] = useState<PreviaToken>({ fase: 'idle' });
   const [previaPedido, setPreviaPedido] = useState<PreviaPedido>({ fase: 'idle' });
   const pedidoKeyRef = useRef('');
+
+  // Link compartilhável: /entrar?token=MOST-XXXX-XXXX
+  useEffect(() => {
+    const t = (params.get('token') ?? '').trim();
+    if (t === '') return;
+    setToken(t);
+    const cadastro = params.get('cadastro') === '1' || params.get('modo') === 'registrar';
+    if (cadastro) {
+      setModo('registrar');
+      setModoCadastro('token');
+    } else {
+      setModo('entrar');
+    }
+  }, [params]);
 
   // Login inteligente: valida o token enquanto digita (antes do Entrar).
   useEffect(() => {
@@ -138,6 +155,16 @@ export function Entrar(): JSX.Element {
   async function enviar(e: FormEvent): Promise<void> {
     e.preventDefault();
     setErro(null);
+    if (modo === 'registrar') {
+      if (senha !== senha2) {
+        setErro('as senhas não coincidem — digite a mesma senha duas vezes');
+        return;
+      }
+      if (senha.length < 8) {
+        setErro('a senha precisa ter ao menos 8 caracteres');
+        return;
+      }
+    }
     setEnviando(true);
     try {
       if (modo === 'entrar') {
@@ -241,6 +268,17 @@ export function Entrar(): JSX.Element {
             {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
+        {modo === 'registrar' && (
+          <Campo
+            rotulo="Confirmar senha"
+            type={mostrarSenha ? 'text' : 'password'}
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={senha2}
+            onChange={(e) => setSenha2(e.target.value)}
+          />
+        )}
         {modo === 'entrar' && (
           <>
             <Campo

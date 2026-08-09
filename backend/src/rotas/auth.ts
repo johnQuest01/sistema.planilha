@@ -26,6 +26,8 @@ import {
 } from '../repositorios/convitesConta';
 import {
   aprovarAcesso,
+  contarAdminsConta,
+  definirPapelConvidado,
   listarContasDoUsuario,
   listarMembrosConvidados,
   listarPedidosPendentes,
@@ -622,13 +624,60 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
       id: m.usuarioId,
       nome: m.nome ?? '',
       email: m.email ?? '',
-      papel: 'membro' as const,
+      papel: (m.papel === 'dono' ? 'dono' : 'membro') as 'dono' | 'membro',
       criadoEm: m.criadoEm,
       origem: 'convidado' as const,
     }));
     // Evita duplicar se alguém for nativo e também estiver na tabela (não deveria).
     const ids = new Set(nativos.map((n) => n.id));
     return reply.send([...nativos, ...convidados.filter((c) => !ids.has(c.id))]);
+  });
+
+  // Passar / tirar autoridade de admin (nativo ou convidado por token).
+  app.patch('/api/auth/usuarios/:id/papel', { preHandler: exigeDono, ...limiteAuth }, async (req, reply) => {
+    const u = usuarioObrigatorio(req);
+    if (!ehAdminConta(u.papel)) {
+      return reply.code(403).send({ erro: 'só o admin da conta pode alterar papéis' });
+    }
+    const { id } = paramsIdSchema.parse(req.params);
+    const body = z
+      .object({ papel: z.enum(['dono', 'membro']) })
+      .strict()
+      .parse(req.body);
+    const contaId = contaObrigatoria(req);
+
+    if (id === u.id && body.papel === 'membro') {
+      if ((await contarAdminsConta(contaId)) <= 1) {
+        return reply.code(400).send({ erro: 'não dá para tirar o admin do único admin da conta' });
+      }
+    }
+
+    // Nativo desta conta?
+    const nativos = await sql<{ id: string; papel: string }[]>`
+      select id, papel from usuarios where id = ${id} and conta_id = ${contaId}`;
+    if (nativos[0] !== undefined) {
+      if (nativos[0].papel === 'dono' && body.papel === 'membro') {
+        if ((await contarAdminsConta(contaId)) <= 1) {
+          return reply.code(400).send({ erro: 'não dá para tirar o único admin da conta' });
+        }
+      }
+      await sql`update usuarios set papel = ${body.papel} where id = ${id}`;
+      return reply.send({ ok: true, origem: 'nativo', papel: body.papel });
+    }
+
+    // Convidado ativo?
+    const conv = (await listarMembrosConvidados(contaId)).find((m) => m.usuarioId === id);
+    if (conv === undefined) {
+      return reply.code(404).send({ erro: 'usuário não encontrado nesta conta' });
+    }
+    if (conv.papel === 'dono' && body.papel === 'membro') {
+      if ((await contarAdminsConta(contaId)) <= 1) {
+        return reply.code(400).send({ erro: 'não dá para tirar o único admin da conta' });
+      }
+    }
+    const ok = await definirPapelConvidado(contaId, id, body.papel);
+    if (!ok) return reply.code(404).send({ erro: 'usuário não encontrado' });
+    return reply.send({ ok: true, origem: 'convidado', papel: body.papel });
   });
 
   // Remove acesso: convidado → só revoga vínculo; nativo → apaga usuário da conta.
@@ -645,11 +694,17 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
     }
 
     // Convidado (tem conta própria em outro lugar).
-    const revogado = await revogarAcessoMembro(contaId, id);
-    if (revogado) {
-      await revogarSessoesDoUsuarioNaConta(id, contaId);
-      expulsarUsuarioWs(contaId, id);
-      return reply.send({ ok: true, modo: 'convidado' });
+    const conv = (await listarMembrosConvidados(contaId)).find((m) => m.usuarioId === id);
+    if (conv !== undefined) {
+      if (conv.papel === 'dono' && (await contarAdminsConta(contaId)) <= 1) {
+        return reply.code(400).send({ erro: 'não dá para remover o único admin da conta' });
+      }
+      const revogado = await revogarAcessoMembro(contaId, id);
+      if (revogado) {
+        await revogarSessoesDoUsuarioNaConta(id, contaId);
+        expulsarUsuarioWs(contaId, id);
+        return reply.send({ ok: true, modo: 'convidado' });
+      }
     }
 
     const alvos = await sql<{ id: string; papel: string }[]>`
@@ -658,13 +713,8 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
     if (alvo === undefined) {
       return reply.code(404).send({ erro: 'usuário não encontrado' });
     }
-    if (alvo.papel === 'dono') {
-      const donos = await sql<{ n: string }[]>`
-        select count(*)::text as n from usuarios
-        where conta_id = ${contaId} and papel = 'dono'`;
-      if (Number(donos[0]?.n ?? '0') <= 1) {
-        return reply.code(400).send({ erro: 'não dá para remover o único admin da conta' });
-      }
+    if (alvo.papel === 'dono' && (await contarAdminsConta(contaId)) <= 1) {
+      return reply.code(400).send({ erro: 'não dá para remover o único admin da conta' });
     }
 
     await revogarSessoesDoUsuario(alvo.id);

@@ -738,22 +738,41 @@ export async function importarNaColecao(
   let feito = rel.semRegistro.length;
   aoProgresso?.({ feito, total });
 
+  // Até 3 registros em paralelo — evita gargalo em lotes grandes (~100 fotos)
+  // sem estourar rede/R2.
+  const CONCORRENCIA = 3;
+  const grupos = [...porRegistro.values()];
   const atualizados: Registro[] = [];
-  for (const { registro, arquivos: doReg } of porRegistro.values()) {
-    const r = await importarNoRegistro(colecao, registro, doReg, () => {
-      feito += 1;
-      aoProgresso?.({ feito, total });
-    });
-    atualizados.push(r.registro);
-    rel.refOk += r.relatorio.refOk;
-    rel.corOk += r.relatorio.corOk;
-    rel.semBloco.push(...r.relatorio.semBloco);
-    rel.cheios.push(...r.relatorio.cheios);
-    rel.erros.push(...r.relatorio.erros);
+  let cursorGrupo = 0;
+
+  async function worker(): Promise<void> {
+    while (cursorGrupo < grupos.length) {
+      const idx = cursorGrupo;
+      cursorGrupo += 1;
+      const g = grupos[idx];
+      if (g === undefined) return;
+      const r = await importarNoRegistro(colecao, g.registro, g.arquivos, () => {
+        feito += 1;
+        aoProgresso?.({ feito, total });
+      });
+      atualizados.push(r.registro);
+      rel.refOk += r.relatorio.refOk;
+      rel.corOk += r.relatorio.corOk;
+      rel.semBloco.push(...r.relatorio.semBloco);
+      rel.cheios.push(...r.relatorio.cheios);
+      rel.erros.push(...r.relatorio.erros);
+    }
   }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCORRENCIA, grupos.length) }, () => worker()),
+  );
 
   return { atualizados, relatorio: rel };
 }
+
+/** Limite seguro de fotos por lote (Home + Importar). */
+export const MAX_FOTOS_LOTE = 100;
 
 // Resumo curto do que aconteceu, para mostrar ao usuário.
 export function resumoRelatorio(rel: RelatorioImport): string {

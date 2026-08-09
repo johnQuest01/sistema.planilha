@@ -217,6 +217,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ senha }),
     }),
+  definirPapelUsuario: (id: string, papel: 'dono' | 'membro') =>
+    pedir<{ ok: boolean; origem: string; papel: string }>(`/api/auth/usuarios/${id}/papel`, {
+      method: 'PATCH',
+      body: JSON.stringify({ papel }),
+    }),
   listarTokensConvite: () =>
     pedir<
       {

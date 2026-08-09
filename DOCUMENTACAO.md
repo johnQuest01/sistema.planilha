@@ -317,6 +317,8 @@ interface ConfigCampo {
 - **022_conta_membros** — vínculo N:N (`pendente`/`ativo`/`revogado`): usuário com
   conta própria pode pedir acesso à conta de um admin via token no login; sessão
   aponta para a conta ativa.
+- **023_conta_membros_papel** — `conta_membros.papel` (`membro`|`dono`) para passar
+  autoridade de admin a convidados (token).
 
 > Nota: há dois arquivos com prefixo `015` (`015_integracoes.sql` e
 > `015_compartilhamentos.sql`); o runner aplica por ordem alfabética, então

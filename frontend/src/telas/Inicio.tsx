@@ -9,6 +9,7 @@ import { Campo } from '../ui/Campo';
 import { Carregando } from '../ui/Carregando';
 import { BotaoImportarZip } from '../importar/BotaoImportarZip';
 import { BotaoCriacaoAutomatica } from '../importar/BotaoCriacaoAutomatica';
+import { BotaoConversaoHome } from '../importar/BotaoConversaoHome';
 import { TopoApp } from './TopoApp';
 import './telas.css';
 
@@ -130,10 +131,13 @@ export function Inicio(): JSX.Element {
       });
   }
 
+  const contaId = usuario?.contaId ?? null;
+
   useEffect(() => {
     let vivo = true;
     setColecoes(null);
     setFalhaCarga(false);
+    setIntegracoes([]);
     void api
       .listarIntegracoes()
       .then((is) => {
@@ -159,7 +163,7 @@ export function Inicio(): JSX.Element {
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [contaId]);
 
   async function criar(e: FormEvent): Promise<void> {
     e.preventDefault();
@@ -266,6 +270,7 @@ export function Inicio(): JSX.Element {
               <Link to="/integracoes" className="btn">
                 <Layers size={18} /> Integrações
               </Link>
+              <BotaoConversaoHome colecoes={colecoes} aoConcluir={() => carregarLista()} />
               <form className="inicio-criar" onSubmit={criar}>
                 <Campo
                   aria-label="Nome da nova planilha"

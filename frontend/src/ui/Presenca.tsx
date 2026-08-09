@@ -24,6 +24,7 @@ export function Presenca(): JSX.Element | null {
   const { estado, sair } = useAuth();
   const logado = estado.fase === 'logado';
   const meuId = estado.fase === 'logado' ? estado.usuario.id : null;
+  const contaId = estado.fase === 'logado' ? estado.usuario.contaId : null;
 
   const [online, setOnline] = useState<Online[]>([]);
   const [avisos, setAvisos] = useState<Aviso[]>([]);
@@ -59,6 +60,10 @@ export function Presenca(): JSX.Element | null {
       return undefined;
     }
 
+    // Troca de conta: zera presença e reconecta WS na sala nova.
+    setOnline([]);
+    setAvisos([]);
+    vistasRef.current = null;
     vivoRef.current = true;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -103,9 +108,9 @@ export function Presenca(): JSX.Element | null {
       if (pollTimer !== null) clearInterval(pollTimer);
       desligarRealtime();
     };
-    // processarEntradas usa meuId do closure
+    // processarEntradas usa meuId do closure; contaId força WS na conta ativa
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logado, meuId, sair]);
+  }, [logado, meuId, contaId, sair]);
 
   if (!logado) return null;
 

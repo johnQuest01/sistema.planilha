@@ -168,6 +168,34 @@ export function Config(): JSX.Element {
     }
   }
 
+  function linkConvite(token: string, cadastro = false): string {
+    const base = `${window.location.origin}/entrar?token=${encodeURIComponent(token)}`;
+    return cadastro ? `${base}&cadastro=1` : base;
+  }
+
+  async function copiarLink(token: string, cadastro = false): Promise<void> {
+    try {
+      await navigator.clipboard?.writeText(linkConvite(token, cadastro));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function alterarPapel(u: UsuarioResumo, papel: 'dono' | 'membro'): Promise<void> {
+    setSalvandoUsuarioId(u.id);
+    setErroUsuarios(null);
+    try {
+      await api.definirPapelUsuario(u.id, papel);
+      setUsuarios((prev) =>
+        (prev ?? []).map((x) => (x.id === u.id ? { ...x, papel } : x)),
+      );
+    } catch (e) {
+      setErroUsuarios(e instanceof ErroApi ? e.message : 'não foi possível alterar o papel');
+    } finally {
+      setSalvandoUsuarioId(null);
+    }
+  }
+
   async function revogarToken(token: string): Promise<void> {
     if (
       !window.confirm(
@@ -356,7 +384,21 @@ export function Config(): JSX.Element {
                 className="link-texto"
                 onClick={() => void navigator.clipboard?.writeText(tokenNovo)}
               >
-                copiar
+                copiar token
+              </button>
+              <button
+                type="button"
+                className="link-texto"
+                onClick={() => void copiarLink(tokenNovo, false)}
+              >
+                copiar link (login)
+              </button>
+              <button
+                type="button"
+                className="link-texto"
+                onClick={() => void copiarLink(tokenNovo, true)}
+              >
+                copiar link (criar conta)
               </button>
             </div>
           )}
@@ -665,6 +707,24 @@ export function Config(): JSX.Element {
                                 Salvar senha
                               </Botao>
                             </>
+                          )}
+                          {meuId !== u.id && u.papel === 'membro' && (
+                            <Botao
+                              variante="fantasma"
+                              onClick={() => void alterarPapel(u, 'dono')}
+                              disabled={salvandoEste}
+                            >
+                              Tornar admin
+                            </Botao>
+                          )}
+                          {meuId !== u.id && u.papel === 'dono' && (
+                            <Botao
+                              variante="fantasma"
+                              onClick={() => void alterarPapel(u, 'membro')}
+                              disabled={salvandoEste}
+                            >
+                              Tirar admin
+                            </Botao>
                           )}
                           {meuId !== u.id && (
                             <Botao

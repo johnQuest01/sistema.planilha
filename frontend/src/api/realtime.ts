@@ -146,6 +146,12 @@ export function desligarRealtime(): void {
   }
 }
 
+/** Troca de conta: fecha o WS da conta antiga e abre na conta da sessão nova. */
+export function reconectarRealtime(): void {
+  desligarRealtime();
+  ligarRealtime();
+}
+
 /** Assina as mensagens do live. Retorna a função para cancelar a assinatura. */
 export function assinarRealtime(fn: Assinante): () => void {
   assinantes.add(fn);

@@ -4,10 +4,16 @@ import type { Colecao, Registro } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
 import { FolhaInferior } from '../ui/FolhaInferior';
-import { ehArquivoImagem, importarNaColecao, resumoRelatorio, type ProgressoImport } from './importarFotos';
+import {
+  ehArquivoImagem,
+  importarNaColecao,
+  MAX_FOTOS_LOTE,
+  resumoRelatorio,
+  type ProgressoImport,
+} from './importarFotos';
 import './importar.css';
 
-const MAX = 200;
+const MAX = MAX_FOTOS_LOTE;
 
 interface FotoAtribuida {
   url: string; // object URL (miniatura)

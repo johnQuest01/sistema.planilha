@@ -27,7 +27,7 @@ export interface UsuarioSessao {
   contaHomeId: string;
   nome: string;
   email: string;
-  /** Papel NA conta da sessão (convidado em outra conta = sempre membro). */
+  /** Papel NA conta da sessão (home ou convidado com papel em conta_membros). */
   papel: 'dono' | 'membro';
   contaNome: string;
 }
@@ -41,6 +41,7 @@ export async function usuarioDaSessao(id: string): Promise<UsuarioSessao | null>
       nome: string;
       email: string;
       papel_home: string;
+      papel_membro: string | null;
       conta_nome: string | null;
       membro_ok: boolean;
     }[]
@@ -52,6 +53,13 @@ export async function usuarioDaSessao(id: string): Promise<UsuarioSessao | null>
       u.nome,
       u.email,
       u.papel as papel_home,
+      (
+        select m.papel from conta_membros m
+        where m.conta_id = s.conta_id
+          and m.usuario_id = u.id
+          and m.status = 'ativo'
+        limit 1
+      ) as papel_membro,
       c.nome as conta_nome,
       (
         s.conta_id = u.conta_id
@@ -71,14 +79,20 @@ export async function usuarioDaSessao(id: string): Promise<UsuarioSessao | null>
 
   const naHome = l.sessao_conta_id === l.home_conta_id;
   const nomeConta = (l.conta_nome ?? '').trim() || (naHome ? 'Minha conta' : 'Conta compartilhada');
+  const papel: 'dono' | 'membro' = naHome
+    ? l.papel_home === 'dono'
+      ? 'dono'
+      : 'membro'
+    : l.papel_membro === 'dono'
+      ? 'dono'
+      : 'membro';
   return {
     usuarioId: l.usuario_id,
     contaId: l.sessao_conta_id,
     contaHomeId: l.home_conta_id,
     nome: l.nome,
     email: l.email,
-    // Convidado nunca é admin da conta alheia.
-    papel: naHome && l.papel_home === 'dono' ? 'dono' : 'membro',
+    papel,
     contaNome: nomeConta,
   };
 }

@@ -6,6 +6,7 @@ import {
   ehArquivoImagem,
   importarNaColecao,
   importarNoRegistro,
+  MAX_FOTOS_LOTE,
   resumoRelatorio,
   type ProgressoImport,
 } from './importarFotos';
@@ -32,8 +33,12 @@ export function BotaoImportarFotos({ colecao, registro, aoConcluir, aoAntes, rot
   const [resumo, setResumo] = useState<string | null>(null);
 
   async function aoEscolher(files: FileList | null): Promise<void> {
-    const arquivos = Array.from(files ?? []).filter(ehArquivoImagem);
+    let arquivos = Array.from(files ?? []).filter(ehArquivoImagem);
     if (arquivos.length === 0) return;
+    if (arquivos.length > MAX_FOTOS_LOTE) {
+      setResumo(`Máximo ${MAX_FOTOS_LOTE} fotos por vez — usando as primeiras ${MAX_FOTOS_LOTE}.`);
+      arquivos = arquivos.slice(0, MAX_FOTOS_LOTE);
+    }
     setOcupado(true);
     setResumo(null);
     setProgresso({ feito: 0, total: arquivos.length });

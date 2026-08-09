@@ -6,6 +6,7 @@ export interface ContaMembro {
   contaId: string;
   usuarioId: string;
   status: StatusMembro;
+  papel?: 'dono' | 'membro';
   tokenOrigem: string | null;
   criadoEm: string;
   aprovadoEm: string | null;
@@ -173,6 +174,7 @@ export async function listarMembrosConvidados(contaId: string): Promise<ContaMem
       conta_id: string;
       usuario_id: string;
       status: string;
+      papel: string;
       token_origem: string | null;
       criado_em: Date;
       aprovado_em: Date | null;
@@ -181,8 +183,8 @@ export async function listarMembrosConvidados(contaId: string): Promise<ContaMem
       email: string;
     }[]
   >`
-    select m.conta_id, m.usuario_id, m.status, m.token_origem,
-           m.criado_em, m.aprovado_em, m.revogado_em,
+    select m.conta_id, m.usuario_id, m.status, coalesce(m.papel, 'membro') as papel,
+           m.token_origem, m.criado_em, m.aprovado_em, m.revogado_em,
            u.nome, u.email
     from conta_membros m
     join usuarios u on u.id = m.usuario_id
@@ -192,6 +194,7 @@ export async function listarMembrosConvidados(contaId: string): Promise<ContaMem
     contaId: l.conta_id,
     usuarioId: l.usuario_id,
     status: 'ativo',
+    papel: l.papel === 'dono' ? 'dono' : 'membro',
     tokenOrigem: l.token_origem,
     criadoEm: l.criado_em.toISOString(),
     aprovadoEm: l.aprovado_em?.toISOString() ?? null,
@@ -199,6 +202,32 @@ export async function listarMembrosConvidados(contaId: string): Promise<ContaMem
     nome: l.nome,
     email: l.email,
   }));
+}
+
+export async function definirPapelConvidado(
+  contaId: string,
+  usuarioId: string,
+  papel: 'dono' | 'membro',
+): Promise<boolean> {
+  const linhas = await sql<{ usuario_id: string }[]>`
+    update conta_membros
+    set papel = ${papel}, atualizado_em = now()
+    where conta_id = ${contaId}
+      and usuario_id = ${usuarioId}
+      and status = 'ativo'
+    returning usuario_id`;
+  return linhas.length > 0;
+}
+
+/** Quantos admins efetivos a conta tem (nativos dono + convidados dono ativos). */
+export async function contarAdminsConta(contaId: string): Promise<number> {
+  const nativos = await sql<{ n: string }[]>`
+    select count(*)::text as n from usuarios
+    where conta_id = ${contaId} and papel = 'dono'`;
+  const convidados = await sql<{ n: string }[]>`
+    select count(*)::text as n from conta_membros
+    where conta_id = ${contaId} and status = 'ativo' and papel = 'dono'`;
+  return Number(nativos[0]?.n ?? '0') + Number(convidados[0]?.n ?? '0');
 }
 
 export interface ContaAcessivel {
@@ -229,9 +258,9 @@ export async function listarContasDoUsuario(usuarioId: string): Promise<ContaAce
   }
 
   const outras = await sql<
-    { id: string; nome: string | null; status: string }[]
+    { id: string; nome: string | null; status: string; papel: string }[]
   >`
-    select c.id, c.nome, m.status
+    select c.id, c.nome, m.status, coalesce(m.papel, 'membro') as papel
     from conta_membros m
     join contas c on c.id = m.conta_id
     where m.usuario_id = ${usuarioId}
@@ -243,7 +272,7 @@ export async function listarContasDoUsuario(usuarioId: string): Promise<ContaAce
     out.push({
       id: o.id,
       nome: (o.nome ?? '').trim() || 'Conta compartilhada',
-      papel: 'membro',
+      papel: o.papel === 'dono' ? 'dono' : 'membro',
       home: false,
       status: o.status === 'pendente' ? 'pendente' : 'ativo',
     });
