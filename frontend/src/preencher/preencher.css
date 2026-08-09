@@ -677,21 +677,17 @@
   border-radius: var(--raio-2);
   overflow: hidden;
 }
-/* Dentro da folha (prévia), o cabeçalho (título + Renomear/Compartilhar/Abrir/Lixeira)
-   fica FIXO no topo — só o conteúdo do registro rola. Visual limpo (papel), SEM faixa
-   cinza/translúcida que parecia "barra de UI". Padrão único: Modelagem e unificadas. */
+/* Ações (Renomear/Compartilhar/Abrir) ficam no slot fixo `folha__abaixoTitulo`
+   (fora do scroll). O cabeçalho interno só mostra selo da planilha / título
+   residual — sem sticky e sem faixa cinza de “barra de UI”. */
 .folha__corpo .preview-registro {
   overflow: visible;
 }
 .folha__corpo .preview-registro__cabecalho {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  /* Full-width colado no topo da folha (cobre o padding). */
-  margin: calc(var(--e4) * -1) calc(var(--e4) * -1) var(--e3);
-  padding: var(--e3) var(--e4);
-  background: var(--papel);
-  border-bottom: 1px solid var(--linha);
+  margin: 0 0 var(--e3);
+  padding: 0;
+  background: transparent;
+  border-bottom: none;
   box-shadow: none;
 }
 .preview-registro__cabecalho {
@@ -702,7 +698,6 @@
   width: 100%;
   padding: var(--e3);
   border-bottom: 1px solid var(--linha);
-  /* Sem faixa cinza — mesmo fundo do registro (não "barra de botões"). */
   background: transparent;
   box-sizing: border-box;
 }

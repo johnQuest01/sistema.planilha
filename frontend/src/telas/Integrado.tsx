@@ -1,6 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, ImageOff, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  ExternalLink,
+  Image as ImageIcon,
+  ImageOff,
+  Link as LinkIcon,
+  PencilLine,
+  Plus,
+  Search,
+  Share2,
+  Trash2,
+} from 'lucide-react';
 import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
 import { exportarIntegracao, type ProgressoExport } from '../backup/exportarColecao';
 import { assinarRealtime } from '../api/realtime';
@@ -23,10 +36,20 @@ import {
 import { FichaIntegrada } from '../integracao/FichaIntegrada';
 import { Miniatura } from '../preencher/Miniatura';
 import { RegistroPreview } from '../preencher/RegistroPreview';
+import {
+  campoTemConteudo,
+  compartilharArquivo,
+  gerarImagemPartes,
+} from '../preencher/compartilhar';
 import { useFecharAoVoltar } from '../ui/useVoltar';
 import './telas.css';
 import './integracao.css';
 import '../preencher/preencher.css';
+
+/** Chave de seleção global: registroId + campoId (ids de campo são UUID únicos). */
+function chaveSel(registroId: string, campoId: string): string {
+  return `${registroId}:${campoId}`;
+}
 
 const DEBOUNCE_MS = 300;
 const PAGINA = 20;
@@ -152,6 +175,8 @@ export function Integrado(): JSX.Element {
   const [resultados, setResultados] = useState<RegistroIntegrado[] | null>(null);
 
   const [previa, setPrevia] = useState<RegistroIntegrado | null>(null);
+  /** Barra global (Renomear/Compartilhar/Abrir ou painel de share) fixa abaixo do título. */
+  const [barraPrevia, setBarraPrevia] = useState<ReactNode>(null);
   const [editando, setEditando] = useState<RegistroIntegrado | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
   const [exportando, setExportando] = useState(false);
@@ -600,7 +625,11 @@ export function Integrado(): JSX.Element {
           alta
           titulo={tituloDoGrupo(previa)}
           subtitulo={`${integracao.nome} — ${partesPresentes(previa)}/${previa.partes.length} planilhas unidas`}
-          onFechar={() => setPrevia(null)}
+          onFechar={() => {
+            setBarraPrevia(null);
+            setPrevia(null);
+          }}
+          abaixoTitulo={barraPrevia}
           acaoTopo={
             <Botao
               variante="primario"
@@ -622,6 +651,7 @@ export function Integrado(): JSX.Element {
           )}
           <PreviaCorpo
             grupo={previa}
+            portaBarra={setBarraPrevia}
             aoAtualizarRegistro={(r) => {
               const i = previa.partes.findIndex((p) => p.colecao.id === r.colecaoId);
               if (i >= 0) atualizarParte(i, r);
@@ -724,33 +754,35 @@ function CartaoRegistro({
   );
 }
 
-/** Corpo da prévia unida: cada parte vira um cartão (planilha + registro). Usa o
- *  RegistroPreview padrão — assim traz o COMPARTILHAR (link/imagem) e o renomear
- *  que já existem nas outras planilhas. Reutilizado na folha inferior e na busca. */
+/**
+ * Corpo da prévia unida: cartões por planilha + barra GLOBAL (Renomear /
+ * Compartilhar / Abrir) no slot fixo da Folha. Compartilhar marca blocos de
+ * TODAS as planilhas e gera UM link (ou imagem) do grupo.
+ */
 function PreviaCorpo({
   grupo,
   aoAtualizarRegistro,
   aoPreencher,
+  portaBarra,
 }: {
   grupo: RegistroIntegrado;
   aoAtualizarRegistro?: (r: Registro) => void;
-  // Abre a edição (Oficina) para preencher; `foco` = índice da planilha escolhida.
   aoPreencher?: (foco?: number) => void;
+  portaBarra?: (barra: ReactNode | null) => void;
 }): JSX.Element {
-  // Navegação entre as planilhas do grupo: como a prévia unida fica grande, detecta
-  // quais partes estão à vista e mostra, no rodapé rolável, chips só das que NÃO estão,
-  // para pular direto até elas (a atual some da lista).
   const previaRef = useRef<HTMLDivElement>(null);
   const parteRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [visiveis, setVisiveis] = useState<Set<number>>(new Set());
-  // Última planilha para onde o usuário pulou pelos chips — o "Preencher" abre nela.
   const [alvo, setAlvo] = useState<number | null>(null);
-  // Partes atualmente em modo COMPARTILHAR — enquanto houver alguma, some a nav
-  // flutuante (senão ela cobre a barra/FAB de compartilhar e trava a seleção).
-  const [compartilhando, setCompartilhando] = useState<Set<string>>(new Set());
+  const [modoShare, setModoShare] = useState(false);
+  const [selShare, setSelShare] = useState<Set<string>>(new Set());
+  const [preparandoShare, setPreparandoShare] = useState(false);
+  const [enviandoShare, setEnviandoShare] = useState(false);
+  const [imgShare, setImgShare] = useState<File | null>(null);
+  const [gerandoLink, setGerandoLink] = useState(false);
+  const [avisoShare, setAvisoShare] = useState<string | null>(null);
 
   useEffect(() => {
-    // Na prévia (folha) a raiz é .folha__corpo; na BUSCA (inline) é .rolagem.
     const root = previaRef.current?.closest('.folha__corpo, .rolagem') ?? null;
     const obs = new IntersectionObserver(
       (entries) => {
@@ -775,7 +807,299 @@ function PreviaCorpo({
     parteRefs.current[indice]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function entrarShare(): void {
+    setSelShare(new Set());
+    setImgShare(null);
+    setAvisoShare(null);
+    setModoShare(true);
+  }
+
+  function sairShare(): void {
+    setModoShare(false);
+    setImgShare(null);
+    setAvisoShare(null);
+    setSelShare(new Set());
+  }
+
+  function marcarTodasShare(): void {
+    setImgShare(null);
+    const todas = new Set<string>();
+    for (const p of grupo.partes) {
+      if (p.registro === null) continue;
+      const campos = camposDaParte(p);
+      for (const c of campos) {
+        if (campoTemConteudo(c, p.registro)) todas.add(chaveSel(p.registro.id, c.id));
+      }
+    }
+    setSelShare(todas);
+  }
+
+  function limparShare(): void {
+    setImgShare(null);
+    setSelShare(new Set());
+  }
+
+  function alternarShareParte(registroId: string, campoId: string): void {
+    setImgShare(null);
+    const k = chaveSel(registroId, campoId);
+    setSelShare((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+  }
+
+  function partesSelecionadas(): {
+    registroId: string;
+    fonte: string;
+    campos: string[];
+    titulo: string;
+    colecaoCampos: ReturnType<typeof camposDaParte>;
+    registro: Registro;
+    sel: Set<string>;
+  }[] {
+    const out: {
+      registroId: string;
+      fonte: string;
+      campos: string[];
+      titulo: string;
+      colecaoCampos: ReturnType<typeof camposDaParte>;
+      registro: Registro;
+      sel: Set<string>;
+    }[] = [];
+    for (const p of grupo.partes) {
+      if (p.registro === null) continue;
+      const campos = camposDaParte(p);
+      const sel = new Set<string>();
+      const ids: string[] = [];
+      for (const c of campos) {
+        if (selShare.has(chaveSel(p.registro.id, c.id))) {
+          sel.add(c.id);
+          ids.push(c.id);
+        }
+      }
+      if (ids.length === 0) continue;
+      out.push({
+        registroId: p.registro.id,
+        fonte: p.colecao.nome,
+        campos: ids,
+        titulo: tituloDoRegistro(campos, p.registro),
+        colecaoCampos: campos,
+        registro: p.registro,
+        sel,
+      });
+    }
+    return out;
+  }
+
+  async function enviarLink(): Promise<void> {
+    if (gerandoLink) return;
+    const partes = partesSelecionadas();
+    if (partes.length === 0) {
+      setAvisoShare('Selecione ao menos um campo para compartilhar.');
+      return;
+    }
+    setGerandoLink(true);
+    setAvisoShare(null);
+    const titulo = tituloDoGrupo(grupo);
+    try {
+      const { codigo } = await api.criarLinkGrupo({
+        titulo,
+        partes: partes.map((p) => ({
+          registroId: p.registroId,
+          fonte: p.fonte,
+          campos: p.campos,
+        })),
+      });
+      const url = `${window.location.origin}/r/${codigo}`;
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ title: titulo, text: titulo, url });
+          sairShare();
+          return;
+        } catch (e) {
+          if (e instanceof DOMException && e.name === 'AbortError') return;
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        setAvisoShare('Link copiado! Cole no WhatsApp.');
+      } catch {
+        setAvisoShare(`Link: ${url}`);
+      }
+    } catch {
+      setAvisoShare('Não foi possível gerar o link. Tente novamente.');
+    } finally {
+      setGerandoLink(false);
+    }
+  }
+
+  async function prepararShare(): Promise<void> {
+    if (preparandoShare || enviandoShare) return;
+    const partes = partesSelecionadas();
+    if (partes.length === 0) {
+      setAvisoShare('Selecione ao menos um campo para compartilhar.');
+      return;
+    }
+    setPreparandoShare(true);
+    setAvisoShare(null);
+    setImgShare(null);
+    try {
+      const f = await gerarImagemPartes(
+        partes.map((p) => ({
+          fonte: p.fonte,
+          titulo: p.titulo,
+          campos: p.colecaoCampos,
+          registro: p.registro,
+          selecionados: p.sel,
+        })),
+      );
+      if (f === null) {
+        setAvisoShare('Não consegui montar a imagem. Tente com menos blocos/fotos.');
+        return;
+      }
+      setImgShare(f);
+    } finally {
+      setPreparandoShare(false);
+    }
+  }
+
+  async function enviarShare(): Promise<void> {
+    if (imgShare === null || enviandoShare) return;
+    setEnviandoShare(true);
+    const r = await compartilharArquivo(tituloDoGrupo(grupo), imgShare);
+    setEnviandoShare(false);
+    if (r === 'ok') sairShare();
+    else if (r === 'cancelado') {
+      /* mantém imagem */
+    } else if (r === 'so-texto') {
+      setAvisoShare('Este navegador não anexa imagem. Abra pelo celular (Safari/Chrome).');
+    } else if (r === 'sem-suporte') {
+      setAvisoShare('Compartilhamento não suportado aqui. Abra o app pelo celular.');
+    } else {
+      setAvisoShare('Não foi possível compartilhar. Tente novamente.');
+    }
+  }
+
   const naoVisiveis = grupo.partes.map((_, i) => i).filter((i) => !visiveis.has(i));
+
+  let barraFixa: ReactNode = null;
+  if (portaBarra !== undefined) {
+    if (modoShare) {
+      barraFixa = (
+        <>
+          <div className="preview-share-topo">
+            <div className="preview-share-topo__info">
+              <LinkIcon size={16} aria-hidden />
+              <span>
+                Marque blocos em qualquer planilha — o link (ou imagem) junta tudo num só
+                compartilhamento.
+              </span>
+            </div>
+            <div className="preview-share-topo__acoes">
+              <span className="preview-share-topo__contador">{selShare.size} selecionado(s)</span>
+              <button type="button" className="preview-share-topo__btn" onClick={marcarTodasShare}>
+                Marcar todas
+              </button>
+              <button
+                type="button"
+                className="preview-share-topo__btn"
+                disabled={selShare.size === 0}
+                onClick={limparShare}
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+          <div className="preview-share-bar">
+            {avisoShare !== null && <p className="preview-share-bar__aviso">{avisoShare}</p>}
+            {imgShare !== null && (
+              <p className="preview-share-bar__ok">Imagem pronta! Toque em “Enviar imagem”.</p>
+            )}
+            <div className="preview-share-bar__acoes">
+              <Botao
+                variante="primario"
+                disabled={gerandoLink || selShare.size === 0}
+                onClick={() => void enviarLink()}
+              >
+                <LinkIcon size={16} aria-hidden />
+                {gerandoLink ? 'Gerando link…' : 'Compartilhar link'}
+              </Botao>
+              {imgShare === null ? (
+                <Botao
+                  variante="fantasma"
+                  disabled={preparandoShare || selShare.size === 0}
+                  onClick={() => void prepararShare()}
+                >
+                  <ImageIcon size={16} aria-hidden />
+                  {preparandoShare ? 'Montando imagem…' : 'Enviar como imagem'}
+                </Botao>
+              ) : (
+                <Botao
+                  variante="padrao"
+                  disabled={enviandoShare}
+                  onClick={() => void enviarShare()}
+                >
+                  <Share2 size={16} aria-hidden />
+                  {enviandoShare ? 'Abrindo…' : 'Enviar imagem'}
+                </Botao>
+              )}
+              <Botao
+                variante="fantasma"
+                disabled={preparandoShare || enviandoShare || gerandoLink}
+                onClick={sairShare}
+              >
+                Cancelar
+              </Botao>
+            </div>
+          </div>
+        </>
+      );
+    } else {
+      barraFixa = (
+        <div className="preview-registro__acoes">
+          <Botao variante="padrao" onClick={entrarShare} aria-label="Compartilhar registro unido">
+            <Share2 size={16} aria-hidden />
+            <span className="preview-registro__btn-txt">Compartilhar</span>
+          </Botao>
+          {aoPreencher !== undefined && (
+            <Botao
+              variante="primario"
+              onClick={() => aoPreencher(alvo ?? undefined)}
+              aria-label="Abrir para preencher"
+            >
+              <ExternalLink size={16} aria-hidden />
+              <span className="preview-registro__btn-txt preview-registro__btn-txt--curto">
+                Abrir
+              </span>
+              <span className="preview-registro__btn-txt preview-registro__btn-txt--longo">
+                Abrir registro
+              </span>
+            </Botao>
+          )}
+        </div>
+      );
+    }
+  }
+
+  useLayoutEffect(() => {
+    if (portaBarra === undefined) return;
+    portaBarra(barraFixa);
+    return () => portaBarra(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    portaBarra,
+    modoShare,
+    selShare.size,
+    preparandoShare,
+    enviandoShare,
+    gerandoLink,
+    imgShare,
+    avisoShare,
+    alvo,
+    aoPreencher,
+  ]);
 
   return (
     <div className="integ-previa" ref={previaRef}>
@@ -793,23 +1117,20 @@ function PreviaCorpo({
                 colecao={parte.colecao}
                 registro={parte.registro}
                 fonte={parte.colecao.nome}
+                ocultarTitulo
+                esconderAcoes
+                modoShareExterno={modoShare}
+                selShareExterno={
+                  new Set(
+                    [...selShare]
+                      .filter((k) => k.startsWith(`${parte.registro!.id}:`))
+                      .map((k) => k.slice(parte.registro!.id.length + 1)),
+                  )
+                }
+                onAlternarShareExterno={(campoId) =>
+                  alternarShareParte(parte.registro!.id, campoId)
+                }
                 aoAtualizar={aoAtualizarRegistro}
-                aoAbrir={
-                  aoPreencher !== undefined
-                    ? () => {
-                        setAlvo(i);
-                        aoPreencher(i);
-                      }
-                    : undefined
-                }
-                aoModoShare={(ativo) =>
-                  setCompartilhando((prev) => {
-                    const n = new Set(prev);
-                    if (ativo) n.add(parte.colecao.id);
-                    else n.delete(parte.colecao.id);
-                    return n;
-                  })
-                }
               />
             </article>
           ) : (
@@ -823,41 +1144,41 @@ function PreviaCorpo({
         </div>
       ))}
 
-      {compartilhando.size === 0 &&
+      {!modoShare &&
         grupo.partes.length > 1 &&
         (naoVisiveis.length > 0 || aoPreencher !== undefined) && (
-        <div className="integ-nav-previa" aria-label="Ir para planilha / preencher">
-          {naoVisiveis.length > 0 && (
-            <div className="integ-nav-previa__planilhas">
-              {naoVisiveis.map((i) => (
-                <button
-                  key={grupo.partes[i]?.colecao.id ?? i}
-                  type="button"
-                  className="integ-nav-previa__chip"
-                  onClick={() => {
-                    irPara(i);
-                    setAlvo(i);
-                  }}
-                >
-                  {grupo.partes[i]?.colecao.nome ?? 'Planilha'}
-                </button>
-              ))}
-            </div>
-          )}
-          {aoPreencher !== undefined && (
-            <button
-              type="button"
-              className="integ-nav-previa__preencher"
-              onClick={() => aoPreencher(alvo ?? undefined)}
-            >
-              <PencilLine size={18} aria-hidden />
-              {alvo !== null
-                ? `Preencher ${grupo.partes[alvo]?.colecao.nome ?? ''}`.trim()
-                : 'Preencher'}
-            </button>
-          )}
-        </div>
-      )}
+          <div className="integ-nav-previa" aria-label="Ir para planilha / preencher">
+            {naoVisiveis.length > 0 && (
+              <div className="integ-nav-previa__planilhas">
+                {naoVisiveis.map((i) => (
+                  <button
+                    key={grupo.partes[i]?.colecao.id ?? i}
+                    type="button"
+                    className="integ-nav-previa__chip"
+                    onClick={() => {
+                      irPara(i);
+                      setAlvo(i);
+                    }}
+                  >
+                    {grupo.partes[i]?.colecao.nome ?? 'Planilha'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {aoPreencher !== undefined && (
+              <button
+                type="button"
+                className="integ-nav-previa__preencher"
+                onClick={() => aoPreencher(alvo ?? undefined)}
+              >
+                <PencilLine size={18} aria-hidden />
+                {alvo !== null
+                  ? `Preencher ${grupo.partes[alvo]?.colecao.nome ?? ''}`.trim()
+                  : 'Preencher'}
+              </button>
+            )}
+          </div>
+        )}
     </div>
   );
 }

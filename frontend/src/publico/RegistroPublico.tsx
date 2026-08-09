@@ -7,13 +7,29 @@ import { formatarValor, keysDoCampo, tituloDoRegistro } from '../preencher/deriv
 import { linhasDe } from '../preencher/SecaoEditor';
 import './publico.css';
 
+type PartePub = { fonte: string; campos: Campo[]; registro: Registro };
+
 type Estado =
   | { fase: 'carregando' }
   | { fase: 'erro'; msg: string }
-  | { fase: 'ok'; campos: Campo[]; registro: Registro };
+  | { fase: 'ok'; titulo: string; partes: PartePub[] };
+
+function registroFake(valores: Record<string, unknown>): Registro {
+  return {
+    id: '',
+    colecaoId: '',
+    valores,
+    criadoPor: null,
+    criadoPorId: null,
+    ordem: 0,
+    criadoEm: '',
+    atualizadoEm: '',
+  };
+}
 
 // Página PÚBLICA (sem login) que mostra um registro pelo link /r/:token, só com os
 // blocos que foram escolhidos ao compartilhar, na ORDEM da estrutura do registro.
+// Também cobre o link UNIDO (várias planilhas / partes no mesmo código).
 export function RegistroPublico(): JSX.Element {
   const { token } = useParams<{ token: string }>();
   const [estado, setEstado] = useState<Estado>({ fase: 'carregando' });
@@ -29,17 +45,35 @@ export function RegistroPublico(): JSX.Element {
         const r = await api.registroPublico(token);
         if (!vivo) return;
         if (r.r2PublicBase !== '') definirBaseR2(r.r2PublicBase);
-        const registro: Registro = {
-          id: '',
-          colecaoId: '',
-          valores: r.valores,
-          criadoPor: null,
-          criadoPorId: null,
-          ordem: 0,
-          criadoEm: '',
-          atualizadoEm: '',
-        };
-        setEstado({ fase: 'ok', campos: r.campos, registro });
+
+        if (r.partes !== undefined && r.partes.length > 0) {
+          const partes: PartePub[] = r.partes.map((p) => ({
+            fonte: p.fonte,
+            campos: p.campos,
+            registro: registroFake(p.valores),
+          }));
+          const titulo =
+            r.titulo !== undefined && r.titulo !== null && r.titulo.trim() !== ''
+              ? r.titulo.trim()
+              : partes
+                  .map((p) => tituloDoRegistro(p.campos, p.registro))
+                  .filter((t) => t !== '' && t !== 'Sem nome')
+                  .join(' | ') || 'Registro compartilhado';
+          setEstado({ fase: 'ok', titulo, partes });
+          return;
+        }
+
+        if (r.campos === undefined || r.valores === undefined) {
+          setEstado({ fase: 'erro', msg: 'Este link é inválido ou expirou.' });
+          return;
+        }
+        const registro = registroFake(r.valores);
+        const titulo = tituloDoRegistro(r.campos, registro);
+        setEstado({
+          fase: 'ok',
+          titulo,
+          partes: [{ fonte: '', campos: r.campos, registro }],
+        });
       } catch (e) {
         if (!vivo) return;
         const msg =
@@ -69,17 +103,23 @@ export function RegistroPublico(): JSX.Element {
     );
   }
 
-  const { campos, registro } = estado;
-  const titulo = tituloDoRegistro(campos, registro);
+  const { titulo, partes } = estado;
+  const multi = partes.length > 1 || partes.some((p) => p.fonte !== '');
 
   return (
     <div className="pub-wrap">
-      <article className="pub-card">
-        {titulo !== 'Sem nome' && <h1 className="pub-titulo">{titulo}</h1>}
-        {campos.map((campo) => (
-          <BlocoPublico key={campo.id} campo={campo} registro={registro} />
-        ))}
-      </article>
+      {multi && titulo !== 'Sem nome' && (
+        <h1 className="pub-titulo pub-titulo--topo">{titulo}</h1>
+      )}
+      {partes.map((parte, i) => (
+        <article key={`${parte.fonte}-${i}`} className="pub-card">
+          {multi && parte.fonte !== '' && <div className="pub-fonte">{parte.fonte}</div>}
+          {!multi && titulo !== 'Sem nome' && <h1 className="pub-titulo">{titulo}</h1>}
+          {parte.campos.map((campo) => (
+            <BlocoPublico key={campo.id} campo={campo} registro={parte.registro} />
+          ))}
+        </article>
+      ))}
       <p className="pub-rodape">Compartilhado por link · somente leitura</p>
     </div>
   );

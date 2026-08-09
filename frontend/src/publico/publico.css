@@ -28,6 +28,22 @@
   color: #111827;
   word-break: break-word;
 }
+.pub-titulo--topo {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 0 12px;
+}
+.pub-fonte {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+.pub-card + .pub-card {
+  margin-top: 12px;
+}
 .pub-bloco {
   padding: 14px 0;
   border-top: 1px solid #f0f1f3;

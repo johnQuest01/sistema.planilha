@@ -431,3 +431,55 @@ export async function compartilharRegistro(
     return 'erro';
   }
 }
+
+/** Monta UMA imagem com várias planilhas (prévia unida): empilha os prints de cada parte. */
+export async function gerarImagemPartes(
+  partes: {
+    fonte: string;
+    titulo: string;
+    campos: Campo[];
+    registro: Registro;
+    selecionados: Set<string>;
+  }[],
+): Promise<File | null> {
+  const arquivos: File[] = [];
+  for (const p of partes) {
+    if (p.selecionados.size === 0) continue;
+    const t = p.fonte !== '' ? `${p.fonte} — ${p.titulo}` : p.titulo;
+    const f = await gerarImagemRegistro(t, p.campos, p.registro, p.selecionados);
+    if (f !== null) arquivos.push(f);
+  }
+  if (arquivos.length === 0) return null;
+  if (arquivos.length === 1) return arquivos[0] ?? null;
+
+  const bitmaps: ImageBitmap[] = [];
+  try {
+    for (const f of arquivos) {
+      bitmaps.push(await createImageBitmap(f));
+    }
+    const gap = 24;
+    const largura = Math.max(...bitmaps.map((b) => b.width));
+    const altura = bitmaps.reduce((acc, b) => acc + b.height, 0) + gap * (bitmaps.length - 1);
+    const canvas = document.createElement('canvas');
+    canvas.width = largura;
+    canvas.height = altura;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) return arquivos[0] ?? null;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, largura, altura);
+    let y = 0;
+    for (const b of bitmaps) {
+      ctx.drawImage(b, Math.floor((largura - b.width) / 2), y);
+      y += b.height + gap;
+    }
+    const blob = await new Promise<Blob | null>((res) =>
+      canvas.toBlob((bl) => res(bl), 'image/jpeg', 0.9),
+    );
+    if (blob === null) return arquivos[0] ?? null;
+    return new File([blob], 'registro-unido.jpg', { type: 'image/jpeg' });
+  } catch {
+    return arquivos[0] ?? null;
+  } finally {
+    for (const b of bitmaps) if (typeof b.close === 'function') b.close();
+  }
+}

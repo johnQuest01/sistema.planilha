@@ -270,7 +270,7 @@ interface ConfigCampo {
 | `campos` | id, colecao_id, nome, tipo, ordem, config(jsonb), criado_em | Blocos compartilhados da planilha (o schema). |
 | `registros` | id, colecao_id, valores(jsonb), campos(jsonb, nullable), criado_por(text), criado_por_id(→usuarios), ordem(double), criado_em, atualizado_em | `campos` = corpo próprio (null = herda da coleção). `ordem` = ordem manual (maior no topo). |
 | `convites` | token(PK), colecao_id, papel(`preencher`\|`ler`), expira_em, revogado_em | Reservada para a "Fase 6" (link de preenchimento com role separada). **Sem rotas ativas** hoje — o compartilhamento atual é só o link público read-only. |
-| `compartilhamentos` | codigo(PK), conta_id, registro_id, blocos(jsonb \| "*"), expira_em, revogado_em, criado_por, criado_em | Link público CURTO por registro (código é o segredo). SELECT público liberado; escrita só do dono. |
+| `compartilhamentos` | codigo(PK), conta_id, registro_id, blocos, partes(jsonb\|null), titulo, expira_em, revogado_em, criado_por, criado_em | Link público CURTO (1 registro ou unido via `partes`). SELECT público liberado; escrita só do dono. |
 | `integracoes` | id, conta_id, nome, colecao_ids(jsonb ordenado), ativo, arquivada, criado_por, criado_em, atualizado_em | Une planilhas por referência. Só configuração/visão. |
 | `lixeira_registros` | id, conta_id, colecao_id, colecao_nome, registro_id, valores(jsonb), campos(jsonb), fotos_referencia(jsonb), criado_por/_id, criado_em, atualizado_em, apagado_em, apagado_por_id/_nome | Soft-delete de registro (snapshot completo, inclui corpo próprio). |
 | `lixeira_colecoes` | id, conta_id, colecao_id, colecao_nome, snapshot(jsonb), fotos_referencia(jsonb), qtd_registros, criado_por, criado_em, atualizado_em, apagado_em, apagado_por_id/_nome | Soft-delete de planilha inteira (campos + registros). Restaurar recria com os mesmos ids. |
@@ -424,8 +424,11 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
 
 **Link público**
 - `POST /api/registros/:registroId/link` `{campos: string[]}` → `{codigo}` (código curto)
+- `POST /api/compartilhamentos/grupo` `{titulo?, partes:[{registroId,fonte,campos}]}` →
+  `{codigo}` — link unido (várias planilhas num `/r/:codigo`; migração `019`)
 - `DELETE /api/registros/:registroId/link/:codigo` — revoga um link específico
-- `GET /api/publico/r/:codigo` → `{campos, valores, r2PublicBase}` (sem login; aceita o
+- `GET /api/publico/r/:codigo` → `{campos, valores, r2PublicBase}` **ou**
+  `{titulo, partes:[{fonte,campos,valores}], r2PublicBase}` (sem login; aceita o
   **código curto** novo OU um **token assinado legado** — HMAC, se contiver `.`)
 
 **Integrações**
@@ -495,12 +498,11 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
   compactos** (miniatura + título + resumo) que rolam por dentro; tocar abre a **prévia
   completa** (folha grande com X). Se a busca acha **exatamente 1** registro, a prévia
   **abre sozinha**. (Mesmo padrão vale na planilha unida.)
-- **`RegistroPreview.tsx`** — prévia de um registro. Dentro da folha, o cabeçalho
-  (título +, abaixo, Renomear/Compartilhar/Abrir/Lixeira) fica **fixo no topo**
-  (sticky), fundo papel, **sem faixa cinza/sombra de “barra de UI”**. Prop opcional
-  `fonte` mostra o nome da planilha como selo no topo (prévia unida). Modo
-  compartilhar: seleciona blocos e gera link (`criarLinkRegistro`) ou imagem; o botão de
-  link (FAB) fica fixo enquanto seleciona.
+- **`RegistroPreview.tsx`** — prévia de um registro. Os botões (Renomear /
+  Compartilhar / Abrir) vão no slot fixo **`folha__abaixoTitulo`** (logo abaixo do
+  título da Folha, fora do scroll) — sem faixa cinza de “barra de UI”. Prop
+  `fonte` = selo da planilha (prévia unida). Modo compartilhar: marca blocos e gera
+  link (`criarLinkRegistro`) ou imagem.
 - **`derivarResumo.ts`** — deriva **título**, **resumo**, **capa** e o **corpo efetivo**
   do registro (`camposDoRegistro` = corpo próprio OU o da coleção). Título vem do bloco
   marcado `ehTitulo`, senão do bloco "Referência".
@@ -537,10 +539,11 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
   (com a referência pré-preenchida) — todas já aparecem prontas para preencher, sem o
   passo "criar registro". Navegação por planilha (chips) e foco inicial na planilha
   escolhida pelo "Preencher" da prévia.
-- **Consistência do topo (importante):** cada parte da prévia unida usa o MESMO
-  cabeçalho sticky da Modelagem (`RegistroPreview` + `fonte` + `aoAbrir` → Preencher
-  naquela planilha): título em cima, botões logo abaixo, fundo papel sem faixa
-  translúcida.
+- **Barra global da prévia unida:** Compartilhar / Abrir ficam **fixos abaixo do
+  título da Folha** (não por planilha). Compartilhar marca blocos em **todas** as
+  planilhas do grupo e gera **um** link (`POST /api/compartilhamentos/grupo`) ou
+  uma imagem empilhada; a página pública `/r/:codigo` mostra as partes com o selo
+  de cada planilha.
 
 ### Importação e backup
 

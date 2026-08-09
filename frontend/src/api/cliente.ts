@@ -266,11 +266,21 @@ export const api = {
   // Gera um CÓDIGO curto (só dos blocos selecionados) para montar a URL /r/<codigo>.
   criarLinkRegistro: (registroId: string, campos: string[]) =>
     pedir<{ codigo: string }>(`/api/registros/${registroId}/link`, corpoJson({ campos })),
+  // Link UNIDO: várias planilhas / registros num único código público.
+  criarLinkGrupo: (dados: {
+    titulo?: string;
+    partes: { registroId: string; fonte: string; campos: string[] }[];
+  }) => pedir<{ codigo: string }>('/api/compartilhamentos/grupo', corpoJson(dados)),
   // Busca o registro público (sem login) só com os blocos que foram compartilhados.
+  // Pode ser 1 registro (`campos`+`valores`) ou unido (`partes`).
   registroPublico: (token: string) =>
-    pedir<{ campos: Campo[]; valores: Record<string, unknown>; r2PublicBase: string }>(
-      `/api/publico/r/${encodeURIComponent(token)}`,
-    ),
+    pedir<{
+      campos?: Campo[];
+      valores?: Record<string, unknown>;
+      titulo?: string | null;
+      partes?: { fonte: string; campos: Campo[]; valores: Record<string, unknown> }[];
+      r2PublicBase: string;
+    }>(`/api/publico/r/${encodeURIComponent(token)}`),
 
   // --- integrações (unir planilhas por referência) ---
   listarIntegracoes: () => pedir<Integracao[]>('/api/integracoes'),

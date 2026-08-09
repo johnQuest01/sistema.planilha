@@ -376,19 +376,14 @@
   box-shadow: none;
   background: transparent;
 }
-/* Prévia UNIDA = MESMO topo da Modelagem: sticky, título em cima, botões
-   (Renomear/Compartilhar/Abrir) logo abaixo, fundo papel limpo (sem faixa cinza,
-   sem sombra de "toolbar"). Só não usa margem negativa (estaria dentro do cartão). */
+/* Prévia UNIDA: ações globais ficam no `folha__abaixoTitulo`. Aqui só o selo
+   da planilha (fonte) — sem sticky / sem faixa de toolbar. */
 .folha__corpo .integ-previa-parte .preview-registro__cabecalho {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  margin: 0 0 var(--e3);
-  padding: var(--e3);
-  background: var(--papel);
-  border-bottom: 1px solid var(--linha);
+  margin: 0;
+  padding: var(--e3) var(--e3) 0;
+  background: transparent;
+  border-bottom: none;
   box-shadow: none;
-  border-radius: 0;
 }
 .integ-previa-parte--ausente {
   box-shadow: none;

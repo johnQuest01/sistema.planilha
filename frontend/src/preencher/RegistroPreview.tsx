@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { ExternalLink, Image as ImageIcon, Link as LinkIcon, Lock, Pencil, Share2, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
@@ -33,6 +33,22 @@ interface Props {
   /** Nome da planilha, exibido como selo no topo (usado na prévia unida, para o
    *  cabeçalho fixo mostrar de qual planilha é o registro). */
   fonte?: string;
+  /** Título já está na Folha — não repete o h3 (só o selo `fonte`, se houver). */
+  ocultarTitulo?: boolean;
+  /** Esconde Renomear/Compartilhar/Abrir internos (pai monta barra global na unida). */
+  esconderAcoes?: boolean;
+  /**
+   * Entrega a barra (ações ou painel de compartilhar) para o slot fixo
+   * `abaixoTitulo` da Folha — fora do scroll.
+   */
+  portaBarra?: (barra: ReactNode | null) => void;
+  /**
+   * Modo compartilhar controlado pelo pai (seleção global na prévia unida).
+   * Quando definido, `selShare`/`onAlternarShare` também vêm do pai.
+   */
+  modoShareExterno?: boolean;
+  selShareExterno?: Set<string>;
+  onAlternarShareExterno?: (campoId: string) => void;
 }
 
 function keysDe(valor: unknown): string[] {
@@ -157,11 +173,18 @@ export function RegistroPreview({
   edicaoBloqueada = false,
   aoModoShare,
   fonte,
+  ocultarTitulo = false,
+  esconderAcoes = false,
+  portaBarra,
+  modoShareExterno,
+  selShareExterno,
+  onAlternarShareExterno,
 }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   // Qualquer usuário logado pode enviar o registro para a lixeira (soft-delete).
   const podeApagar = aoApagar !== undefined && usuario !== null;
+  const shareControlado = modoShareExterno !== undefined;
 
   const [local, setLocal] = useState(registro);
   // Corpo VIGENTE deste registro (próprio, se independente; senão o da coleção).
@@ -178,13 +201,16 @@ export function RegistroPreview({
   // Modo compartilhar: escolhe quais campos entram e envia (imagem montada) pro WhatsApp.
   // Fluxo em 2 etapas (iPhone-safe): "Preparar" monta a imagem; "Enviar" chama o
   // compartilhamento no toque (gesto fresco), senão o iOS não abre o menu.
-  const [modoShare, setModoShare] = useState(false);
-  const [selShare, setSelShare] = useState<Set<string>>(new Set());
+  const [modoShareLocal, setModoShareLocal] = useState(false);
+  const [selShareLocal, setSelShareLocal] = useState<Set<string>>(new Set());
   const [preparandoShare, setPreparandoShare] = useState(false);
   const [enviandoShare, setEnviandoShare] = useState(false);
   const [imgShare, setImgShare] = useState<File | null>(null);
   const [gerandoLink, setGerandoLink] = useState(false);
   const [avisoShare, setAvisoShare] = useState<string | null>(null);
+
+  const modoShare = shareControlado ? Boolean(modoShareExterno) : modoShareLocal;
+  const selShare = shareControlado ? (selShareExterno ?? new Set<string>()) : selShareLocal;
 
   useEffect(() => {
     setLocal(registro);
@@ -193,21 +219,25 @@ export function RegistroPreview({
   // Avisa o pai quando entra/sai do compartilhar (a prévia unida esconde a nav
   // flutuante nesse momento, senão ela cobre os controles de compartilhar).
   useEffect(() => {
-    aoModoShare?.(modoShare);
+    if (!shareControlado) aoModoShare?.(modoShare);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modoShare]);
+  }, [modoShare, shareControlado]);
 
   function entrarShare(): void {
     // Comeca sem nada marcado: o usuario escolhe manualmente o que compartilhar.
-    setSelShare(new Set());
+    setSelShareLocal(new Set());
     setImgShare(null);
     setAvisoShare(null);
-    setModoShare(true);
+    setModoShareLocal(true);
   }
 
   function alternarShare(id: string): void {
+    if (shareControlado) {
+      onAlternarShareExterno?.(id);
+      return;
+    }
     setImgShare(null); // seleção mudou: a imagem preparada ficou desatualizada.
-    setSelShare((prev) => {
+    setSelShareLocal((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
       else n.add(id);
@@ -219,16 +249,16 @@ export function RegistroPreview({
     setImgShare(null);
     const todas = new Set<string>();
     for (const c of campos) if (campoTemConteudo(c, local)) todas.add(c.id);
-    setSelShare(todas);
+    setSelShareLocal(todas);
   }
 
   function limparShare(): void {
     setImgShare(null);
-    setSelShare(new Set());
+    setSelShareLocal(new Set());
   }
 
   function sairShare(): void {
-    setModoShare(false);
+    setModoShareLocal(false);
     setImgShare(null);
     setAvisoShare(null);
   }
@@ -369,166 +399,258 @@ export function RegistroPreview({
   }
 
   const tituloAtual = tituloDoRegistro(campos, local);
+  // Quando a barra vai pro slot fixo da Folha, o share local (link/imagem) também
+  // sobe pra lá. No modo controlado (unida), o pai monta a barra global.
+  const barraExterna = portaBarra !== undefined && !shareControlado;
+  const acoesInternas = !esconderAcoes && !barraExterna;
+
+  const caixaRenomear = (
+    <div className="preview-registro__renomear-box">
+      <input
+        className="campo__controle preview-registro__nome-input"
+        value={rascunho}
+        autoFocus
+        aria-label="Nome do registro"
+        placeholder="Nome do registro"
+        disabled={salvando}
+        onChange={(e) => setRascunho(e.target.value)}
+        onKeyDown={aoTeclar}
+      />
+      <div className="preview-registro__renomear-acoes">
+        <button
+          type="button"
+          className="lista-item__salvar"
+          disabled={salvando}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => void salvarNome()}
+        >
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+        <button
+          type="button"
+          className="lista-item__cancelar"
+          disabled={salvando}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={cancelarEdicao}
+        >
+          Cancelar
+        </button>
+      </div>
+      {erroNome !== null && <p className="aviso-erro">{erroNome}</p>}
+    </div>
+  );
+
+  const barraAcoes = (
+    <div className="preview-registro__acoes">
+      {alvo !== undefined && (
+        <Botao variante="padrao" onClick={iniciarEdicao}>
+          <Pencil size={16} aria-hidden />
+          <span className="preview-registro__btn-txt">Renomear</span>
+        </Botao>
+      )}
+      <Botao
+        variante="padrao"
+        onClick={entrarShare}
+        aria-label={`Compartilhar registro ${tituloAtual}`}
+      >
+        <Share2 size={16} aria-hidden />
+        <span className="preview-registro__btn-txt">Compartilhar</span>
+      </Botao>
+      {aoAbrir !== undefined && !edicaoBloqueada && (
+        <Botao variante="primario" onClick={aoAbrir} aria-label={`Abrir registro ${tituloAtual}`}>
+          <ExternalLink size={16} aria-hidden />
+          <span className="preview-registro__btn-txt preview-registro__btn-txt--curto">Abrir</span>
+          <span className="preview-registro__btn-txt preview-registro__btn-txt--longo">
+            Abrir registro
+          </span>
+        </Botao>
+      )}
+      {aoAbrir !== undefined && edicaoBloqueada && (
+        <span
+          className="preview-registro__travado"
+          title="Libere a edição na barra para abrir este registro"
+        >
+          <Lock size={14} aria-hidden />
+          Edição travada
+        </span>
+      )}
+      {podeApagar && (
+        <button
+          type="button"
+          className="btn btn--icone preview-registro__lixeira"
+          aria-label={`Apagar registro ${tituloAtual}`}
+          title="Enviar para lixeira"
+          onClick={() => {
+            setConfirmandoApagar(true);
+            setErroApagar(null);
+          }}
+        >
+          <Trash2 size={18} aria-hidden />
+        </button>
+      )}
+    </div>
+  );
+
+  const painelShare = (
+    <>
+      <div className="preview-share-topo">
+        <div className="preview-share-topo__info">
+          <LinkIcon size={16} aria-hidden />
+          <span>
+            Marque as áreas e toque em “Compartilhar link”. O link abre só esses blocos, com as
+            fotos em alta resolução.
+          </span>
+        </div>
+        <div className="preview-share-topo__acoes">
+          <span className="preview-share-topo__contador">{selShare.size} selecionado(s)</span>
+          <button type="button" className="preview-share-topo__btn" onClick={marcarTodasShare}>
+            Marcar todas
+          </button>
+          <button
+            type="button"
+            className="preview-share-topo__btn"
+            disabled={selShare.size === 0}
+            onClick={limparShare}
+          >
+            Limpar
+          </button>
+        </div>
+      </div>
+      <div className="preview-share-bar">
+        {avisoShare !== null && <p className="preview-share-bar__aviso">{avisoShare}</p>}
+        {imgShare !== null && (
+          <p className="preview-share-bar__ok">Imagem pronta! Toque em “Enviar imagem”.</p>
+        )}
+        <div className="preview-share-bar__acoes">
+          <Botao
+            variante="primario"
+            disabled={gerandoLink || selShare.size === 0}
+            onClick={() => void enviarLink()}
+          >
+            <LinkIcon size={16} aria-hidden />
+            {gerandoLink ? 'Gerando link…' : 'Compartilhar link'}
+          </Botao>
+          {imgShare === null ? (
+            <Botao
+              variante="fantasma"
+              disabled={preparandoShare || selShare.size === 0}
+              onClick={() => void prepararShare()}
+            >
+              <ImageIcon size={16} aria-hidden />
+              {preparandoShare ? 'Montando imagem…' : 'Enviar como imagem'}
+            </Botao>
+          ) : (
+            <Botao variante="padrao" disabled={enviandoShare} onClick={() => void enviarShare()}>
+              <Share2 size={16} aria-hidden />
+              {enviandoShare ? 'Abrindo…' : 'Enviar imagem'}
+            </Botao>
+          )}
+          <Botao
+            variante="fantasma"
+            disabled={preparandoShare || enviandoShare || gerandoLink}
+            onClick={sairShare}
+          >
+            Cancelar
+          </Botao>
+        </div>
+      </div>
+    </>
+  );
+
+  const confirmaApagar = (
+    <div className="preview-registro__confirma-apagar">
+      <span className="preview-registro__confirma-txt">
+        Mover para a lixeira? Dados e fotos ficam salvos até apagar definitivo.
+      </span>
+      <div className="preview-registro__confirma-acoes">
+        <Botao variante="perigo" disabled={apagando} onClick={() => void apagarRegistro()}>
+          {apagando ? 'Apagando…' : 'Lixeira'}
+        </Botao>
+        <Botao
+          variante="fantasma"
+          disabled={apagando}
+          onClick={() => setConfirmandoApagar(false)}
+        >
+          Cancelar
+        </Botao>
+      </div>
+      {erroApagar !== null && <p className="aviso-erro">{erroApagar}</p>}
+    </div>
+  );
+
+  let barraFixa: ReactNode = null;
+  if (barraExterna) {
+    if (editando) barraFixa = caixaRenomear;
+    else if (confirmandoApagar) barraFixa = confirmaApagar;
+    else if (modoShare) barraFixa = painelShare;
+    else barraFixa = barraAcoes;
+  }
+
+  useLayoutEffect(() => {
+    if (portaBarra === undefined || shareControlado) return;
+    portaBarra(barraFixa);
+    return () => portaBarra(null);
+    // Só reenvia quando o modo da barra muda — senão setState no pai vira loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    portaBarra,
+    shareControlado,
+    barraExterna,
+    editando,
+    confirmandoApagar,
+    modoShare,
+    selShare.size,
+    preparandoShare,
+    enviandoShare,
+    gerandoLink,
+    imgShare,
+    avisoShare,
+    rascunho,
+    salvando,
+    erroNome,
+    erroApagar,
+    apagando,
+    edicaoBloqueada,
+    podeApagar,
+    tituloAtual,
+    alvo?.campoId,
+  ]);
+
+  const mostrarCabecalhoInterno =
+    (!ocultarTitulo || (fonte !== undefined && fonte !== '') || (editando && !barraExterna)) &&
+    !(barraExterna && ocultarTitulo && (fonte === undefined || fonte === '') && !editando && !confirmandoApagar);
 
   return (
     <article className="preview-registro preview-registro--completo">
-      <div className="preview-registro__cabecalho">
-        {fonte !== undefined && fonte !== '' && (
-          <span className="preview-registro__fonte">{fonte}</span>
-        )}
-        <div className="preview-registro__cabecalho-linha">
-          {editando ? (
-            <div className="preview-registro__renomear-box">
-              <input
-                className="campo__controle preview-registro__nome-input"
-                value={rascunho}
-                autoFocus
-                aria-label="Nome do registro"
-                placeholder="Nome do registro"
-                disabled={salvando}
-                onChange={(e) => setRascunho(e.target.value)}
-                onKeyDown={aoTeclar}
-              />
-              <div className="preview-registro__renomear-acoes">
-                <button
-                  type="button"
-                  className="lista-item__salvar"
-                  disabled={salvando}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => void salvarNome()}
-                >
-                  {salvando ? 'Salvando…' : 'Salvar'}
-                </button>
-                <button
-                  type="button"
-                  className="lista-item__cancelar"
-                  disabled={salvando}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={cancelarEdicao}
-                >
-                  Cancelar
-                </button>
-              </div>
-              {erroNome !== null && <p className="aviso-erro">{erroNome}</p>}
-            </div>
-          ) : alvo !== undefined ? (
-            <button
-              type="button"
-              className="preview-registro__titulo-btn"
-              onClick={iniciarEdicao}
-              title="Clique para renomear"
-            >
-              <h3 className="preview-registro__titulo">{tituloAtual}</h3>
-            </button>
-          ) : (
-            <h3 className="preview-registro__titulo">{tituloAtual}</h3>
+      {mostrarCabecalhoInterno && (
+        <div className="preview-registro__cabecalho">
+          {fonte !== undefined && fonte !== '' && (
+            <span className="preview-registro__fonte">{fonte}</span>
           )}
-        </div>
-        {!editando && !confirmandoApagar && !modoShare && (
-          <div className="preview-registro__acoes">
-            {alvo !== undefined && (
-              <Botao variante="padrao" onClick={iniciarEdicao}>
-                <Pencil size={16} aria-hidden />
-                <span className="preview-registro__btn-txt">Renomear</span>
-              </Botao>
-            )}
-            <Botao
-              variante="padrao"
-              onClick={entrarShare}
-              aria-label={`Compartilhar registro ${tituloAtual}`}
-            >
-              <Share2 size={16} aria-hidden />
-              <span className="preview-registro__btn-txt">Compartilhar</span>
-            </Botao>
-            {aoAbrir !== undefined && !edicaoBloqueada && (
-              <Botao
-                variante="primario"
-                onClick={aoAbrir}
-                aria-label={`Abrir registro ${tituloAtual}`}
-              >
-                <ExternalLink size={16} aria-hidden />
-                <span className="preview-registro__btn-txt preview-registro__btn-txt--curto">
-                  Abrir
-                </span>
-                <span className="preview-registro__btn-txt preview-registro__btn-txt--longo">
-                  Abrir registro
-                </span>
-              </Botao>
-            )}
-            {aoAbrir !== undefined && edicaoBloqueada && (
-              <span className="preview-registro__travado" title="Libere a edição na barra para abrir este registro">
-                <Lock size={14} aria-hidden />
-                Edição travada
-              </span>
-            )}
-            {podeApagar && (
-              <button
-                type="button"
-                className="btn btn--icone preview-registro__lixeira"
-                aria-label={`Apagar registro ${tituloAtual}`}
-                title="Enviar para lixeira"
-                onClick={() => {
-                  setConfirmandoApagar(true);
-                  setErroApagar(null);
-                }}
-              >
-                <Trash2 size={18} aria-hidden />
-              </button>
-            )}
-          </div>
-        )}
-        {confirmandoApagar && (
-          <div className="preview-registro__confirma-apagar">
-            <span className="preview-registro__confirma-txt">
-              Mover para a lixeira? Dados e fotos ficam salvos até apagar definitivo.
-            </span>
-            <div className="preview-registro__confirma-acoes">
-              <Botao
-                variante="perigo"
-                disabled={apagando}
-                onClick={() => void apagarRegistro()}
-              >
-                {apagando ? 'Apagando…' : 'Lixeira'}
-              </Botao>
-              <Botao
-                variante="fantasma"
-                disabled={apagando}
-                onClick={() => setConfirmandoApagar(false)}
-              >
-                Cancelar
-              </Botao>
+          {!ocultarTitulo && (
+            <div className="preview-registro__cabecalho-linha">
+              {editando && !barraExterna ? (
+                caixaRenomear
+              ) : alvo !== undefined && !ocultarTitulo ? (
+                <button
+                  type="button"
+                  className="preview-registro__titulo-btn"
+                  onClick={iniciarEdicao}
+                  title="Clique para renomear"
+                >
+                  <h3 className="preview-registro__titulo">{tituloAtual}</h3>
+                </button>
+              ) : (
+                !ocultarTitulo && <h3 className="preview-registro__titulo">{tituloAtual}</h3>
+              )}
             </div>
-            {erroApagar !== null && <p className="aviso-erro">{erroApagar}</p>}
-          </div>
-        )}
-      </div>
-
-      {modoShare && (
-        <div className="preview-share-topo">
-          <div className="preview-share-topo__info">
-            <LinkIcon size={16} aria-hidden />
-            <span>Marque as áreas e toque em “Compartilhar link”. O link abre só esses blocos, com as fotos em alta resolução.</span>
-          </div>
-          <div className="preview-share-topo__acoes">
-            <span className="preview-share-topo__contador">{selShare.size} selecionado(s)</span>
-            <button
-              type="button"
-              className="preview-share-topo__btn"
-              onClick={marcarTodasShare}
-            >
-              Marcar todas
-            </button>
-            <button
-              type="button"
-              className="preview-share-topo__btn"
-              disabled={selShare.size === 0}
-              onClick={limparShare}
-            >
-              Limpar
-            </button>
-          </div>
+          )}
+          {acoesInternas && !editando && !confirmandoApagar && !modoShare && barraAcoes}
+          {confirmandoApagar && !barraExterna && confirmaApagar}
         </div>
       )}
+
+      {modoShare && !barraExterna && !shareControlado && painelShare}
 
       <div className="preview-campos">
         {campos.map((campo) => {
@@ -575,52 +697,7 @@ export function RegistroPreview({
         })}
       </div>
 
-      {modoShare && (
-        <div className="preview-share-bar">
-          {avisoShare !== null && <p className="preview-share-bar__aviso">{avisoShare}</p>}
-          {imgShare !== null && (
-            <p className="preview-share-bar__ok">Imagem pronta! Toque em “Enviar imagem”.</p>
-          )}
-          <div className="preview-share-bar__acoes">
-            <Botao
-              variante="primario"
-              disabled={gerandoLink || selShare.size === 0}
-              onClick={() => void enviarLink()}
-            >
-              <LinkIcon size={16} aria-hidden />
-              {gerandoLink ? 'Gerando link…' : 'Compartilhar link'}
-            </Botao>
-            {imgShare === null ? (
-              <Botao
-                variante="fantasma"
-                disabled={preparandoShare || selShare.size === 0}
-                onClick={() => void prepararShare()}
-              >
-                <ImageIcon size={16} aria-hidden />
-                {preparandoShare ? 'Montando imagem…' : 'Enviar como imagem'}
-              </Botao>
-            ) : (
-              <Botao
-                variante="padrao"
-                disabled={enviandoShare}
-                onClick={() => void enviarShare()}
-              >
-                <Share2 size={16} aria-hidden />
-                {enviandoShare ? 'Abrindo…' : 'Enviar imagem'}
-              </Botao>
-            )}
-            <Botao
-              variante="fantasma"
-              disabled={preparandoShare || enviandoShare || gerandoLink}
-              onClick={sairShare}
-            >
-              Cancelar
-            </Botao>
-          </div>
-        </div>
-      )}
-
-      {modoShare && selShare.size > 0 && (
+      {modoShare && !barraExterna && !shareControlado && selShare.size > 0 && (
         <button
           type="button"
           className="preview-share-fab preview-share-fab--pronto"
