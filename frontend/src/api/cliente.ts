@@ -148,6 +148,21 @@ export const api = {
       '/api/auth/entrar',
       corpoJson(token !== undefined && token.trim() !== '' ? { email, senha, token } : { email, senha }),
     ),
+  olharToken: (token: string) =>
+    pedir<{ valido: boolean; contaNome: string | null }>(
+      '/api/auth/olhar-token',
+      corpoJson({ token }),
+    ),
+  prePedido: (email: string, token: string) =>
+    pedir<{
+      ok: boolean;
+      status: 'pendente' | 'ativo';
+      contaId: string;
+      contaNome: string;
+      jaAtivo: boolean;
+      email: string;
+      nome: string;
+    }>('/api/auth/pre-pedido', corpoJson({ email, token })),
   registrar: (dados: {
     nome: string;
     email: string;

@@ -140,6 +140,12 @@
   color: var(--tinta);
   background: rgba(196, 92, 38, 0.08);
 }
+.entrar__ok {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1a7a45;
+}
 .entrar__dica {
   margin: 0 0 var(--e3);
   font-size: 13px;

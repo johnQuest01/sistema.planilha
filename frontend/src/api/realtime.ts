@@ -8,6 +8,12 @@ import { urlWsPresenca } from './runtime';
 export type Online = { id: string; nome: string };
 export type Entrada = { id: string; usuarioId: string; nome: string };
 
+export type PedidoAcessoLive = {
+  usuarioId: string;
+  nome: string;
+  email: string;
+};
+
 export type MsgRealtime =
   | { tipo: 'presenca'; online: Online[]; entradas: Entrada[] }
   | { tipo: 'entrada'; entrada: Entrada }
@@ -15,6 +21,7 @@ export type MsgRealtime =
   | { tipo: 'registro'; acao: 'apagado'; colecaoId: string; registroId: string }
   | { tipo: 'trava'; liberada: boolean }
   | { tipo: 'acesso_revogado' }
+  | { tipo: 'pedido_acesso'; pedido: PedidoAcessoLive }
   | { tipo: 'pong' };
 
 type Assinante = (msg: MsgRealtime) => void;

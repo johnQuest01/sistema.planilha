@@ -183,6 +183,19 @@ export async function anunciarEntradaWs(
   agendarBroadcastPresenca(contaId);
 }
 
+/** Avisa a conta (admins na UI) que alguém pediu acesso com token. */
+export function anunciarPedidoAcessoWs(
+  contaId: string,
+  pedido: { usuarioId: string; nome: string; email: string },
+): void {
+  const sala = salas.get(contaId);
+  if (sala === undefined || sala.size === 0) return;
+  const payload = JSON.stringify({ tipo: 'pedido_acesso', pedido });
+  for (const c of sala) {
+    if (aberto(c.socket)) c.socket.send(payload);
+  }
+}
+
 /**
  * Admin removeu o acesso: avisa o usuário (desloga no client), fecha os sockets
  * dele e atualiza a lista "online" da conta na hora.

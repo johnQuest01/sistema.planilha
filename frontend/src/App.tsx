@@ -7,6 +7,7 @@ import { Carregando } from './ui/Carregando';
 import { BotaoLixeiraFlutuante } from './ui/BotaoLixeiraFlutuante';
 import { InstalarApp } from './ui/InstalarApp';
 import { Presenca } from './ui/Presenca';
+import { AvisoPedidoAcesso } from './ui/AvisoPedidoAcesso';
 
 // Telas pesadas (editor de planilha, imagens, tabela virtualizada, config, lixeira) saem
 // do bundle inicial e só baixam quando a rota é acessada — o boot fica mais leve.
@@ -100,6 +101,7 @@ export function App(): JSX.Element {
         <Rotas />
         <BotaoLixeiraFlutuante />
         <Presenca />
+        <AvisoPedidoAcesso />
         <InstalarApp />
       </ProvedorAuth>
     </BrowserRouter>

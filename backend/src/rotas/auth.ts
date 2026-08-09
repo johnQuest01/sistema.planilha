@@ -11,7 +11,11 @@ import {
   revogarSessoesDoUsuarioNaConta,
 } from '../auth/sessoes';
 import { registrarEntrada } from '../repositorios/presenca';
-import { anunciarEntradaWs, expulsarUsuarioWs } from '../ws/presencaHub';
+import {
+  anunciarEntradaWs,
+  anunciarPedidoAcessoWs,
+  expulsarUsuarioWs,
+} from '../ws/presencaHub';
 import { workspaceContaId, workspaceCodigoHash } from '../auth/workspace';
 import {
   criarConviteConta,
@@ -42,6 +46,7 @@ import {
 import { paramsIdSchema } from '../validacao/params';
 
 const limiteAuth = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } };
+const limiteOlhar = { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } };
 
 const entrarSchema = credenciaisSchema
   .extend({
@@ -53,6 +58,86 @@ const entrarSchema = credenciaisSchema
 const trocarContaSchema = z
   .object({ contaId: z.string().uuid() })
   .strict();
+
+const olharTokenSchema = z
+  .object({ token: z.string().trim().min(4).max(200) })
+  .strict();
+
+const prePedidoSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email().max(200),
+    token: z.string().trim().min(4).max(200),
+  })
+  .strict();
+
+/** Resolve token → pedido de acesso. Avisa o admin via WS se ficou pendente. */
+async function aplicarTokenAcesso(
+  usuario: { id: string; nome: string; email: string; conta_id: string },
+  tokenLimpo: string,
+): Promise<
+  | {
+      ok: true;
+      pedido: { status: 'pendente' | 'ativo'; contaId: string; contaNome: string };
+      jaAtivo: boolean;
+    }
+  | { ok: false; erro: string; code: number }
+> {
+  const visto = await olharConviteConta(tokenLimpo);
+  if (visto === null) {
+    const codigoHash = await workspaceCodigoHash();
+    if (codigoHash === null || !(await conferirSenha(codigoHash, tokenLimpo))) {
+      return { ok: false, erro: 'token inválido, expirado ou já usado', code: 403 };
+    }
+    const cid = await workspaceContaId();
+    if (cid === usuario.conta_id) {
+      return { ok: false, erro: 'este token é da sua própria conta', code: 400 };
+    }
+    const st = await statusMembro(cid, usuario.id);
+    const r = await pedirAcessoConta(cid, usuario.id, 'codigo-legado');
+    const cn = await nomeDaConta(cid);
+    if (r.status === 'pendente' && (st === null || st === 'revogado')) {
+      anunciarPedidoAcessoWs(cid, {
+        usuarioId: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+      });
+    }
+    return {
+      ok: true,
+      pedido: { status: r.status === 'ativo' ? 'ativo' : 'pendente', contaId: cid, contaNome: cn },
+      jaAtivo: r.jaAtivo,
+    };
+  }
+
+  if (visto.contaId === usuario.conta_id) {
+    return { ok: false, erro: 'este token é da sua própria conta', code: 400 };
+  }
+  const st = await statusMembro(visto.contaId, usuario.id);
+  if (st === null || st === 'revogado') {
+    const gasto = await consumirConviteConta(tokenLimpo);
+    if (gasto === null) {
+      return { ok: false, erro: 'token inválido, expirado ou já usado', code: 403 };
+    }
+  }
+  const r = await pedirAcessoConta(visto.contaId, usuario.id, visto.token);
+  const cn = await nomeDaConta(visto.contaId);
+  if (r.status === 'pendente') {
+    anunciarPedidoAcessoWs(visto.contaId, {
+      usuarioId: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+    });
+  }
+  return {
+    ok: true,
+    pedido: {
+      status: r.status === 'ativo' ? 'ativo' : 'pendente',
+      contaId: visto.contaId,
+      contaNome: cn,
+    },
+    jaAtivo: r.jaAtivo,
+  };
+}
 
 function ehAdminConta(papel: string): boolean {
   return papel === 'dono';
@@ -219,48 +304,22 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
 
     const tokenLimpo = (token ?? '').trim();
     if (tokenLimpo !== '') {
-      const visto = await olharConviteConta(tokenLimpo);
-      if (visto === null) {
-        // Fallback legado Bruno (só se não for convites_conta).
-        const codigoHash = await workspaceCodigoHash();
-        if (codigoHash !== null && (await conferirSenha(codigoHash, tokenLimpo))) {
-          const cid = await workspaceContaId();
-          if (cid === usuario.conta_id) {
-            return reply.code(400).send({ erro: 'este token é da sua própria conta' });
-          }
-          const r = await pedirAcessoConta(cid, usuario.id, 'codigo-legado');
-          const cn = await nomeDaConta(cid);
-          pedido = { status: r.status === 'ativo' ? 'ativo' : 'pendente', contaId: cid, contaNome: cn };
-          if (r.jaAtivo) {
-            contaSessao = cid;
-            papelSessao = 'membro';
-          }
-        } else {
-          return reply.code(403).send({ erro: 'token inválido, expirado ou já usado' });
-        }
-      } else {
-        if (visto.contaId === usuario.conta_id) {
-          return reply.code(400).send({ erro: 'este token é da sua própria conta' });
-        }
-        // Gasta uso só no 1º pedido ou após revogação (não gasta se já pendente/ativo).
-        const st = await statusMembro(visto.contaId, usuario.id);
-        if (st === null || st === 'revogado') {
-          const gasto = await consumirConviteConta(tokenLimpo);
-          if (gasto === null) {
-            return reply.code(403).send({ erro: 'token inválido, expirado ou já usado' });
-          }
-        }
-        const r = await pedirAcessoConta(visto.contaId, usuario.id, visto.token);
-        const cn = await nomeDaConta(visto.contaId);
-        pedido = {
-          status: r.status === 'ativo' ? 'ativo' : 'pendente',
-          contaId: visto.contaId,
-          contaNome: cn,
-        };
-        if (r.jaAtivo) {
-          contaSessao = visto.contaId;
-          papelSessao = 'membro';
-        }
+      const r = await aplicarTokenAcesso(
+        {
+          id: usuario.id,
+          nome: usuario.nome,
+          email,
+          conta_id: usuario.conta_id,
+        },
+        tokenLimpo,
+      );
+      if (!r.ok) {
+        return reply.code(r.code).send({ erro: r.erro });
+      }
+      pedido = r.pedido;
+      if (r.jaAtivo) {
+        contaSessao = r.pedido.contaId;
+        papelSessao = 'membro';
       }
     }
 
@@ -278,6 +337,57 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
         pedido,
       }),
     );
+  });
+
+  /** Só olha o token (não gasta uso) — login inteligente mostra o nome da conta. */
+  app.post('/api/auth/olhar-token', limiteOlhar, async (req, reply) => {
+    const { token } = olharTokenSchema.parse(req.body);
+    const visto = await olharConviteConta(token);
+    if (visto !== null) {
+      return reply.send({ valido: true, contaNome: await nomeDaConta(visto.contaId) });
+    }
+    const codigoHash = await workspaceCodigoHash();
+    if (codigoHash !== null && (await conferirSenha(codigoHash, token))) {
+      const cid = await workspaceContaId();
+      return reply.send({ valido: true, contaNome: await nomeDaConta(cid) });
+    }
+    return reply.send({ valido: false, contaNome: null });
+  });
+
+  /**
+   * Antes do "Entrar": e-mail + token → cria/lembra pedido e avisa o admin ao vivo
+   * (com o login informado). Senha ainda é exigida no POST /entrar.
+   */
+  app.post('/api/auth/pre-pedido', limiteAuth, async (req, reply) => {
+    const { email, token } = prePedidoSchema.parse(req.body);
+    const linhas = await sql<
+      { id: string; conta_id: string; nome: string; email: string }[]
+    >`select id, conta_id, nome, email from usuarios where email = ${email}`;
+    const usuario = linhas[0];
+    if (usuario === undefined) {
+      return reply.code(404).send({ erro: 'e-mail não cadastrado — crie uma conta primeiro' });
+    }
+    const r = await aplicarTokenAcesso(
+      {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        conta_id: usuario.conta_id,
+      },
+      token,
+    );
+    if (!r.ok) {
+      return reply.code(r.code).send({ erro: r.erro });
+    }
+    return reply.send({
+      ok: true,
+      status: r.pedido.status,
+      contaId: r.pedido.contaId,
+      contaNome: r.pedido.contaNome,
+      jaAtivo: r.jaAtivo,
+      email: usuario.email,
+      nome: usuario.nome,
+    });
   });
 
   app.post('/api/auth/sair', async (req, reply) => {
@@ -357,27 +467,23 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
   app.post('/api/auth/pedir-acesso', { preHandler: exigeDono, ...limiteAuth }, async (req, reply) => {
     const u = usuarioObrigatorio(req);
     const body = z.object({ token: z.string().trim().min(4).max(200) }).strict().parse(req.body);
-    const visto = await olharConviteConta(body.token);
-    if (visto === null) {
-      return reply.code(403).send({ erro: 'token inválido, expirado ou já usado' });
+    const homeId = u.contaHomeId ?? contaObrigatoria(req);
+    const r = await aplicarTokenAcesso(
+      {
+        id: u.id,
+        nome: u.nome,
+        email: u.email,
+        conta_id: homeId,
+      },
+      body.token,
+    );
+    if (!r.ok) {
+      return reply.code(r.code).send({ erro: r.erro });
     }
-    const homeId = u.contaHomeId;
-    if (homeId !== undefined && visto.contaId === homeId) {
-      return reply.code(400).send({ erro: 'este token é da sua própria conta' });
-    }
-    const st = await statusMembro(visto.contaId, u.id);
-    if (st === null || st === 'revogado') {
-      const gasto = await consumirConviteConta(body.token);
-      if (gasto === null) {
-        return reply.code(403).send({ erro: 'token inválido, expirado ou já usado' });
-      }
-    }
-    const r = await pedirAcessoConta(visto.contaId, u.id, visto.token);
-    const cn = await nomeDaConta(visto.contaId);
     return reply.send({
-      status: r.status,
-      contaId: visto.contaId,
-      contaNome: cn,
+      status: r.pedido.status,
+      contaId: r.pedido.contaId,
+      contaNome: r.pedido.contaNome,
       jaAtivo: r.jaAtivo,
     });
   });

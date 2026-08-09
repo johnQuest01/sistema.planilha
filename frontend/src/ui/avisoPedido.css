@@ -1,0 +1,61 @@
+.aviso-pedido {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--e4);
+  background: rgba(20, 24, 22, 0.45);
+}
+
+.aviso-pedido__card {
+  width: min(420px, 100%);
+  padding: var(--e4);
+  background: var(--cartao);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-2);
+  box-shadow: var(--sombra);
+  color: var(--tinta);
+}
+
+.aviso-pedido__topo {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  margin-bottom: var(--e3);
+}
+
+.aviso-pedido__topo h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.aviso-pedido__texto {
+  margin: 0 0 var(--e3);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--tinta-2);
+}
+
+.aviso-pedido__email {
+  display: block;
+  padding: var(--e2) var(--e3);
+  margin-bottom: var(--e3);
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: var(--raio);
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.aviso-pedido__mais {
+  margin: 0 0 var(--e3);
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.aviso-pedido__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
