@@ -204,7 +204,9 @@ textarea.campo__controle {
 }
 .folha__voltar {
   flex: none;
-  color: var(--giz);
+  /* Antes era --giz (quase branco) sobre a folha clara -> parecia um espaço vazio feio
+     no canto superior esquerdo. Mesma cor do X para ficar um botão visível e simétrico. */
+  color: var(--tinta-2);
 }
 .folha__tituloArea {
   flex: 1;

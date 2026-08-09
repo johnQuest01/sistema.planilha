@@ -491,9 +491,16 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
   servidor, sincroniza ao vivo pelo evento `trava` do WebSocket).
 - **`ListaDensa.tsx`** (mobile) e **`Tabela.tsx`** (desktop) — listas virtualizadas
   (`@tanstack/react-virtual`) que rolam dentro do container.
-- **`BuscaReferencia.tsx`** — busca por referência; resultados rolam por dentro.
-- **`RegistroPreview.tsx`** — prévia de um registro (cabeçalho fixo com
-  Renomear/Compartilhar/Abrir/Lixeira).
+- **`BuscaReferencia.tsx`** — busca por referência. Os resultados são **cards
+  compactos** (miniatura + título + resumo) que rolam por dentro; tocar abre a **prévia
+  completa** (folha grande com X). Se a busca acha **exatamente 1** registro, a prévia
+  **abre sozinha**. (Mesmo padrão vale na planilha unida.)
+- **`RegistroPreview.tsx`** — prévia de um registro. Dentro da folha, o cabeçalho
+  (título + Renomear/Compartilhar/Abrir/Lixeira) fica **fixo no topo** (sticky), fundo
+  limpo (papel). Prop opcional `fonte` mostra o nome da planilha como selo no topo
+  (usada na prévia unida, para TODAS as partes terem o MESMO topo fixo). Modo
+  compartilhar: seleciona blocos e gera link (`criarLinkRegistro`) ou imagem; o botão de
+  link (FAB) fica fixo enquanto seleciona.
 - **`derivarResumo.ts`** — deriva **título**, **resumo**, **capa** e o **corpo efetivo**
   do registro (`camposDoRegistro` = corpo próprio OU o da coleção). Título vem do bloco
   marcado `ehTitulo`, senão do bloco "Referência".
@@ -517,11 +524,22 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
 - **`merge.ts`** — casa registros por **referência** (`chaveReferencia`), monta o
   `RegistroIntegrado` (partes por coleção) e a lista unida.
 - **`Integrado.tsx`** — tela da planilha unida (app shell: header/busca/filtro fixos,
-  lista rolável). "Novo registro unificado" herda o corpo recente da 1ª planilha.
-  Prévia com navegação entre planilhas do grupo (chips das que não estão à vista).
-  Botão "Baixar backup" (backup da união inteira).
+  lista rolável). Busca → **cards compactos** → tocar abre a **prévia completa** (folha
+  ALTA, quase tela cheia, com X); busca com 1 resultado abre sozinha. "Novo registro
+  unificado" herda o corpo recente da 1ª planilha. Prévia com navegação entre planilhas
+  (chips das fora de vista) + botão flutuante "Preencher" — que **some no modo
+  compartilhar** para não cobrir os controles de compartilhar. Botão "Baixar backup"
+  (backup da união inteira). Realtime: assina eventos de registro de TODAS as planilhas
+  do grupo e recalcula os grupos — criar registro/fotos numa planilha membro reflete
+  aqui na hora.
 - **`FichaIntegrada.tsx`** — editor unido: edita cada planilha da referência num lugar
-  só; navegação por planilha (chips no rodapé).
+  só. Ao abrir, **cria automaticamente** os registros faltantes das planilhas do grupo
+  (com a referência pré-preenchida) — todas já aparecem prontas para preencher, sem o
+  passo "criar registro". Navegação por planilha (chips) e foco inicial na planilha
+  escolhida pelo "Preencher" da prévia.
+- **Consistência do topo (importante):** cada parte da prévia unida usa o MESMO
+  cabeçalho fixo e limpo da Modelagem (via `RegistroPreview` + `fonte`), sem faixa
+  translúcida — todas as planilhas têm o registro com o mesmo topo fixo com botões.
 
 ### Importação e backup
 

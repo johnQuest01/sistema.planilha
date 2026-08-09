@@ -338,7 +338,9 @@
   border: 1px solid var(--linha);
   border-radius: var(--raio-2);
   box-shadow: var(--sombra);
-  overflow: hidden;
+  /* visible (não hidden): deixa o cabeçalho de cada parte grudar no topo (sticky),
+     igual ao topo fixo da Modelagem. */
+  overflow: visible;
 }
 .integ-previa-parte__cabecalho {
   display: flex;
@@ -374,18 +376,21 @@
   box-shadow: none;
   background: transparent;
 }
-/* Na prévia UNIDA há vários registros empilhados (um por planilha). O cabeçalho
-   FIXO/full-bleed do preview simples (margem negativa) fazia o título do registro
-   (ex.: 4805) subir por cima do nome da planilha e ser CORTADO pelo overflow do
-   cartão. Aqui o cabeçalho volta ao fluxo normal, dentro do cartão da parte.
-   (3 classes: vence a regra sticky de preencher.css sem depender da ordem de import.) */
+/* Prévia UNIDA: cada parte tem o MESMO topo fixo da Modelagem — o cabeçalho (nome da
+   planilha + título + botões) fica grudado no topo ao rolar, com fundo limpo (papel) e
+   SEM a faixa translúcida. Sem margem negativa (que causava sobreposição/corte).
+   O nome da planilha vai como um selo (.preview-registro__fonte) dentro do cabeçalho. */
 .folha__corpo .integ-previa-parte .preview-registro__cabecalho {
-  position: static;
+  position: sticky;
+  top: 0;
+  z-index: 3;
   margin: 0;
-  padding: var(--e3) 0 0;
-  background: transparent;
-  border-bottom: none;
-  box-shadow: none;
+  padding: var(--e3);
+  background: var(--papel);
+  border-bottom: 1px solid var(--linha);
+  box-shadow: 0 3px 8px rgba(23, 32, 28, 0.05);
+  border-top-left-radius: var(--raio-2);
+  border-top-right-radius: var(--raio-2);
 }
 .integ-previa-parte--ausente {
   box-shadow: none;

@@ -789,12 +789,10 @@ function PreviaCorpo({
         >
           {parte.registro !== null ? (
             <article className="integ-previa-parte">
-              <div className="integ-previa-parte__cabecalho">
-                <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
-              </div>
               <RegistroPreview
                 colecao={parte.colecao}
                 registro={parte.registro}
+                fonte={parte.colecao.nome}
                 aoAtualizar={aoAtualizarRegistro}
                 aoModoShare={(ativo) =>
                   setCompartilhando((prev) => {

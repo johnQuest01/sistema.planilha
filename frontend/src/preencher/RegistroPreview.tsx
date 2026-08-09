@@ -30,6 +30,9 @@ interface Props {
   /** Avisa o pai ao entrar/sair do modo compartilhar (a prévia unida usa para esconder
    *  a nav flutuante, que cobria a barra/FAB de compartilhar). */
   aoModoShare?: (ativo: boolean) => void;
+  /** Nome da planilha, exibido como selo no topo (usado na prévia unida, para o
+   *  cabeçalho fixo mostrar de qual planilha é o registro). */
+  fonte?: string;
 }
 
 function keysDe(valor: unknown): string[] {
@@ -153,6 +156,7 @@ export function RegistroPreview({
   aoApagar,
   edicaoBloqueada = false,
   aoModoShare,
+  fonte,
 }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
@@ -369,6 +373,9 @@ export function RegistroPreview({
   return (
     <article className="preview-registro preview-registro--completo">
       <div className="preview-registro__cabecalho">
+        {fonte !== undefined && fonte !== '' && (
+          <span className="preview-registro__fonte">{fonte}</span>
+        )}
         <div className="preview-registro__cabecalho-linha">
           {editando ? (
             <div className="preview-registro__renomear-box">
