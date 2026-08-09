@@ -249,7 +249,10 @@ export function Inicio(): JSX.Element {
               </Botao>
               {erro !== null && <p className="aviso-erro">{erro}</p>}
               <BotaoCriacaoAutomatica aoImportado={(id) => navegar(`/c/${id}`)} />
-              <BotaoImportarZip aoImportado={(id) => navegar(`/c/${id}`)} />
+              <BotaoImportarZip
+                aoImportado={(id) => navegar(`/c/${id}`)}
+                aoImportadoIntegracao={(id) => navegar(`/i/${id}`)}
+              />
               <button type="button" className="link-texto" onClick={() => void carregarExemplo()}>
                 ou carregar um exemplo
               </button>
@@ -276,7 +279,10 @@ export function Inicio(): JSX.Element {
                 </Botao>
               </form>
               <BotaoCriacaoAutomatica aoImportado={(id) => navegar(`/c/${id}`)} />
-              <BotaoImportarZip aoImportado={(id) => navegar(`/c/${id}`)} />
+              <BotaoImportarZip
+                aoImportado={(id) => navegar(`/c/${id}`)}
+                aoImportadoIntegracao={(id) => navegar(`/i/${id}`)}
+              />
             </div>
             {erro !== null && <p className="aviso-erro">{erro}</p>}
             <div className="rolagem">

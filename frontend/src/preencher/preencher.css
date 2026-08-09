@@ -577,6 +577,13 @@
   flex-direction: column;
   gap: var(--e3);
   margin-top: var(--e3);
+  /* Rola por dentro (senão os resultados ficam presos no cabeçalho fixo do app shell
+     e não dá para navegar). Ocupa quase a tela toda. */
+  max-height: calc(100dvh - 200px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: var(--e3);
 }
 .busca-ref__resultados > .preview-registro:last-child {
   scroll-margin-bottom: var(--e4);
@@ -632,8 +639,12 @@
   position: sticky;
   top: 0;
   z-index: 3;
+  /* Barra full-width e colada no topo (cobre o padding da folha), visual limpo. */
+  margin: calc(var(--e4) * -1) calc(var(--e4) * -1) var(--e3);
+  padding: var(--e3) var(--e4);
   background: var(--papel);
-  box-shadow: 0 6px 14px rgba(23, 32, 28, 0.1);
+  border-bottom: 1px solid var(--linha);
+  box-shadow: 0 3px 8px rgba(23, 32, 28, 0.05);
 }
 .preview-registro__cabecalho {
   display: flex;

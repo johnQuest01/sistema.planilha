@@ -272,6 +272,17 @@
 .integ-nav__chip:active {
   background: var(--linha);
 }
+/* Na PRÉVIA a nav fica colada no rodapé da área de rolagem (full-bleed), para pular
+   entre as planilhas do grupo sem sair do topo. */
+.integ-nav--previa {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin: var(--e3) calc(var(--e4) * -1) calc(var(--e4) * -1);
+  padding: var(--e2) var(--e4);
+  background: var(--papel);
+  border-top: 1px solid var(--linha);
+}
 
 /* Prévia unida: cada parte vira um cartão no padrão do registro da Modelagem
    (cabeçalho com planilha + título e, abaixo, os blocos via .preview-campos). */

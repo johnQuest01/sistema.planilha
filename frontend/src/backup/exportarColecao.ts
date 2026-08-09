@@ -4,6 +4,7 @@
 // e um dados.json estruturado — para que, se as imagens se perderem de novo, dê para
 // reconstruir tudo a partir do arquivo baixado.
 
+import type JSZipTipo from 'jszip';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { api, cursorDeRegistro } from '../api/cliente';
 import { urlCheia } from '../imagens/urls';
@@ -21,6 +22,10 @@ export interface ProgressoExport {
   fase: 'carregando' | 'imagens' | 'compactando' | 'pronto';
   feito: number;
   total: number;
+  // Só no backup de planilha UNIDA (integração): qual membro está sendo salvo.
+  planilha?: string;
+  indice?: number;
+  planilhas?: number;
 }
 
 // Uma imagem a exportar, com o rótulo (bloco de origem) para nomear o arquivo.
@@ -185,40 +190,23 @@ function dispararDownload(blob: Blob, nome: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// Exporta a planilha inteira num .zip. `aoProgredir` recebe o andamento para a UI.
-export async function exportarColecao(
-  colecao: Colecao,
-  aoProgredir: (p: ProgressoExport) => void,
-): Promise<{ registros: number; imagens: number; faltaram: number }> {
-  // JSZip carregado sob demanda (só quando o dono clica) para não pesar o bundle.
-  const { default: JSZip } = await import('jszip');
-  const zip = new JSZip();
-  const raiz = zip.folder(`backup-${limparNome(colecao.nome, 40)}`) ?? zip;
+export interface ResultadoEscrita {
+  registros: number;
+  imagens: number;
+  faltaram: number;
+}
 
-  aoProgredir({ fase: 'carregando', feito: 0, total: 0 });
+// Escreve UMA coleção (dados.json + textos + imagens HD) dentro de uma pasta do zip.
+// Reutilizado pelo backup simples e pelo backup de planilha UNIDA. Grava, no dados.json,
+// o MAPA key->caminho de cada imagem (relativo a esta pasta) para o import reconstruir
+// os registros com as fotos nos lugares certos.
+async function escreverColecaoNoZip(
+  raiz: JSZipTipo,
+  colecao: Colecao,
+  aoImagem?: (feito: number, total: number) => void,
+): Promise<ResultadoEscrita> {
   const registros = await carregarTodos(colecao.id);
 
-  // dados.json estruturado (para reimportação futura): estrutura + valores crus.
-  raiz.file(
-    'dados.json',
-    JSON.stringify(
-      {
-        exportadoEm: new Date().toISOString(),
-        colecao: { id: colecao.id, nome: colecao.nome, campos: colecao.campos },
-        registros: registros.map((r) => ({
-          id: r.id,
-          criadoEm: r.criadoEm,
-          atualizadoEm: r.atualizadoEm,
-          campos: Array.isArray(r.campos) ? r.campos : null,
-          valores: r.valores,
-        })),
-      },
-      null,
-      2,
-    ),
-  );
-
-  // Planeja todas as imagens (para ter um total de progresso).
   interface Plano {
     registro: Registro;
     campos: Campo[];
@@ -236,30 +224,56 @@ export async function exportarColecao(
   const totalImagens = planos.reduce((n, p) => n + p.imagens.length, 0);
 
   const faltaram: string[] = [];
+  // registro.id -> { keyAntiga: caminhoRelativo } ('' quando a foto não pôde ser baixada).
+  const mapaImagens: Record<string, Record<string, string>> = {};
   let feito = 0;
-  aoProgredir({ fase: 'imagens', feito, total: totalImagens });
+  aoImagem?.(feito, totalImagens);
 
   for (const p of planos) {
     const pasta = raiz.folder(p.pasta) ?? raiz;
-    // Texto legível com TODAS as informações do registro.
     pasta.file('informacoes.txt', textoDoRegistro(colecao, p.campos, p.registro));
 
     const cor = corDoRegistro(p.campos, p.registro);
     const baseNome = limparNome(cor === '' ? p.ref : `${p.ref} - ${cor}`, 60);
+    const mapaReg: Record<string, string> = {};
     let n = 0;
     for (const img of p.imagens) {
       n += 1;
       const blob = await baixarImagem(img.key);
       if (blob === null) {
         faltaram.push(`${p.pasta} :: ${img.rotulo} :: ${img.key}`);
+        mapaReg[img.key] = ''; // sem arquivo — o import descarta a key antiga
       } else {
         const nome = `${String(n).padStart(2, '0')} - ${baseNome} - ${limparNome(img.rotulo, 40)}.${extDe(img.key)}`;
         pasta.file(nome, blob);
+        mapaReg[img.key] = `${p.pasta}/${nome}`; // relativo à pasta desta coleção
       }
       feito += 1;
-      aoProgredir({ fase: 'imagens', feito, total: totalImagens });
+      aoImagem?.(feito, totalImagens);
     }
+    mapaImagens[p.registro.id] = mapaReg;
   }
+
+  // dados.json estruturado (para reimportação): estrutura + valores + mapa de imagens.
+  raiz.file(
+    'dados.json',
+    JSON.stringify(
+      {
+        exportadoEm: new Date().toISOString(),
+        colecao: { id: colecao.id, nome: colecao.nome, campos: colecao.campos },
+        registros: registros.map((r) => ({
+          id: r.id,
+          criadoEm: r.criadoEm,
+          atualizadoEm: r.atualizadoEm,
+          campos: Array.isArray(r.campos) ? r.campos : null,
+          valores: r.valores,
+          imagens: mapaImagens[r.id] ?? {},
+        })),
+      },
+      null,
+      2,
+    ),
+  );
 
   if (faltaram.length > 0) {
     raiz.file(
@@ -273,27 +287,128 @@ export async function exportarColecao(
     );
   }
 
+  return {
+    registros: registros.length,
+    imagens: totalImagens - faltaram.length,
+    faltaram: faltaram.length,
+  };
+}
+
+// Exporta a planilha inteira num .zip. `aoProgredir` recebe o andamento para a UI.
+export async function exportarColecao(
+  colecao: Colecao,
+  aoProgredir: (p: ProgressoExport) => void,
+): Promise<ResultadoEscrita> {
+  // JSZip carregado sob demanda (só quando o dono clica) para não pesar o bundle.
+  const { default: JSZip } = await import('jszip');
+  const zip = new JSZip();
+  const raiz = zip.folder(`backup-${limparNome(colecao.nome, 40)}`) ?? zip;
+
+  aoProgredir({ fase: 'carregando', feito: 0, total: 0 });
+  const res = await escreverColecaoNoZip(raiz, colecao, (feito, total) =>
+    aoProgredir({ fase: 'imagens', feito, total }),
+  );
+
   raiz.file(
     'LEIA-ME.txt',
     [
       `Backup da planilha "${colecao.nome}"`,
       `Gerado em ${new Date().toLocaleString('pt-BR')}`,
       '',
-      `Registros: ${registros.length}`,
-      `Imagens salvas: ${totalImagens - faltaram.length} de ${totalImagens}`,
+      `Registros: ${res.registros}`,
+      `Imagens salvas: ${res.imagens} (faltaram ${res.faltaram})`,
       '',
       'Como está organizado:',
       '- Uma pasta por registro (numerada, com a referência e a cor no nome).',
       '- Dentro de cada pasta: as imagens em alta definição + "informacoes.txt" com todos os dados.',
-      '- "dados.json" na raiz tem tudo estruturado, para reimportar no futuro.',
+      '- "dados.json" na raiz tem tudo estruturado (inclui o mapa das imagens), para reimportar no futuro.',
     ].join('\r\n'),
   );
 
-  aoProgredir({ fase: 'compactando', feito: totalImagens, total: totalImagens });
+  aoProgredir({ fase: 'compactando', feito: res.imagens, total: res.imagens });
   const blob = await zip.generateAsync({ type: 'blob' });
   const dia = new Date().toISOString().slice(0, 10);
   dispararDownload(blob, `backup-${limparNome(colecao.nome, 40)}-${dia}.zip`);
 
-  aoProgredir({ fase: 'pronto', feito: totalImagens, total: totalImagens });
-  return { registros: registros.length, imagens: totalImagens - faltaram.length, faltaram: faltaram.length };
+  aoProgredir({ fase: 'pronto', feito: res.imagens, total: res.imagens });
+  return res;
+}
+
+// Exporta uma planilha UNIDA (integração) inteira: um integracao.json na raiz + uma
+// subpasta por membro (cada uma com seu dados.json + imagens HD). O import recria as
+// coleções e refaz a união.
+export async function exportarIntegracao(
+  nome: string,
+  colecoes: Colecao[],
+  aoProgredir: (p: ProgressoExport) => void,
+): Promise<{ planilhas: number; registros: number; imagens: number; faltaram: number }> {
+  const { default: JSZip } = await import('jszip');
+  const zip = new JSZip();
+  const raiz = zip.folder(`backup-unido-${limparNome(nome, 40)}`) ?? zip;
+
+  const membros = colecoes.map((c, i) => ({
+    colecao: c,
+    pasta: `${String(i + 1).padStart(2, '0')} - ${limparNome(c.nome, 40)}`,
+  }));
+
+  raiz.file(
+    'integracao.json',
+    JSON.stringify(
+      {
+        exportadoEm: new Date().toISOString(),
+        nome,
+        membros: membros.map((m) => ({ nome: m.colecao.nome, id: m.colecao.id, pasta: m.pasta })),
+      },
+      null,
+      2,
+    ),
+  );
+
+  aoProgredir({ fase: 'carregando', feito: 0, total: 0, planilhas: colecoes.length });
+  let regs = 0;
+  let imgs = 0;
+  let falt = 0;
+  for (let i = 0; i < membros.length; i += 1) {
+    const m = membros[i];
+    if (m === undefined) continue;
+    const sub = raiz.folder(m.pasta) ?? raiz;
+    const res = await escreverColecaoNoZip(sub, m.colecao, (feito, total) =>
+      aoProgredir({
+        fase: 'imagens',
+        feito,
+        total,
+        planilha: m.colecao.nome,
+        indice: i + 1,
+        planilhas: membros.length,
+      }),
+    );
+    regs += res.registros;
+    imgs += res.imagens;
+    falt += res.faltaram;
+  }
+
+  raiz.file(
+    'LEIA-ME.txt',
+    [
+      `Backup da planilha UNIDA "${nome}"`,
+      `Gerado em ${new Date().toLocaleString('pt-BR')}`,
+      '',
+      `Planilhas do grupo: ${membros.length}`,
+      `Registros: ${regs}`,
+      `Imagens salvas: ${imgs} (faltaram ${falt})`,
+      '',
+      'Como está organizado:',
+      '- "integracao.json" na raiz lista as planilhas do grupo.',
+      '- Uma subpasta por planilha, cada uma com "dados.json" + pastas de registro com as fotos.',
+      '- Ao importar este .zip, o app recria cada planilha e refaz a união.',
+    ].join('\r\n'),
+  );
+
+  aoProgredir({ fase: 'compactando', feito: imgs, total: imgs });
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const dia = new Date().toISOString().slice(0, 10);
+  dispararDownload(blob, `backup-unido-${limparNome(nome, 40)}-${dia}.zip`);
+
+  aoProgredir({ fase: 'pronto', feito: imgs, total: imgs });
+  return { planilhas: membros.length, registros: regs, imagens: imgs, faltaram: falt };
 }

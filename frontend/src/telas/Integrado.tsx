@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ImageOff, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, ImageOff, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
 import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
+import { exportarIntegracao, type ProgressoExport } from '../backup/exportarColecao';
 import { assinarRealtime } from '../api/realtime';
 import { chaveIntegrado, gravarCache, lerCache } from '../api/cache';
 import { useAuth } from '../contexto/Auth';
@@ -153,6 +154,8 @@ export function Integrado(): JSX.Element {
   const [previa, setPrevia] = useState<RegistroIntegrado | null>(null);
   const [editando, setEditando] = useState<RegistroIntegrado | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [progExport, setProgExport] = useState<ProgressoExport | null>(null);
 
   // Botão VOLTAR (nativo/gesto) fecha a prévia ou o editor unido em vez de sair da
   // planilha unificada. Um booleano só: a troca prévia→editar não mexe no histórico.
@@ -381,7 +384,13 @@ export function Integrado(): JSX.Element {
     if (prim === undefined || criandoNovo) return;
     setCriandoNovo(true);
     try {
-      const novo = await api.criarRegistro(prim.id, valoresVaziosDe(prim.campos));
+      // Herda a ESTRUTURA (blocos) do registro mais recente da planilha do topo, em
+      // branco — assim o novo unificado nasce com o corpo recente (não um modelo antigo).
+      const base = regs?.[0]?.[0];
+      const corpo = base !== undefined ? camposDoRegistro(prim, base) : prim.campos;
+      const proprio =
+        base !== undefined && Array.isArray(base.campos) && base.campos.length > 0 ? corpo : undefined;
+      const novo = await api.criarRegistro(prim.id, valoresVaziosDe(corpo), proprio);
       const grupo: RegistroIntegrado = {
         chave: '',
         partes: cols.map((c, i) => ({ colecao: c, registro: i === 0 ? novo : null })),
@@ -393,6 +402,33 @@ export function Integrado(): JSX.Element {
     } finally {
       setCriandoNovo(false);
     }
+  }
+
+  // Baixa um backup da planilha UNIDA inteira (todas as membros + a união), num único
+  // .zip que o botão "Importar de arquivo" (na tela inicial) recria igualzinho.
+  async function baixarBackup(): Promise<void> {
+    const cols = colecoes ?? [];
+    if (integracao === null || cols.length === 0 || exportando) return;
+    setExportando(true);
+    try {
+      await exportarIntegracao(integracao.nome, cols, setProgExport);
+    } catch (e) {
+      setErroCarga(e instanceof ErroApi ? e.message : 'não foi possível baixar o backup');
+    } finally {
+      setExportando(false);
+      setProgExport(null);
+    }
+  }
+
+  function textoExport(p: ProgressoExport | null): string {
+    if (p === null) return 'Baixando…';
+    if (p.fase === 'carregando') return 'Lendo os registros…';
+    if (p.fase === 'imagens') {
+      const onde = p.planilha !== undefined ? ` ${p.planilha}` : '';
+      return `Baixando imagens${onde}… ${p.feito}/${p.total}`;
+    }
+    if (p.fase === 'compactando') return 'Compactando o .zip…';
+    return 'Pronto!';
   }
 
   // Apaga o registro unificado: envia para a lixeira TODAS as partes presentes do
@@ -451,14 +487,23 @@ export function Integrado(): JSX.Element {
           : geralLista;
 
   return (
-    <div className="pagina">
+    <div className="pagina pagina--app">
       <TopoApp />
-      <div className="faixa">
+      <div className="faixa faixa--app">
         <div className="inicio-cabeca">
           <h1 className="inicio-cabeca__titulo">{integracao.nome}</h1>
           <Botao variante="primario" onClick={() => void novoUnificado()} disabled={criandoNovo || primaria === null}>
             <Plus size={16} /> {criandoNovo ? 'Criando…' : 'Novo registro unificado'}
           </Botao>
+          {podeApagar && (
+            <Botao
+              variante="padrao"
+              onClick={() => void baixarBackup()}
+              disabled={exportando || (colecoes?.length ?? 0) === 0}
+            >
+              <Download size={16} /> {exportando ? textoExport(progExport) : 'Baixar backup'}
+            </Botao>
+          )}
           <Link to="/integracoes" className="btn">
             <ArrowLeft size={16} /> Integrações
           </Link>
@@ -496,7 +541,7 @@ export function Integrado(): JSX.Element {
         </div>
 
         {resultados !== null ? (
-          <>
+          <div className="rolagem">
             <p className="integ-dica">
               {buscando ? 'Buscando…' : `${resultados.length} resultado(s) para “${termo.trim()}”`}
             </p>
@@ -522,7 +567,7 @@ export function Integrado(): JSX.Element {
                 ))}
               </div>
             )}
-          </>
+          </div>
         ) : listaTodos === null ? (
           <Carregando />
         ) : (
@@ -539,25 +584,27 @@ export function Integrado(): JSX.Element {
                 ]}
               />
             </div>
-            {listaTodos.length === 0 ? (
-              <p className="integ-vazio">
-                {filtro === 'unidos'
-                  ? 'Nenhuma referência bateu entre as planilhas ainda.'
-                  : 'Nenhum registro nas planilhas do grupo.'}
-              </p>
-            ) : (
-              <ListaGrupos
-                titulo={
-                  filtro === 'unidos'
-                    ? `${listaTodos.length} referência(s) unida(s) — toque para ver as informações juntas`
-                    : filtro === 'todos'
-                      ? `${listaTodos.length} referência(s) no total`
-                      : `${listaTodos.length} registro(s) no geral (${colecoes.map((c) => c.nome).join(' + ')})`
-                }
-                grupos={listaTodos}
-                aoAbrir={setPrevia}
-              />
-            )}
+            <div className="rolagem">
+              {listaTodos.length === 0 ? (
+                <p className="integ-vazio">
+                  {filtro === 'unidos'
+                    ? 'Nenhuma referência bateu entre as planilhas ainda.'
+                    : 'Nenhum registro nas planilhas do grupo.'}
+                </p>
+              ) : (
+                <ListaGrupos
+                  titulo={
+                    filtro === 'unidos'
+                      ? `${listaTodos.length} referência(s) unida(s) — toque para ver as informações juntas`
+                      : filtro === 'todos'
+                        ? `${listaTodos.length} referência(s) no total`
+                        : `${listaTodos.length} registro(s) no geral (${colecoes.map((c) => c.nome).join(' + ')})`
+                  }
+                  grupos={listaTodos}
+                  aoAbrir={setPrevia}
+                />
+              )}
+            </div>
           </>
         )}
       </div>
@@ -689,31 +736,86 @@ function PreviaCorpo({
   grupo: RegistroIntegrado;
   aoAtualizarRegistro?: (r: Registro) => void;
 }): JSX.Element {
+  // Navegação entre as planilhas do grupo: como a prévia unida fica grande, detecta
+  // quais partes estão à vista e mostra, no rodapé rolável, chips só das que NÃO estão,
+  // para pular direto até elas (a atual some da lista).
+  const previaRef = useRef<HTMLDivElement>(null);
+  const parteRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [visiveis, setVisiveis] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    const root = previaRef.current?.closest('.folha__corpo') ?? null;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        setVisiveis((prev) => {
+          const next = new Set(prev);
+          for (const e of entries) {
+            const idx = Number((e.target as HTMLElement).dataset.idx);
+            if (Number.isNaN(idx)) continue;
+            if (e.isIntersecting) next.add(idx);
+            else next.delete(idx);
+          }
+          return next;
+        });
+      },
+      { root, threshold: 0.2 },
+    );
+    for (const el of parteRefs.current) if (el !== null) obs.observe(el);
+    return () => obs.disconnect();
+  }, [grupo.partes.length]);
+
+  function irPara(indice: number): void {
+    parteRefs.current[indice]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const naoVisiveis = grupo.partes.map((_, i) => i).filter((i) => !visiveis.has(i));
+
   return (
-    <div className="integ-previa">
-      {grupo.partes.map((parte) =>
-        parte.registro !== null ? (
-          <article key={parte.colecao.id} className="integ-previa-parte">
-            <div className="integ-previa-parte__cabecalho">
-              <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
-            </div>
-            <RegistroPreview
-              colecao={parte.colecao}
-              registro={parte.registro}
-              aoAtualizar={aoAtualizarRegistro}
-            />
-          </article>
-        ) : (
-          <article
-            key={parte.colecao.id}
-            className="integ-previa-parte integ-previa-parte--ausente"
-          >
-            <div className="integ-previa-parte__cabecalho">
-              <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
-              <span className="integ-previa-parte__vazio">Sem registro para esta referência</span>
-            </div>
-          </article>
-        ),
+    <div className="integ-previa" ref={previaRef}>
+      {grupo.partes.map((parte, i) => (
+        <div
+          key={parte.colecao.id}
+          ref={(el) => {
+            parteRefs.current[i] = el;
+          }}
+          data-idx={i}
+        >
+          {parte.registro !== null ? (
+            <article className="integ-previa-parte">
+              <div className="integ-previa-parte__cabecalho">
+                <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
+              </div>
+              <RegistroPreview
+                colecao={parte.colecao}
+                registro={parte.registro}
+                aoAtualizar={aoAtualizarRegistro}
+              />
+            </article>
+          ) : (
+            <article className="integ-previa-parte integ-previa-parte--ausente">
+              <div className="integ-previa-parte__cabecalho">
+                <span className="integ-previa-parte__fonte">{parte.colecao.nome}</span>
+                <span className="integ-previa-parte__vazio">Sem registro para esta referência</span>
+              </div>
+            </article>
+          )}
+        </div>
+      ))}
+
+      {grupo.partes.length > 1 && naoVisiveis.length > 0 && (
+        <div className="integ-nav integ-nav--previa" aria-label="Ir para planilha">
+          <span className="integ-nav__rotulo">Ir para</span>
+          {naoVisiveis.map((i) => (
+            <button
+              key={grupo.partes[i]?.colecao.id ?? i}
+              type="button"
+              className="integ-nav__chip"
+              onClick={() => irPara(i)}
+            >
+              {grupo.partes[i]?.colecao.nome ?? 'Planilha'}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
