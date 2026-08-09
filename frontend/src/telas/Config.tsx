@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { KeyRound, Lock, Shuffle, Ticket, Trash2, UserCheck, Users } from 'lucide-react';
+import { KeyRound, Link2, Lock, Shuffle, Ticket, Trash2, UserCheck, Users } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo, type UsuarioResumo } from '../api/cliente';
 import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
@@ -58,6 +58,7 @@ export function Config(): JSX.Element {
   const [tokenNovo, setTokenNovo] = useState<string | null>(null);
   const [erroTokens, setErroTokens] = useState<string | null>(null);
   const [gerandoToken, setGerandoToken] = useState(false);
+  const [linkAppCopiado, setLinkAppCopiado] = useState(false);
 
   const [planilhas, setPlanilhas] = useState<ColecaoResumo[] | null>(null);
   const [senhasPlanilha, setSenhasPlanilha] = useState<Record<string, string>>({});
@@ -168,9 +169,23 @@ export function Config(): JSX.Element {
     }
   }
 
+  function linkApp(): string {
+    return `${window.location.origin}/entrar`;
+  }
+
   function linkConvite(token: string, cadastro = false): string {
     const base = `${window.location.origin}/entrar?token=${encodeURIComponent(token)}`;
     return cadastro ? `${base}&cadastro=1` : base;
+  }
+
+  async function copiarLinkApp(): Promise<void> {
+    try {
+      await navigator.clipboard?.writeText(linkApp());
+      setLinkAppCopiado(true);
+      window.setTimeout(() => setLinkAppCopiado(false), 2500);
+    } catch {
+      /* ignore */
+    }
   }
 
   async function copiarLink(token: string, cadastro = false): Promise<void> {
@@ -364,9 +379,30 @@ export function Config(): JSX.Element {
       <div className="faixa">
         <div className="config">
           <h1 className="config__titulo">
+            <Link2 size={20} />
+            Link do app
+          </h1>
+          <p className="config__ajuda">
+            Só a tela de login — sem token. A pessoa abre o app e entra ou cria a conta dela.
+          </p>
+          <div className="config__acoes">
+            <Botao variante="primario" onClick={() => void copiarLinkApp()}>
+              <Link2 size={16} />
+              {linkAppCopiado ? 'Link copiado!' : 'Compartilhar link do app'}
+            </Botao>
+          </div>
+          <p className="config__ajuda" style={{ marginTop: '0.5rem' }}>
+            <code className="config__salvo-codigo" style={{ fontSize: '12px' }}>
+              {linkApp()}
+            </code>
+          </p>
+
+          <hr className="config__sep" />
+
+          <h2 className="config__titulo">
             <Ticket size={20} />
             Tokens de acesso
-          </h1>
+          </h2>
           <p className="config__ajuda">
             Gere um token (válido 7 dias, 1 uso) e envie. Quem <strong>ainda não tem conta</strong>{' '}
             usa no cadastro (“Tenho um token”). Quem <strong>já tem a própria conta</strong> cola o
@@ -391,14 +427,14 @@ export function Config(): JSX.Element {
                 className="link-texto"
                 onClick={() => void copiarLink(tokenNovo, false)}
               >
-                copiar link (login)
+                link com token (login)
               </button>
               <button
                 type="button"
                 className="link-texto"
                 onClick={() => void copiarLink(tokenNovo, true)}
               >
-                copiar link (criar conta)
+                link com token (criar conta)
               </button>
             </div>
           )}
