@@ -447,13 +447,6 @@ export function Integrado(): JSX.Element {
     }
   }
 
-  // Apagar a partir dos RESULTADOS de busca: remove o bloco da lista de resultados
-  // (por identidade do objeto, já que a mesma referência pode ter vários grupos).
-  async function apagarNaBusca(grupo: RegistroIntegrado): Promise<void> {
-    await apagarGrupo(grupo);
-    setResultados((rs) => (rs === null ? rs : rs.filter((g) => g !== grupo)));
-  }
-
   // Apagar a partir da PRÉVIA (folha inferior): fecha a folha ao concluir.
   async function apagarNaPrevia(grupo: RegistroIntegrado): Promise<void> {
     await apagarGrupo(grupo);
@@ -544,31 +537,18 @@ export function Integrado(): JSX.Element {
 
         {resultados !== null ? (
           <div className="rolagem">
-            <p className="integ-dica">
-              {buscando ? 'Buscando…' : `${resultados.length} resultado(s) para “${termo.trim()}”`}
-            </p>
-            {!buscando && resultados.length === 0 ? (
+            {buscando ? (
+              <p className="integ-dica">Buscando…</p>
+            ) : resultados.length === 0 ? (
               <p className="integ-vazio">Nenhum registro com esses dados nas planilhas do grupo.</p>
             ) : (
-              <div className="integ-resultados">
-                {resultados.map((g, i) => (
-                  <BlocoIntegrado
-                    key={`${g.chave}:${i}`}
-                    grupo={g}
-                    integracaoNome={integracao.nome}
-                    podeApagar={podeApagar}
-                    aoEditar={(gg, foco) => {
-                      setFocoEditor(foco);
-                      setEditando(gg);
-                    }}
-                    aoApagar={apagarNaBusca}
-                    aoAtualizarRegistro={(r) => {
-                      const idx = g.partes.findIndex((p) => p.colecao.id === r.colecaoId);
-                      if (idx >= 0) atualizarParte(idx, r);
-                    }}
-                  />
-                ))}
-              </div>
+              // Resultados como cards COMPACTOS: toque abre a PRÉVIA COMPLETA (grande),
+              // de onde dá para preencher/alterar todas as planilhas.
+              <ListaGrupos
+                titulo={`${resultados.length} resultado(s) para “${termo.trim()}” — toque para ver a prévia completa`}
+                grupos={resultados}
+                aoAbrir={setPrevia}
+              />
             )}
           </div>
         ) : listaTodos === null ? (
@@ -614,19 +594,21 @@ export function Integrado(): JSX.Element {
 
       {previa !== null && (
         <FolhaInferior
+          alta
           titulo={tituloDoGrupo(previa)}
           subtitulo={`${integracao.nome} — ${partesPresentes(previa)}/${previa.partes.length} planilhas unidas`}
           onFechar={() => setPrevia(null)}
           acaoTopo={
             <Botao
               variante="primario"
+              className="btn--compacto"
               onClick={() => {
                 setFocoEditor(undefined);
                 setEditando(previa);
                 setPrevia(null);
               }}
             >
-              <PencilLine size={16} /> Preencher / alterar
+              <PencilLine size={16} /> Preencher
             </Botao>
           }
         >
@@ -917,48 +899,5 @@ function AcaoApagarIntegrado({
       </div>
       {erro !== null && <p className="aviso-erro">{erro}</p>}
     </div>
-  );
-}
-
-/** Resultado de busca no padrão das outras planilhas: já mostra a prévia inteira
- *  (sem precisar clicar), com ações de preencher/alterar e apagar. */
-function BlocoIntegrado({
-  grupo,
-  integracaoNome,
-  podeApagar,
-  aoEditar,
-  aoApagar,
-  aoAtualizarRegistro,
-}: {
-  grupo: RegistroIntegrado;
-  integracaoNome: string;
-  podeApagar: boolean;
-  aoEditar: (g: RegistroIntegrado, foco?: number) => void;
-  aoApagar: (g: RegistroIntegrado) => Promise<void>;
-  aoAtualizarRegistro?: (r: Registro) => void;
-}): JSX.Element {
-  const presentes = partesPresentes(grupo);
-  return (
-    <article className="integ-resultado">
-      <div className="integ-resultado__cabecalho">
-        <div className="integ-resultado__titulo-area">
-          <h3 className="integ-resultado__titulo">{tituloDoGrupo(grupo)}</h3>
-          <span className="etiqueta">
-            {integracaoNome} — {presentes}/{grupo.partes.length} planilhas
-          </span>
-        </div>
-        <div className="integ-resultado__acoes">
-          <Botao variante="primario" onClick={() => aoEditar(grupo)}>
-            <PencilLine size={16} /> Preencher / alterar
-          </Botao>
-          <AcaoApagarIntegrado grupo={grupo} podeApagar={podeApagar} aoApagar={aoApagar} />
-        </div>
-      </div>
-      <PreviaCorpo
-        grupo={grupo}
-        aoAtualizarRegistro={aoAtualizarRegistro}
-        aoPreencher={(foco) => aoEditar(grupo, foco)}
-      />
-    </article>
   );
 }

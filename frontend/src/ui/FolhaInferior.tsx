@@ -15,9 +15,11 @@ interface Props {
   acaoTopo?: ReactNode;
   /** Barra fixa no rodapé da folha (fora da área de rolagem). */
   rodape?: ReactNode;
+  /** Folha ALTA (quase tela cheia) — usada nas prévias grandes (planilha unida). */
+  alta?: boolean;
 }
 
-export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo, rodape }: Props): JSX.Element {
+export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo, rodape, alta }: Props): JSX.Element {
   const folhaRef = useRef<HTMLDivElement>(null);
   // onFechar é recriado a cada render do pai (Ficha). Guardamos numa ref para o
   // efeito de montagem NÃO depender dele — senão ele re-executava a cada tecla,
@@ -49,7 +51,7 @@ export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo,
       }}
     >
       <div
-        className="folha"
+        className={`folha${alta ? ' folha--alta' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={titulo}

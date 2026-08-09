@@ -122,6 +122,41 @@ export function FichaIntegrada({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focoInicial]);
 
+  // Abrir para PREENCHER já cria o registro das planilhas do grupo que ainda não têm
+  // um para esta referência — assim TODAS aparecem prontas para preencher/alterar, sem
+  // precisar clicar em "criar registro". A referência é pré-preenchida quando existe.
+  const autoCriarFeito = useRef(false);
+  useEffect(() => {
+    if (autoCriarFeito.current) return;
+    autoCriarFeito.current = true;
+    const faltantes = partes
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => p.registro === null);
+    if (faltantes.length === 0) return;
+    let vivo = true;
+    void (async () => {
+      const refCriar = refParaPreencher(chave, partes);
+      for (const { p, i } of faltantes) {
+        const alvo = alvoTitulo(p.colecao.campos);
+        const valoresIniciais: Record<string, unknown> =
+          refCriar !== '' && alvo !== undefined && alvo.subcampoId === undefined
+            ? { [alvo.campoId]: refCriar }
+            : {};
+        try {
+          const novo = await api.criarRegistro(p.colecao.id, valoresIniciais);
+          if (!vivo) return;
+          aoAtualizarParte(i, novo);
+        } catch {
+          /* se falhar, o botão "Criar registro aqui" continua como alternativa */
+        }
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function marcarSalvando(delta: number): void {
     setSalvandoCount((n) => Math.max(0, n + delta));
   }
@@ -273,6 +308,7 @@ export function FichaIntegrada({
 
   return (
     <FolhaInferior
+      alta
       titulo={titulo}
       subtitulo={`${integracao.nome} — preenchimento unido`}
       onFechar={fechar}
