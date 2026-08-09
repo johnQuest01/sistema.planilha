@@ -255,16 +255,16 @@ interface ConfigCampo {
   `sessoes`) e filas de manutenção (`lixo_r2`) ficam FORA da RLS de conta — a auth
   media o acesso e as rotas filtram por `conta_id` explicitamente.
 
-### Tabelas (estado final após as migrations 001–018)
+### Tabelas (estado final após as migrations 001–020)
 
-> São **19 arquivos** de migration: `001`–`018`, com **dois** arquivos de prefixo `015`
-> (`015_compartilhamentos.sql` e `015_integracoes.sql`). O runner ordena por nome, então
-> `compartilhamentos` roda antes de `integracoes`.
+> Arquivos `001`–`020`, com **dois** de prefixo `015` (`015_compartilhamentos` e
+> `015_integracoes`). O runner ordena por nome.
 
 | Tabela | Colunas principais | Observações |
 |---|---|---|
-| `contas` | id, email(unique), senha_hash, codigo_convite_hash, edicao_liberada, criado_em | O "workspace". `edicao_liberada` = alavanca de edição por conta (default false). |
-| `usuarios` | id, conta_id, nome, email(unique), senha_hash, papel(`dono`\|`membro`), visto_em, criado_em | Pessoas que logam; todas caem na conta-workspace do dono. `visto_em` = presença. |
+| `contas` | id, email(unique), senha_hash, nome, codigo_convite_hash, edicao_liberada, criado_em | Workspace isolado. `nome` = rótulo amigável (mig. 020). |
+| `usuarios` | id, conta_id, nome, email(unique), senha_hash, papel(`dono`\|`membro`), visto_em, criado_em | Login; cada um pertence a **uma** conta. |
+| `convites_conta` | token(PK), conta_id, rotulo, criado_por, expira_em, revogado_em, usos, max_usos, criado_em | Tokens do admin para outros entrarem na conta (fora da RLS; mig. 020). |
 | `sessoes` | id(text PK), conta_id, usuario_id, criado_em, expira_em, revogado_em | Cookie carrega `sessoes.id` (opaco). Fora da RLS. |
 | `colecoes` | id, conta_id, nome, criado_por(→usuarios), senha_hash, arquivada, criado_em, atualizado_em | Planilha. `senha_hash` = senha da planilha (Oficina). |
 | `campos` | id, colecao_id, nome, tipo, ordem, config(jsonb), criado_em | Blocos compartilhados da planilha (o schema). |
@@ -308,6 +308,9 @@ interface ConfigCampo {
 - **017_integracao_arquivada** — `integracoes.arquivada`.
 - **018_registros_ordem** — `registros.ordem` (double, ordem manual; backfill = epoch
   do `criado_em`); índice `(colecao_id, ordem desc)` para paginação por cursor.
+- **019_compartilhamentos_partes** — `compartilhamentos.partes` + `titulo` (link unido).
+- **020_contas_multi_tenant** — `contas.nome` + tabela `convites_conta` (tokens por
+  conta; cadastro cria workspace próprio ou entra com token).
 
 > Nota: há dois arquivos com prefixo `015` (`015_integracoes.sql` e
 > `015_compartilhamentos.sql`); o runner aplica por ordem alfabética, então
@@ -317,26 +320,26 @@ interface ConfigCampo {
 
 ## 7. Segurança e multi-tenant
 
-- **Cadastro/login**: `usuarios` (email único). Todo cadastro novo cai na conta do
-  `WORKSPACE_OWNER_EMAIL` (workspace compartilhado). Senha com **argon2**
-  (`auth/senha.ts`). Cadastro exige **código de convite** (hash na conta).
-- **Sessão**: cookie assinado carrega `sessoes.id` (opaco, aleatório). Dá para expirar
-  e revogar (logout/troca de senha). `auth/sessoes.ts`, `auth/cookies.ts`.
-- **Papéis**: `dono` (pode apagar tudo, gerir senhas/usuários, arquivar) e `membro`
-  (cria/preenche). Atenção ao nome: o preHandler `auth/exigeDono.ts` na verdade só
-  **exige uma sessão válida** (preenche `req.contaId`/`req.usuario`); a checagem de
-  papel `dono` / dono-do-workspace é feita **rota a rota** (ex.: arquivar, gerir
-  senhas/usuários, apagar planilha).
-- **RLS por conta**: todo acesso "dono" passa por `comConta(contaId, fn)` (ver §6).
-- **Senha por planilha (Oficina)**: `colecoes.senha_hash` + `colecao_acessos`. E-mails
-  em `PLANILHA_ACESSO_LIVRE_EMAILS` não precisam desbloquear.
-- **Arquivamento**: `colecoes.arquivada` / `integracoes.arquivada` — some para todos
-  menos o dono do workspace (que desarquiva). Diferente de senha (não há desbloqueio).
-- **Link público**: `compartilhamentos` (código curto = segredo). A rota pública
-  resolve por igualdade exata e devolve só os blocos compartilhados. `publico/link.ts`,
-  `rotas/publico.ts`.
-- **Rate limit**: 300 req/min por IP global; rotas de auth apertam mais (argon2 é caro).
-- **Helmet** para headers de segurança; **CORS** restrito ao `CORS_ORIGIN`.
+- **Cadastro dual** (`POST /api/auth/registrar`):
+  - **Com token** (`token` ou `codigo`): entra como `membro` na conta do admin
+    (`convites_conta`) — ou, legado, código da conta Bruno (`codigo_convite_hash`).
+  - **Sem token**: cria **workspace novo** (`INSERT contas` + usuário `dono`).
+    Dados isolados por `conta_id` + RLS — nunca misturam com outras contas.
+- **Tokens**: tabela `convites_conta` (migration `020`). Admin gera/lista/revoga em
+  Config (`/api/auth/tokens-convite`).
+- **Login**: `usuarios` (e-mail único global). Senha **argon2** (`auth/senha.ts`).
+- **Sessão**: cookie assinado com `sessoes.id`. `auth/sessoes.ts`, `auth/cookies.ts`.
+- **Papéis**: `dono` = admin da **própria** conta (Config/engrenagem, tokens,
+  usuários, lixeira restaurar/apagar definitivo, senhas, arquivar). `membro` =
+  preenche/cria, sem essas telas. O preHandler `exigeDono` só exige sessão; o
+  papel é checado rota a rota.
+- **RLS por conta**: `comConta(contaId, fn)` (ver §6).
+- **Senha por planilha (Oficina)**: `colecoes.senha_hash` + `colecao_acessos`.
+- **Arquivamento**: `colecoes.arquivada` / `integracoes.arquivada` — some para
+  membros; admin desarquiva.
+- **Link público**: `compartilhamentos` (código curto). `rotas/publico.ts`.
+- **Rate limit** / **Helmet** / **CORS** como antes.
+- Ver também `atualizacao.MD` (pedido multi-conta organizado).
 
 ---
 

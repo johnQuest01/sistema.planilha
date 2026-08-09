@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { KeyRound, Lock, Shuffle, Users } from 'lucide-react';
+import { KeyRound, Lock, Shuffle, Ticket, Trash2, Users } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo, type UsuarioResumo } from '../api/cliente';
 import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
@@ -28,12 +28,27 @@ function gerarSenhaLogin(): string {
   return s;
 }
 
+type TokenConvite = {
+  token: string;
+  rotulo: string | null;
+  expiraEm: string | null;
+  revogadoEm: string | null;
+  usos: number;
+  maxUsos: number | null;
+  criadoEm: string;
+};
+
 export function Config(): JSX.Element {
   const { estado } = useAuth();
   const [codigo, setCodigo] = useState('');
   const [salvo, setSalvo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+
+  const [tokens, setTokens] = useState<TokenConvite[] | null>(null);
+  const [tokenNovo, setTokenNovo] = useState<string | null>(null);
+  const [erroTokens, setErroTokens] = useState<string | null>(null);
+  const [gerandoToken, setGerandoToken] = useState(false);
 
   const [planilhas, setPlanilhas] = useState<ColecaoResumo[] | null>(null);
   const [senhasPlanilha, setSenhasPlanilha] = useState<Record<string, string>>({});
@@ -51,9 +66,11 @@ export function Config(): JSX.Element {
   );
   const [erroUsuarios, setErroUsuarios] = useState<string | null>(null);
   const [salvandoUsuarioId, setSalvandoUsuarioId] = useState<string | null>(null);
+  const [removendoUsuarioId, setRemovendoUsuarioId] = useState<string | null>(null);
 
   const podeGerirSenhas =
     estado.fase === 'logado' && estado.usuario.podeGerirSenhas === true;
+  const meuId = estado.fase === 'logado' ? estado.usuario.id : null;
 
   useEffect(() => {
     if (!podeGerirSenhas) return;
@@ -90,9 +107,70 @@ export function Config(): JSX.Element {
     };
   }, [podeGerirSenhas]);
 
+  useEffect(() => {
+    if (estado.fase !== 'logado' || estado.usuario.papel !== 'dono') return;
+    let vivo = true;
+    void api
+      .listarTokensConvite()
+      .then((lista) => {
+        if (vivo) setTokens(lista);
+      })
+      .catch((e) => {
+        if (vivo) {
+          setTokens([]);
+          setErroTokens(e instanceof ErroApi ? e.message : 'não foi possível listar tokens');
+        }
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [estado]);
+
   // Só o dono usa esta tela. Membro que digitar /config volta pro início.
   if (estado.fase === 'logado' && estado.usuario.papel !== 'dono') {
     return <Navigate to="/" replace />;
+  }
+
+  async function gerarToken(): Promise<void> {
+    setGerandoToken(true);
+    setErroTokens(null);
+    try {
+      const t = await api.criarTokenConvite({});
+      setTokenNovo(t.token);
+      setTokens((prev) => [t, ...(prev ?? [])]);
+    } catch (e) {
+      setErroTokens(e instanceof ErroApi ? e.message : 'não foi possível gerar o token');
+    } finally {
+      setGerandoToken(false);
+    }
+  }
+
+  async function revogarToken(token: string): Promise<void> {
+    setErroTokens(null);
+    try {
+      await api.revogarTokenConvite(token);
+      setTokens((prev) =>
+        (prev ?? []).map((t) =>
+          t.token === token ? { ...t, revogadoEm: new Date().toISOString() } : t,
+        ),
+      );
+    } catch (e) {
+      setErroTokens(e instanceof ErroApi ? e.message : 'não foi possível revogar');
+    }
+  }
+
+  async function removerUsuario(u: UsuarioResumo): Promise<void> {
+    if (!window.confirm(`Remover o acesso de ${u.nome} (${u.email})?`)) return;
+    setRemovendoUsuarioId(u.id);
+    setErroUsuarios(null);
+    try {
+      await api.removerUsuario(u.id);
+      setUsuarios((prev) => (prev ?? []).filter((x) => x.id !== u.id));
+    } catch (e) {
+      setErroUsuarios(e instanceof ErroApi ? e.message : 'não foi possível remover');
+    } finally {
+      setRemovendoUsuarioId(null);
+    }
   }
 
   async function salvar(): Promise<void> {
@@ -193,16 +271,71 @@ export function Config(): JSX.Element {
       <div className="faixa">
         <div className="config">
           <h1 className="config__titulo">
-            <KeyRound size={20} />
-            Código de convite
+            <Ticket size={20} />
+            Tokens de acesso
           </h1>
           <p className="config__ajuda">
-            Quem for criar conta precisa digitar este código. Por segurança, o código atual
-            não é exibido — defina um novo abaixo quando quiser trocá-lo.
+            Gere um token e envie para a pessoa. No cadastro ela escolhe{' '}
+            <strong>Tenho um token</strong>, cola o código e entra na <em>sua</em> conta —
+            com as mesmas planilhas e informações. Dados de outras contas nunca se misturam.
           </p>
+
+          {tokenNovo !== null && (
+            <div className="config__salvo">
+              <span className="config__salvo-rotulo">Token gerado — copie e envie:</span>
+              <code className="config__salvo-codigo">{tokenNovo}</code>
+              <button
+                type="button"
+                className="link-texto"
+                onClick={() => void navigator.clipboard?.writeText(tokenNovo)}
+              >
+                copiar
+              </button>
+            </div>
+          )}
+
+          <div className="config__acoes">
+            <Botao variante="primario" onClick={() => void gerarToken()} disabled={gerandoToken}>
+              <Ticket size={16} />
+              {gerandoToken ? 'Gerando…' : 'Gerar token'}
+            </Botao>
+          </div>
+          {erroTokens !== null && <p className="aviso-erro">{erroTokens}</p>}
+
+          {tokens !== null && tokens.length > 0 && (
+            <ul className="config__usuarios" style={{ marginTop: '1rem' }}>
+              {tokens.map((t) => {
+                const morto = t.revogadoEm !== null;
+                return (
+                  <li key={t.token} className="config__usuario">
+                    <div className="config__usuario-info">
+                      <code>{t.token}</code>
+                      <span className="config__usuario-papel">
+                        {morto
+                          ? 'revogado'
+                          : `${t.usos} uso(s)${t.maxUsos !== null ? ` / máx ${t.maxUsos}` : ''}`}
+                      </span>
+                    </div>
+                    {!morto && (
+                      <Botao variante="fantasma" onClick={() => void revogarToken(t.token)}>
+                        Revogar
+                      </Botao>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <hr className="config__sep" />
+
+          <h2 className="config__titulo">
+            <KeyRound size={20} />
+            Código permanente (opcional)
+          </h2>
           <p className="config__ajuda">
-            Depois que a pessoa criar a conta, use a seção <strong>Senhas dos usuários</strong>{' '}
-            abaixo para gerar a senha de login e entregar a ela.
+            Alternativa ao token: um código fixo da conta (não aparece de novo depois de
+            salvar). Prefira os tokens acima — dá para revogar um a um.
           </p>
 
           {salvo !== null && (
@@ -251,9 +384,8 @@ export function Config(): JSX.Element {
                 Senhas das planilhas
               </h2>
               <p className="config__ajuda">
-                Só você (<code>brunoacre07@gmail.com</code>) pode colocar ou tirar senha de
-                qualquer planilha, na hora que quiser. Quem não tem acesso automático precisa
-                digitar a senha uma vez para abrir.
+                Como admin desta conta, você define ou remove a senha de qualquer planilha.
+                Quem não tem acesso automático digita a senha uma vez para abrir.
               </p>
 
               {senhaPlanilhaSalva !== null && (
@@ -345,12 +477,11 @@ export function Config(): JSX.Element {
 
               <h2 className="config__titulo">
                 <Users size={20} />
-                Senhas dos usuários
+                Usuários da conta
               </h2>
               <p className="config__ajuda">
-                Só você (<code>brunoacre07@gmail.com</code>) pode gerar ou trocar a senha de
-                login de qualquer conta — inclusive Jurandir. Gere, salve e entregue a senha
-                para a pessoa entrar no app.
+                Gere senha de login para entregar à pessoa, ou <strong>remova o acesso</strong>{' '}
+                (ela deixa de ver as planilhas desta conta).
               </p>
 
               {senhaEntregue !== null && (
@@ -413,6 +544,16 @@ export function Config(): JSX.Element {
                           >
                             Salvar senha
                           </Botao>
+                          {meuId !== u.id && (
+                            <Botao
+                              variante="fantasma"
+                              onClick={() => void removerUsuario(u)}
+                              disabled={removendoUsuarioId === u.id}
+                            >
+                              <Trash2 size={16} />
+                              Remover acesso
+                            </Botao>
+                          )}
                         </div>
                       </li>
                     );

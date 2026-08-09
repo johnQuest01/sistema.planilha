@@ -17,10 +17,19 @@ type Estado =
   | { fase: 'deslogado' }
   | { fase: 'logado'; usuario: Usuario };
 
+export type DadosRegistro = {
+  nome: string;
+  email: string;
+  senha: string;
+  /** Token/código para entrar numa conta existente. Sem token = cria conta nova. */
+  token?: string;
+  nomeConta?: string;
+};
+
 interface ContextoAuth {
   estado: Estado;
   entrar: (email: string, senha: string) => Promise<void>;
-  registrar: (nome: string, email: string, senha: string, codigo: string) => Promise<void>;
+  registrar: (dados: DadosRegistro) => Promise<void>;
   sair: () => Promise<void>;
 }
 
@@ -57,13 +66,10 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
     setEstado({ fase: 'logado', usuario });
   }, []);
 
-  const registrar = useCallback(
-    async (nome: string, email: string, senha: string, codigo: string) => {
-      const usuario = await api.registrar(nome, email, senha, codigo);
-      setEstado({ fase: 'logado', usuario });
-    },
-    [],
-  );
+  const registrar = useCallback(async (dados: DadosRegistro) => {
+    const usuario = await api.registrar(dados);
+    setEstado({ fase: 'logado', usuario });
+  }, []);
 
   const sair = useCallback(async () => {
     await api.sair();

@@ -36,22 +36,25 @@ export function TopoApp(): JSX.Element {
       </Link>
       <span className="topo-app__espaco" />
       {nome !== '' && <span className="topo-app__email">{nome}</span>}
-      <Link
-        to="/lixeira"
-        className="btn btn--icone"
-        style={{ color: 'var(--giz)' }}
-        aria-label="Lixeira"
-        title="Lixeira — restaurar planilhas e fichas"
-      >
-        <Trash2 size={18} />
-      </Link>
+      {/* Lixeira e engrenagem: só o admin (dono) da conta. */}
+      {ehDono && (
+        <Link
+          to="/lixeira"
+          className="btn btn--icone"
+          style={{ color: 'var(--giz)' }}
+          aria-label="Lixeira"
+          title="Lixeira — restaurar planilhas e fichas"
+        >
+          <Trash2 size={18} />
+        </Link>
+      )}
       {ehDono && (
         <Link
           to="/config"
           className="btn btn--icone"
           style={{ color: 'var(--giz)' }}
-          aria-label="Código de convite"
-          title="Código de convite"
+          aria-label="Configurações da conta"
+          title="Configurações — tokens, usuários, senhas"
         >
           <Settings size={18} />
         </Link>

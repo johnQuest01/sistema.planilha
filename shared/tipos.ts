@@ -116,17 +116,17 @@ export interface Integracao {
   atualizadoEm: string;
 }
 
-// Usuário logado (pessoa). Papel 'dono' pode apagar tudo; 'membro' preenche e cria.
+// Usuário logado (pessoa). Papel 'dono' = admin da conta; 'membro' preenche e cria.
 export interface Usuario {
   id: string;
   nome: string;
   email: string;
   papel: 'dono' | 'membro';
-  /** Só o dono do workspace (brunoacre07) gerencia senhas de login e de planilhas. */
+  /** Admin da conta (papel dono): senhas, tokens, usuários, lixeira. */
   podeGerirSenhas?: boolean;
 }
 
-/** Linha da lista de usuários no painel do dono do workspace. */
+/** Linha da lista de usuários no painel do admin da conta. */
 export interface UsuarioResumo {
   id: string;
   nome: string;

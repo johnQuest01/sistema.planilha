@@ -9,8 +9,18 @@ import {
   restaurarDaLixeira,
 } from '../repositorios/lixeira';
 
+function exigeAdminConta(req: { usuario?: { papel: string } }, reply: { code: (n: number) => { send: (b: unknown) => unknown } }): boolean {
+  if (req.usuario?.papel !== 'dono') {
+    void reply.code(403).send({ erro: 'só o admin da conta pode gerir a lixeira' });
+    return false;
+  }
+  return true;
+}
+
 export async function rotasLixeira(app: FastifyInstance): Promise<void> {
+  // Listar / restaurar / apagar definitivo: SÓ o admin (dono) da conta.
   app.get('/api/lixeira', { preHandler: [exigeDono] }, async (req, reply) => {
+    if (!exigeAdminConta(req, reply)) return;
     const contaId = contaObrigatoria(req);
     const itens = await comConta(contaId, (tx) => listarLixeira(tx));
     return reply.send(itens);
@@ -20,6 +30,7 @@ export async function rotasLixeira(app: FastifyInstance): Promise<void> {
     '/api/lixeira/:id/restaurar',
     { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
+      if (!exigeAdminConta(req, reply)) return;
       const contaId = contaObrigatoria(req);
       const { resultado, registro } = await comConta(contaId, (tx) =>
         restaurarDaLixeira(tx, req.params.id),
@@ -50,6 +61,7 @@ export async function rotasLixeira(app: FastifyInstance): Promise<void> {
     '/api/lixeira/:id',
     { preHandler: [exigeDono, validaIdParam] },
     async (req, reply) => {
+      if (!exigeAdminConta(req, reply)) return;
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
       const { resultado, keys } = await comConta(contaId, (tx) =>
@@ -62,7 +74,6 @@ export async function rotasLixeira(app: FastifyInstance): Promise<void> {
       if (resultado === 'nao-encontrado') {
         return reply.code(404).send({ erro: 'item não encontrado na lixeira' });
       }
-      // Qualquer usuário da conta pode; R2 fora da transação (Neon já limpo).
       await apagarKeysNoR2(keys);
       return reply.code(204).send();
     },

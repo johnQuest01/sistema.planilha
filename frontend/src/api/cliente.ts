@@ -138,8 +138,14 @@ export const api = {
   eu: () => pedir<Usuario>('/api/auth/eu'),
   entrar: (email: string, senha: string) =>
     pedir<Usuario>('/api/auth/entrar', corpoJson({ email, senha })),
-  registrar: (nome: string, email: string, senha: string, codigo: string) =>
-    pedir<Usuario>('/api/auth/registrar', corpoJson({ nome, email, senha, codigo })),
+  registrar: (dados: {
+    nome: string;
+    email: string;
+    senha: string;
+    token?: string;
+    codigo?: string;
+    nomeConta?: string;
+  }) => pedir<Usuario>('/api/auth/registrar', corpoJson(dados)),
   sair: () => pedir<{ ok: boolean }>('/api/auth/sair', { method: 'POST' }),
   definirCodigoConvite: (codigo: string) =>
     pedir<{ ok: boolean }>('/api/auth/codigo-convite', {
@@ -147,10 +153,38 @@ export const api = {
       body: JSON.stringify({ codigo }),
     }),
   listarUsuarios: () => pedir<UsuarioResumo[]>('/api/auth/usuarios'),
+  removerUsuario: (id: string) =>
+    pedir<{ ok: boolean }>(`/api/auth/usuarios/${id}`, { method: 'DELETE' }),
   definirSenhaUsuario: (id: string, senha: string) =>
     pedir<{ ok: boolean; email: string }>(`/api/auth/usuarios/${id}/senha`, {
       method: 'PATCH',
       body: JSON.stringify({ senha }),
+    }),
+  listarTokensConvite: () =>
+    pedir<
+      {
+        token: string;
+        rotulo: string | null;
+        expiraEm: string | null;
+        revogadoEm: string | null;
+        usos: number;
+        maxUsos: number | null;
+        criadoEm: string;
+      }[]
+    >('/api/auth/tokens-convite'),
+  criarTokenConvite: (dados?: { rotulo?: string; diasValidade?: number; maxUsos?: number }) =>
+    pedir<{
+      token: string;
+      rotulo: string | null;
+      expiraEm: string | null;
+      revogadoEm: string | null;
+      usos: number;
+      maxUsos: number | null;
+      criadoEm: string;
+    }>('/api/auth/tokens-convite', corpoJson(dados ?? {})),
+  revogarTokenConvite: (token: string) =>
+    pedir<{ revogado: boolean }>(`/api/auth/tokens-convite/${encodeURIComponent(token)}`, {
+      method: 'DELETE',
     }),
 
   // --- coleções ---

@@ -127,7 +127,9 @@ export function BotaoLixeiraFlutuante(): JSX.Element | null {
     [usuarioId, loc.pathname, navegar],
   );
 
-  if (usuarioId === null || loc.pathname === '/entrar') return null;
+  // Só o admin (dono) da conta vê a lixeira.
+  const ehAdmin = estado.fase === 'logado' && estado.usuario.papel === 'dono';
+  if (usuarioId === null || !ehAdmin || loc.pathname === '/entrar') return null;
 
   return (
     <button

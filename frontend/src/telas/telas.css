@@ -76,6 +76,33 @@
   flex-direction: column;
   gap: var(--e4);
 }
+.entrar__modos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--e2);
+  margin-bottom: var(--e3);
+}
+.entrar__modo {
+  padding: var(--e2) var(--e3);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--tinta-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.entrar__modo--ativo {
+  border-color: var(--destaque, #c45c26);
+  color: var(--tinta);
+  background: rgba(196, 92, 38, 0.08);
+}
+.entrar__dica {
+  margin: 0 0 var(--e3);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--tinta-2);
+}
 .entrar__marca {
   display: flex;
   align-items: center;

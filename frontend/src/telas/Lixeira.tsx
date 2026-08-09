@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { RotateCcw, Trash2 } from 'lucide-react';
 import { api, ErroApi, type ItemLixeira } from '../api/cliente';
+import { useAuth } from '../contexto/Auth';
 import { urlMini } from '../imagens/urls';
 import { Botao } from '../ui/Botao';
 import { Carregando } from '../ui/Carregando';
@@ -28,10 +29,12 @@ const fmt = new Intl.DateTimeFormat('pt-BR', {
 });
 
 export function Lixeira(): JSX.Element {
+  const { estado } = useAuth();
   const [itens, setItens] = useState<ItemLixeira[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState<string | null>(null);
+  const ehAdmin = estado.fase === 'logado' && estado.usuario.papel === 'dono';
 
   const carregar = useCallback(async () => {
     try {
@@ -44,8 +47,9 @@ export function Lixeira(): JSX.Element {
   }, []);
 
   useEffect(() => {
+    if (!ehAdmin) return;
     void carregar();
-  }, [carregar]);
+  }, [carregar, ehAdmin]);
 
   async function restaurar(id: string): Promise<void> {
     setOcupado(id);
@@ -74,6 +78,10 @@ export function Lixeira(): JSX.Element {
     }
   }
 
+  if (estado.fase === 'logado' && !ehAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
   if (itens === null) {
     return (
       <div className="pagina">
@@ -91,8 +99,8 @@ export function Lixeira(): JSX.Element {
           <div>
             <h1 className="lixeira__titulo">Lixeira</h1>
             <p className="lixeira__sub">
-              Aqui entram planilhas e fichas apagadas (com tudo que foi preenchido). Qualquer
-              pessoa do time pode restaurar ou apagar de vez. Prévia: fotos do bloco Referência.
+              Planilhas e fichas apagadas (com o que foi preenchido). Só o admin da conta
+              restaura ou apaga de vez. Prévia: fotos do bloco Referência.
             </p>
           </div>
           <Link to="/" className="btn btn--fantasma">

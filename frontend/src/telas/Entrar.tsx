@@ -6,14 +6,18 @@ import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
 import './telas.css';
 
+type ModoCadastro = 'nova' | 'token';
+
 export function Entrar(): JSX.Element {
   const { entrar, registrar } = useAuth();
   const [modo, setModo] = useState<'entrar' | 'registrar'>('entrar');
+  const [modoCadastro, setModoCadastro] = useState<ModoCadastro>('token');
   const [nome, setNome] = useState('');
+  const [nomeConta, setNomeConta] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [codigo, setCodigo] = useState('');
+  const [token, setToken] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -22,8 +26,23 @@ export function Entrar(): JSX.Element {
     setErro(null);
     setEnviando(true);
     try {
-      if (modo === 'entrar') await entrar(email.trim(), senha);
-      else await registrar(nome.trim(), email.trim(), senha, codigo.trim());
+      if (modo === 'entrar') {
+        await entrar(email.trim(), senha);
+      } else if (modoCadastro === 'token') {
+        await registrar({
+          nome: nome.trim(),
+          email: email.trim(),
+          senha,
+          token: token.trim(),
+        });
+      } else {
+        await registrar({
+          nome: nome.trim(),
+          email: email.trim(),
+          senha,
+          nomeConta: nomeConta.trim() || undefined,
+        });
+      }
     } catch (err) {
       setErro(err instanceof ErroApi ? err.message : 'não foi possível continuar');
       setEnviando(false);
@@ -39,13 +58,42 @@ export function Entrar(): JSX.Element {
         </div>
 
         {modo === 'registrar' && (
+          <div className="entrar__modos" role="group" aria-label="Tipo de cadastro">
+            <button
+              type="button"
+              className={`entrar__modo${modoCadastro === 'token' ? ' entrar__modo--ativo' : ''}`}
+              onClick={() => setModoCadastro('token')}
+            >
+              Tenho um token
+            </button>
+            <button
+              type="button"
+              className={`entrar__modo${modoCadastro === 'nova' ? ' entrar__modo--ativo' : ''}`}
+              onClick={() => setModoCadastro('nova')}
+            >
+              Criar minha conta
+            </button>
+          </div>
+        )}
+
+        {modo === 'registrar' && (
           <Campo
-            rotulo="Nome"
+            rotulo="Seu nome"
             type="text"
             autoComplete="name"
             required
             value={nome}
             onChange={(e) => setNome(e.target.value)}
+          />
+        )}
+        {modo === 'registrar' && modoCadastro === 'nova' && (
+          <Campo
+            rotulo="Nome da sua conta (opcional)"
+            type="text"
+            autoComplete="organization"
+            placeholder="ex.: Oficina do João"
+            value={nomeConta}
+            onChange={(e) => setNomeConta(e.target.value)}
           />
         )}
         <Campo
@@ -76,21 +124,32 @@ export function Entrar(): JSX.Element {
             {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
-        {modo === 'registrar' && (
+        {modo === 'registrar' && modoCadastro === 'token' && (
           <Campo
-            rotulo="Código de convite"
+            rotulo="Token de convite"
             type="text"
             autoComplete="off"
             required
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
+            placeholder="MOST-XXXX-XXXX"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
           />
+        )}
+        {modo === 'registrar' && modoCadastro === 'nova' && (
+          <p className="entrar__dica">
+            Você será o <strong>admin</strong> desta conta: planilhas, dados e tokens só seus —
+            sem misturar com outras contas.
+          </p>
         )}
 
         {erro !== null && <p className="aviso-erro">{erro}</p>}
 
         <Botao variante="primario" type="submit" bloco disabled={enviando}>
-          {modo === 'entrar' ? 'Entrar' : 'Criar conta'}
+          {modo === 'entrar'
+            ? 'Entrar'
+            : modoCadastro === 'nova'
+              ? 'Criar minha conta'
+              : 'Entrar com token'}
         </Botao>
 
         <p className="entrar__troca">
