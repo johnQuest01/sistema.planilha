@@ -114,7 +114,27 @@ export function partirEmBlocos(texto: string): string[] {
   return blocos;
 }
 
-type Classe = 'referencia' | 'cor' | 'rotulo' | 'texto';
+// Tira a numeração de listas ("1 ...", "2) ...", "3. ..."). Só age quando REALMENTE
+// parece uma lista numerada (2+ itens), para não estragar textos que começam com
+// número (ex.: "100 metros"). Cobre dois jeitos de escrever:
+//   A) "1 conteudo" (numero + espaco): tira o "1 " de cada bloco.
+//   B) "1. conteudo" (o ponto separou o numero do conteudo em blocos diferentes):
+//      remove os blocos que ficaram só com o número.
+export function removerOrdinais(blocos: string[]): string[] {
+  const inline = blocos.filter((b) => /^\s*\d{1,2}[.)\-]?\s+\S/.test(b)).length;
+  const soltos = blocos.filter((b) => /^\s*\d{1,2}\s*$/.test(b)).length;
+  if (inline >= 2) {
+    return blocos
+      .map((b) => b.replace(/^\s*\d{1,2}[.)\-]?\s+/, '').trim())
+      .filter((b) => b !== '');
+  }
+  if (soltos >= 2) {
+    return blocos.filter((b) => !/^\s*\d{1,2}\s*$/.test(b));
+  }
+  return blocos;
+}
+
+type Classe = 'referencia' | 'cor' | 'rotulo' | 'texto' | 'imagemref';
 
 export interface BlocoInfo {
   classe: Classe;
@@ -131,6 +151,20 @@ const RE_REF_EXPL = /^\s*ref(?:er[eê]ncia)?\b\.?\s*[:\-]?\s*(\S.*)$/i;
 const RE_REF_CODE = /^\s*\d{3,}[a-z0-9]*(?:\s+.+)?$/i;
 // "rótulo: valor" — SÓ com dois-pontos (hífen picotaria palavras compostas).
 const RE_ROTULO = /^\s*([\p{L}][\p{L}\s]{0,28}?)\s*:\s*(.+?)\s*$/u;
+
+// Nomes que DECLARAM um bloco de imagem da referência (bloco sem valor de texto).
+const NOMES_IMAGEM = new Set([
+  'imagem', 'imagens', 'foto', 'fotos', 'modelagem',
+  'imagem da referencia', 'imagens da referencia', 'foto da referencia', 'fotos da referencia',
+  'imagem de referencia', 'imagens de referencia', 'foto de referencia', 'fotos de referencia',
+  'imagem da modelagem', 'fotos da modelagem',
+]);
+
+// Rótulos que significam "dê um título a este bloco": o VALOR vira o NOME do bloco
+// de texto (ex.: "texto titulo: observação" -> bloco "Observação").
+const ROTULOS_TITULO = new Set([
+  'titulo', 'texto titulo', 'titulo do texto', 'titulo do bloco', 'nome', 'nome do bloco', 'bloco',
+]);
 
 function separarCores(txt: string): string[] {
   return txt
@@ -152,9 +186,17 @@ export function classificarBloco(bloco: string): BlocoInfo {
   if (RE_REF_CODE.test(b)) {
     return { classe: 'referencia', rotulo: 'Referência', valor: b, cores: [] };
   }
+  if (NOMES_IMAGEM.has(normalizar(b))) {
+    return { classe: 'imagemref', rotulo: 'Imagem da referência', valor: b, cores: [] };
+  }
   const mRot = b.match(RE_ROTULO);
   if (mRot?.[1] !== undefined && mRot[2] !== undefined) {
-    return { classe: 'rotulo', rotulo: capitalizar(mRot[1]), valor: mRot[2].trim(), cores: [] };
+    const label = mRot[1].trim();
+    const valor = mRot[2].trim();
+    if (ROTULOS_TITULO.has(normalizar(label))) {
+      return { classe: 'rotulo', rotulo: capitalizar(valor), valor: '', cores: [] };
+    }
+    return { classe: 'rotulo', rotulo: capitalizar(label), valor, cores: [] };
   }
   return { classe: 'texto', rotulo: null, valor: b, cores: [] };
 }
@@ -167,7 +209,7 @@ interface RegistroParse {
 }
 
 function parseRegistro(raw: string): RegistroParse {
-  const blocos = partirEmBlocos(raw).map(classificarBloco);
+  const blocos = removerOrdinais(partirEmBlocos(raw)).map(classificarBloco);
   const refBloco = blocos.find((b) => b.classe === 'referencia');
   const coresTexto = blocos.filter((b) => b.classe === 'cor').flatMap((b) => b.cores);
   return {
@@ -249,7 +291,7 @@ async function criarEsquemaComum(colecaoId: string): Promise<EsquemaComum> {
     },
   });
   const img = await api.criarCampo(colecaoId, {
-    nome: 'Imagens',
+    nome: 'Imagem da referência',
     tipo: 'imagem',
     config: { maxFotos: MAX_FOTOS },
   });
@@ -275,7 +317,7 @@ function montarCorpo(
   const addTexto = (nome: string, valor: string): void => {
     const tipo: Campo['tipo'] = valor.length > 80 || valor.includes('\n') ? 'paragrafo' : 'texto';
     add({ id: crypto.randomUUID(), colecaoId: colId, nome: nome.slice(0, 60) || 'Texto', tipo, ordem: 0, config: {} });
-    valores[campos[campos.length - 1]!.id] = valor;
+    if (valor !== '') valores[campos[campos.length - 1]!.id] = valor; // bloco "titulado" nasce vazio
   };
 
   let refFeita = false;
@@ -291,6 +333,10 @@ function montarCorpo(
       corFeita = true;
     }
   };
+  // Quando o usuário DECLARA o bloco de imagem no texto (ex.: "5 imagem da
+  // referencia"), respeitamos a posição dele — não injetamos o bloco logo após a
+  // referência.
+  const temDeclaracaoImg = blocos.some((b) => b.classe === 'imagemref');
 
   for (const b of blocos) {
     if (b.classe === 'referencia') {
@@ -298,10 +344,14 @@ function montarCorpo(
         add({ ...comuns.ref });
         valores[comuns.ref.id] = b.valor;
         refFeita = true;
-        if (temImagensRef) addImg(); // fotos da referência ficam logo abaixo do título
+        if (temImagensRef && !temDeclaracaoImg) addImg(); // fotos ficam logo abaixo do título
       } else {
         addTexto('Referência', b.valor); // 2ª referência vira só texto
       }
+      continue;
+    }
+    if (b.classe === 'imagemref') {
+      addImg();
       continue;
     }
     if (b.classe === 'cor') {
@@ -345,6 +395,7 @@ export interface RelatorioAuto {
   fotos: number;
   semReferencia: number; // fotos que não casaram (foram para o 1º registro)
   excedente: number; // fotos que passaram do limite do bloco ou sem bloco de destino
+  erros: number; // fotos que falharam no upload (formato/rede)
 }
 
 export async function criarPlanilhaAutomatica(
@@ -403,6 +454,7 @@ export async function criarPlanilhaAutomatica(
   // distribui foto de referência x foto de cor pelos blocos certos).
   let fotos = 0;
   let excedente = 0;
+  let erros = 0;
   const semReferencia = rota.filter((r) => !r.casou).length;
   const total = imagens.length;
   let feito = 0;
@@ -419,14 +471,16 @@ export async function criarPlanilhaAutomatica(
       registros[i] = registro;
       fotos += relatorio.refOk + relatorio.corOk;
       excedente += relatorio.cheios.length + relatorio.semBloco.length;
+      erros += relatorio.erros.length;
     } catch {
-      /* se um registro inteiro falhar no upload, segue para os demais */
+      // Um registro inteiro falhou no upload: conta as fotos dele como erro e segue.
+      erros += arqs.length;
     }
   }
 
   return {
     colecaoId: col.id,
-    relatorio: { registros: parses.length, fotos, semReferencia, excedente },
+    relatorio: { registros: parses.length, fotos, semReferencia, excedente, erros },
   };
 }
 
@@ -437,6 +491,7 @@ export function resumoAuto(rel: RelatorioAuto): string {
   const avisos: string[] = [];
   if (rel.semReferencia > 0) avisos.push(`${rel.semReferencia} foto(s) sem referência foram para o 1º registro`);
   if (rel.excedente > 0) avisos.push(`${rel.excedente} foto(s) não couberam no bloco`);
+  if (rel.erros > 0) avisos.push(`${rel.erros} foto(s) falharam ao enviar`);
   if (avisos.length > 0) base += ` (${avisos.join('; ')})`;
   return base;
 }

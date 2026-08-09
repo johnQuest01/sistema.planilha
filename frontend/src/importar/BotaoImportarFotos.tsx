@@ -3,6 +3,7 @@ import { ImagePlus } from 'lucide-react';
 import type { Colecao, Registro } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import {
+  ehArquivoImagem,
   importarNaColecao,
   importarNoRegistro,
   resumoRelatorio,
@@ -31,7 +32,7 @@ export function BotaoImportarFotos({ colecao, registro, aoConcluir, aoAntes, rot
   const [resumo, setResumo] = useState<string | null>(null);
 
   async function aoEscolher(files: FileList | null): Promise<void> {
-    const arquivos = Array.from(files ?? []).filter((f) => f.type.startsWith('image/'));
+    const arquivos = Array.from(files ?? []).filter(ehArquivoImagem);
     if (arquivos.length === 0) return;
     setOcupado(true);
     setResumo(null);

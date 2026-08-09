@@ -13,15 +13,51 @@ export interface Derivadas {
   mini: Blob;
 }
 
-async function carregarBitmap(file: File): Promise<ImageBitmap> {
-  // imageOrientation 'from-image' respeita o EXIF (foto de celular não vira de lado).
-  return createImageBitmap(file, { imageOrientation: 'from-image' });
+// Fonte desenhável: ImageBitmap (rápido) ou HTMLImageElement (fallback). Guardamos
+// as dimensões porque ImageBitmap e HTMLImageElement expõem width/height igual.
+interface FonteImagem {
+  fonte: CanvasImageSource;
+  largura: number;
+  altura: number;
+  fechar: () => void;
 }
 
-function desenhar(bitmap: ImageBitmap, ladoMax: number): HTMLCanvasElement {
-  const escala = Math.min(1, ladoMax / Math.max(bitmap.width, bitmap.height));
-  const largura = Math.max(1, Math.round(bitmap.width * escala));
-  const altura = Math.max(1, Math.round(bitmap.height * escala));
+// Fallback quando createImageBitmap falha (alguns navegadores/formatos): carrega via
+// <img> a partir de um object URL. Sem isso, a foto sumia em silêncio no upload.
+async function carregarViaImg(file: File): Promise<FonteImagem> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.decoding = 'async';
+    await new Promise<void>((resolver, rejeitar) => {
+      img.onload = () => resolver();
+      img.onerror = () => rejeitar(new Error('não foi possível ler a imagem'));
+      img.src = url;
+    });
+    const largura = img.naturalWidth || img.width;
+    const altura = img.naturalHeight || img.height;
+    if (largura === 0 || altura === 0) throw new Error('imagem com dimensões inválidas');
+    return { fonte: img, largura, altura, fechar: () => URL.revokeObjectURL(url) };
+  } catch (e) {
+    URL.revokeObjectURL(url);
+    throw e;
+  }
+}
+
+async function carregarFonte(file: File): Promise<FonteImagem> {
+  // imageOrientation 'from-image' respeita o EXIF (foto de celular não vira de lado).
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    return { fonte: bitmap, largura: bitmap.width, altura: bitmap.height, fechar: () => bitmap.close() };
+  } catch {
+    return carregarViaImg(file);
+  }
+}
+
+function desenhar(fonte: FonteImagem, ladoMax: number): HTMLCanvasElement {
+  const escala = Math.min(1, ladoMax / Math.max(fonte.largura, fonte.altura));
+  const largura = Math.max(1, Math.round(fonte.largura * escala));
+  const altura = Math.max(1, Math.round(fonte.altura * escala));
   const canvas = document.createElement('canvas');
   canvas.width = largura;
   canvas.height = altura;
@@ -29,7 +65,7 @@ function desenhar(bitmap: ImageBitmap, ladoMax: number): HTMLCanvasElement {
   if (ctx === null) throw new Error('canvas 2d indisponível');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(bitmap, 0, 0, largura, altura);
+  ctx.drawImage(fonte.fonte, 0, 0, largura, altura);
   return canvas;
 }
 
@@ -60,12 +96,12 @@ async function codificarAbaixoDe(
 }
 
 export async function gerarDerivadas(file: File): Promise<Derivadas> {
-  const bitmap = await carregarBitmap(file);
+  const fonte = await carregarFonte(file);
   try {
-    const cheia = await codificarAbaixoDe(desenhar(bitmap, LADO_CHEIA), MAX_CHEIA, 0.88);
-    const mini = await codificarAbaixoDe(desenhar(bitmap, LADO_MINI), MAX_MINI, 0.7);
+    const cheia = await codificarAbaixoDe(desenhar(fonte, LADO_CHEIA), MAX_CHEIA, 0.88);
+    const mini = await codificarAbaixoDe(desenhar(fonte, LADO_MINI), MAX_MINI, 0.7);
     return { cheia, mini };
   } finally {
-    bitmap.close();
+    fonte.fechar();
   }
 }

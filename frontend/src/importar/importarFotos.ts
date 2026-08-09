@@ -42,6 +42,17 @@ function normalizar(s: string): string {
     .toLowerCase();
 }
 
+// Filtro TOLERANTE de imagem: no celular (e com HEIC) o `File.type` costuma vir
+// vazio; se filtrássemos só por `type.startsWith('image/')`, essas fotos sumiam
+// silenciosamente ("imagem não entra"). Aceita por mime OU por extensão do nome.
+export function ehArquivoImagem(f: File): boolean {
+  if (f.type.startsWith('image/')) return true;
+  if (f.type === '' || f.type === 'application/octet-stream') {
+    return /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif|tiff?)$/i.test(f.name);
+  }
+  return false;
+}
+
 // "Cor"/"Cores" como palavra (não casa "corte"/"corpo").
 function nomeEhCor(nome: string): boolean {
   return /(?:^|[^a-z])cor(?:es)?(?:[^a-z]|$)/.test(normalizar(nome));
@@ -123,6 +134,27 @@ function blocoImagemReferencia(campos: Campo[]): Campo | null {
   if (preferido !== undefined) return preferido;
   const qualquer = campos.find((c) => c.tipo === 'imagem' && !nomeEhCor(c.nome));
   return qualquer ?? null;
+}
+
+// Casa o NOME do arquivo (com pontos) com o NOME de um bloco de imagem do registro.
+// Ex.: "imagem.da.referencia.png" -> bloco "Imagem da referência"; "modelagem.png"
+// -> bloco "Modelagem". Um código no início ("4785.imagem.da.referencia.png") é
+// referência (roteamento), não parte do nome do campo, então é ignorado aqui.
+// Blocos de cor ficam de fora (a foto de cor tem lógica própria).
+function blocoImagemPorNomeArquivo(nome: string, campos: Campo[]): Campo | null {
+  const semExt = soNome(nome).replace(/\.[^.]+$/, '');
+  const semRef = semExt.replace(/^\s*\d{2,}[\s._-]*/, ''); // tira o código do começo
+  const alvo = normalizar(semRef.replace(/[._-]+/g, ' ')).trim();
+  if (alvo.length < 3) return null;
+  const imagens = campos.filter((c) => c.tipo === 'imagem' && !nomeEhCor(c.nome));
+  const exato = imagens.find((c) => normalizar(c.nome) === alvo);
+  if (exato !== undefined) return exato;
+  return (
+    imagens.find((c) => {
+      const n = normalizar(c.nome);
+      return n.length >= 3 && (alvo.startsWith(`${n} `) || alvo === n);
+    }) ?? null
+  );
 }
 
 export interface SecaoCor {
@@ -262,10 +294,15 @@ export async function importarNoRegistro(
 
   for (const file of arquivos) {
     const parse = parseNomeArquivo(file.name);
+    const blocoPorNome = blocoImagemPorNomeArquivo(file.name, campos);
     const cor = corDaFoto(parse, secCor, campos, valores);
     const temOndeColocarCor = cor !== null && (secCor !== null || blocoImagemPorCor(campos, cor) !== null);
     try {
-      if (cor !== null && temOndeColocarCor) {
+      if (blocoPorNome !== null) {
+        // O nome do arquivo bate com o nome de um bloco de imagem (ex.:
+        // "imagem.da.referencia.png" -> bloco "Imagem da referência").
+        if (await colocarRef(registro.id, file, blocoPorNome, valores, rel)) rel.refOk += 1;
+      } else if (cor !== null && temOndeColocarCor) {
         if (await colocarCor(registro.id, file, cor, campos, secCor, valores, rel)) rel.corOk += 1;
       } else {
         // Sem cor detectada (ou sem bloco "Cor"): vai para o bloco de imagens da

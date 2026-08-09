@@ -4,6 +4,7 @@ import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
 import { FolhaInferior } from '../ui/FolhaInferior';
 import { criarPlanilhaAutomatica, resumoAuto, type ProgressoAuto } from './criacaoAutomatica';
+import { ehArquivoImagem } from './importarFotos';
 import './importar.css';
 
 interface Props {
@@ -67,13 +68,14 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
         <FolhaInferior titulo="Criação automático" onFechar={fechar}>
           <div className="importar-zip">
             <p className="importar-zip__ajuda">
-              Cole um texto (de qualquer lugar). Cada <strong>ponto final</strong> (.) vira um{' '}
-              <strong>bloco</strong> do registro; escreva <code>cor: rosa</code> para um bloco de
-              cor e <code>4785</code> (ou <code>ref: 4785</code>) para a referência. Para criar{' '}
-              <strong>mais de um</strong> registro, separe-os com uma linha só com <code>---</code>.
-              As imagens (opcional) entram pelo nome: <code>4785.png</code> vai para as fotos da
+              Cole um texto. Cada <strong>ponto final</strong> (.) — ou item numerado{' '}
+              (<code>1 …</code> <code>2 …</code>) — vira um <strong>bloco</strong>. Escreva{' '}
+              <code>cor: rosa</code> para um bloco de cor, <code>4785</code> (ou <code>ref: 4785</code>)
+              para a referência e <code>imagem da referência</code> para o bloco de fotos. Vários
+              registros: separe com uma linha só com <code>---</code>. As imagens (opcional) entram
+              pelo <strong>nome do campo</strong>: <code>imagem.da.referencia.png</code> nas fotos da
               referência; <code>cor.rosa.png</code>, <code>rosa.png</code> ou{' '}
-              <code>4785.cor.rosa.png</code> entram no bloco de cor <strong>rosa</strong>.
+              <code>4785.cor.rosa.png</code> no bloco de cor <strong>rosa</strong>.
             </p>
 
             <Campo
@@ -101,7 +103,7 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
               multiple
               accept="image/*"
               hidden
-              onChange={(e) => setImagens(Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/')))}
+              onChange={(e) => setImagens(Array.from(e.target.files ?? []).filter(ehArquivoImagem))}
             />
             <Botao variante="padrao" onClick={() => inputRef.current?.click()} disabled={ocupado}>
               <ImagePlus size={16} />
