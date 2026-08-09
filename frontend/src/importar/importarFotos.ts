@@ -15,7 +15,7 @@
 import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
 import { enviarFoto } from '../imagens/enviar';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
-import { camposDoRegistro } from '../preencher/derivarResumo';
+import { camposDoRegistro, camposReferencia, formatarValor } from '../preencher/derivarResumo';
 import { chaveReferencia, codigoInicial } from '../integracao/merge';
 
 // Cria um bloco de imagem tentando um teto alto (backend novo aceita até 30) e
@@ -178,6 +178,85 @@ export function secaoImagemReferencia(campos: Campo[]): SecaoFoto | null {
   return { secao: pref, subFoto };
 }
 
+// Subcampo/bloco cujo NOME é "Referência"/"Ref." (mesma regra do título do registro).
+function nomeEhReferencia(nome: string): boolean {
+  return /(?:^|[^a-z])(?:referencia|ref\.?)/.test(normalizar(nome));
+}
+
+// Uma LINHA específica de uma seção de referência (ex.: seção "R" da Modelagem, com
+// subcampo "Referência" + "Foto"). Devolve a seção, o subcampo de foto e o ÍNDICE da
+// linha cujo código de referência casa com `refCode`. Assim, num registro com várias
+// referências (4512, 5231...), a foto "5231.png" cai na LINHA da 5231.
+interface SecaoRefLinha {
+  secao: Campo;
+  subFoto: SubCampo;
+  indice: number;
+}
+function secaoReferenciaComLinha(
+  campos: Campo[],
+  valores: Record<string, unknown>,
+  refCode: string,
+): SecaoRefLinha | null {
+  const alvo = codigoInicial(refCode);
+  if (alvo === '') return null;
+  for (const c of campos) {
+    if (c.tipo !== 'secao') continue;
+    const subs = c.config.subcampos ?? [];
+    const subRef = subs.find((s) => nomeEhReferencia(s.nome));
+    const subFoto = subs.find((s) => s.tipo === 'imagem');
+    if (subRef === undefined || subFoto === undefined) continue;
+    const linhas = linhasDe(valores[c.id]);
+    const indice = linhas.findIndex((l) => {
+      const v = l[subRef.id];
+      const s = typeof v === 'number' ? String(v) : typeof v === 'string' ? v : '';
+      return s !== '' && codigoInicial(s) === alvo;
+    });
+    if (indice >= 0) return { secao: c, subFoto, indice };
+  }
+  return null;
+}
+
+// Posição escrita no nome ("5.png" ou "4828.5.png") -> ÍNDICE (0-based) do bloco no
+// corpo. O usuário conta a partir do 1º bloco de CONTEÚDO, pulando a data do topo
+// (ex.: Modelagem: I=1, O=2, S=3, Imagens=4, R=5). Só age quando, tirando um código
+// de referência do começo, sobra apenas um número pequeno.
+function posicaoDoNome(nome: string, campos: Campo[]): number | null {
+  const semExt = soNome(nome).replace(/\.[^.]+$/, '');
+  const resto = semExt.replace(/^\s*\d{2,}[\s._-]*/, '');
+  const m = resto.match(/^\s*(\d{1,2})\s*$/);
+  if (m?.[1] === undefined) return null;
+  const n = Number(m[1]);
+  if (n < 1) return null;
+  const posicionaveis: number[] = [];
+  campos.forEach((c, i) => {
+    if (c.tipo !== 'data' && c.tipo !== 'datahora') posicionaveis.push(i);
+  });
+  return posicionaveis[n - 1] ?? null;
+}
+
+// TODAS as referências de um registro: blocos de referência do topo + cada linha de
+// uma seção com subcampo "Referência". Usado para indexar o registro por todos os
+// códigos (senão "5231.png" não acharia um registro indexado só pela 1ª referência).
+export function todasReferencias(campos: Campo[], registro: Registro): string[] {
+  const refs: string[] = [];
+  for (const c of camposReferencia(campos)) {
+    const cod = codigoInicial(formatarValor(c, registro.valores[c.id]));
+    if (cod !== '') refs.push(cod);
+  }
+  for (const c of campos) {
+    if (c.tipo !== 'secao') continue;
+    const subRef = (c.config.subcampos ?? []).find((s) => nomeEhReferencia(s.nome));
+    if (subRef === undefined) continue;
+    for (const linha of linhasDe(registro.valores[c.id])) {
+      const v = linha[subRef.id];
+      const s = typeof v === 'number' ? String(v) : typeof v === 'string' ? v : '';
+      const cod = codigoInicial(s);
+      if (cod !== '') refs.push(cod);
+    }
+  }
+  return [...new Set(refs)];
+}
+
 export interface SecaoCor {
   secao: Campo;
   subCor: SubCampo | null; // subcampo de texto/seleção com o NOME da cor
@@ -188,11 +267,18 @@ export interface SecaoCor {
 // texto/seleção (se houver) guarda o nome da cor (o "título").
 export function secaoCor(campos: Campo[]): SecaoCor | null {
   for (const c of campos) {
-    if (c.tipo !== 'secao' || !nomeEhCor(c.nome)) continue;
+    if (c.tipo !== 'secao') continue;
     const subs = c.config.subcampos ?? [];
     const subFoto = subs.find((s) => s.tipo === 'imagem');
     if (subFoto === undefined) continue;
-    const subCor = subs.find((s) => s.tipo === 'texto' || s.tipo === 'selecao') ?? null;
+    // Subcampo que guarda o NOME da cor (chamado "Cor"), se houver.
+    const subCorNomeado = subs.find(
+      (s) => (s.tipo === 'texto' || s.tipo === 'selecao') && nomeEhCor(s.nome),
+    );
+    // A seção é "de cor" quando o NOME dela é cor OU tem um subcampo "Cor" (ex.: a
+    // seção "......." da Modelagem, cujo subcampo é "Cor" + "Foto").
+    if (!nomeEhCor(c.nome) && subCorNomeado === undefined) continue;
+    const subCor = subCorNomeado ?? subs.find((s) => s.tipo === 'texto' || s.tipo === 'selecao') ?? null;
     return { secao: c, subCor, subFoto };
   }
   return null;
@@ -317,25 +403,45 @@ export type Destino =
   | { tipo: 'blocoNome'; bloco: Campo }
   | { tipo: 'cor'; cor: string }
   | { tipo: 'blocoRef'; bloco: Campo }
-  | { tipo: 'secaoRef'; sec: SecaoFoto }
+  | { tipo: 'refLinha'; alvo: SecaoRefLinha }
   | { tipo: 'nenhum' };
 
 // Decide (SEM rede) para onde uma foto vai, pelo NOME do arquivo e pela estrutura do
-// registro. Ordem: nome do bloco -> cor -> bloco de imagem no topo -> seção de
-// referência (Modelagem) -> nenhum. Pura: dá para testar sem subir nada.
+// registro. Ordem: posição -> nome do bloco -> cor -> LINHA da referência -> bloco de
+// imagem no topo -> seção de referência (1ª linha) -> nenhum. Pura: dá para testar.
 export function decidirDestino(
   nome: string,
   campos: Campo[],
   valores: Record<string, unknown>,
 ): Destino {
+  // 1. Posição explícita: "5.png" (ou "4828.5.png") -> 5º bloco de conteúdo.
+  const pos = posicaoDoNome(nome, campos);
+  if (pos !== null) {
+    const bloco = campos[pos];
+    if (bloco?.tipo === 'imagem') return { tipo: 'blocoNome', bloco };
+    if (bloco?.tipo === 'secao') {
+      const subFoto = (bloco.config.subcampos ?? []).find((s) => s.tipo === 'imagem');
+      if (subFoto !== undefined) return { tipo: 'refLinha', alvo: { secao: bloco, subFoto, indice: 0 } };
+    }
+  }
+  // 2. Nome do arquivo casa com o nome de um bloco de imagem.
   const blocoPorNome = blocoImagemPorNomeArquivo(nome, campos);
   if (blocoPorNome !== null) return { tipo: 'blocoNome', bloco: blocoPorNome };
+  // 3. Cor.
   const cor = corDaFoto(parseNomeArquivo(nome), secaoCor(campos), campos, valores);
   if (cor !== null && temDestinoDeCor(campos, cor)) return { tipo: 'cor', cor };
+  // 4. Referência específica -> a LINHA da seção de referência que casa com o código.
+  const ref = refDoNome(nome);
+  if (ref !== null) {
+    const linha = secaoReferenciaComLinha(campos, valores, ref);
+    if (linha !== null) return { tipo: 'refLinha', alvo: linha };
+  }
+  // 5. Bloco de imagem no topo (ex.: "Imagem da referência", "Imagens de Modelagens").
   const blocoRef = blocoImagemReferencia(campos);
   if (blocoRef !== null) return { tipo: 'blocoRef', bloco: blocoRef };
+  // 6. Foto da referência mora dentro de uma seção (1ª linha).
   const secRef = secaoImagemReferencia(campos);
-  if (secRef !== null) return { tipo: 'secaoRef', sec: secRef };
+  if (secRef !== null) return { tipo: 'refLinha', alvo: { secao: secRef.secao, subFoto: secRef.subFoto, indice: 0 } };
   return { tipo: 'nenhum' };
 }
 
@@ -367,9 +473,9 @@ export async function importarNoRegistro(
         if (await colocarCor(registro.id, file, destino.cor, campos, secCor, valores, rel)) rel.corOk += 1;
       } else if (destino.tipo === 'blocoRef') {
         if (await colocarRef(registro.id, file, destino.bloco, valores, rel)) rel.refOk += 1;
-      } else if (destino.tipo === 'secaoRef') {
-        // Formato Modelagem: a foto da referência mora dentro de uma seção.
-        if (await colocarRefEmSecao(registro.id, file, destino.sec, valores, rel)) rel.refOk += 1;
+      } else if (destino.tipo === 'refLinha') {
+        // Linha certa de uma seção de referência (ex.: seção "R" da Modelagem) ou 1ª linha.
+        if (await colocarEmLinha(registro.id, file, destino.alvo, valores, rel)) rel.refOk += 1;
       } else {
         rel.semBloco.push(file.name);
       }
@@ -414,18 +520,22 @@ async function colocarRef(
 // Coloca uma foto de referência DENTRO de uma seção (1ª linha; cria uma se não
 // houver). Para registros no formato Modelagem, onde a foto da referência mora numa
 // seção (número + imagem) em vez de num bloco de imagem no topo.
-async function colocarRefEmSecao(
+async function colocarEmLinha(
   registroId: string,
   file: File,
-  sec: SecaoFoto,
+  alvo: SecaoRefLinha,
   valores: Record<string, unknown>,
   rel: RelatorioImport,
 ): Promise<boolean> {
-  const { secao, subFoto } = sec;
+  const { secao, subFoto, indice } = alvo;
   const max = subFoto.config.maxFotos ?? 1;
   const linhas = linhasDe(valores[secao.id]).map((l) => ({ ...l }));
-  let linha = linhas[0];
+  let linha = linhas[indice];
   if (linha === undefined) {
+    if (indice !== 0) {
+      rel.semBloco.push(file.name);
+      return false;
+    }
     linha = {};
     linhas.push(linha);
   }
@@ -514,11 +624,17 @@ async function indexarPorReferencia(colecao: Colecao): Promise<Map<string, Regis
   for (let i = 0; i < 1000; i += 1) {
     const pagina = await api.listarRegistros(colecao.id, cursor);
     for (const r of pagina) {
-      const cod = chaveReferencia(camposDoRegistro(colecao, r), r);
-      if (cod === null) continue;
-      const lista = mapa.get(cod);
-      if (lista === undefined) mapa.set(cod, [r]);
-      else lista.push(r);
+      const body = camposDoRegistro(colecao, r);
+      // Indexa por TODAS as referências (topo + linhas da seção "R"); cai no título
+      // só quando não há nenhuma. Assim "5231.png" acha o registro mesmo que 5231
+      // seja a 2ª referência de dentro dele.
+      const refs = todasReferencias(body, r);
+      const chaves = refs.length > 0 ? refs : [chaveReferencia(body, r)].filter((c): c is string => c !== null);
+      for (const cod of chaves) {
+        const lista = mapa.get(cod);
+        if (lista === undefined) mapa.set(cod, [r]);
+        else if (!lista.includes(r)) lista.push(r);
+      }
     }
     if (pagina.length < PAGINA) break;
     const ultimo = pagina[pagina.length - 1];
