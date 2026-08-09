@@ -557,8 +557,9 @@ export function Integrado(): JSX.Element {
                     grupo={g}
                     integracaoNome={integracao.nome}
                     podeApagar={podeApagar}
-                    aoEditar={() => {
-                      setEditando(g);
+                    aoEditar={(gg, foco) => {
+                      setFocoEditor(foco);
+                      setEditando(gg);
                     }}
                     aoApagar={apagarNaBusca}
                     aoAtualizarRegistro={(r) => {
@@ -761,7 +762,8 @@ function PreviaCorpo({
   const [alvo, setAlvo] = useState<number | null>(null);
 
   useEffect(() => {
-    const root = previaRef.current?.closest('.folha__corpo') ?? null;
+    // Na prévia (folha) a raiz é .folha__corpo; na BUSCA (inline) é .rolagem.
+    const root = previaRef.current?.closest('.folha__corpo, .rolagem') ?? null;
     const obs = new IntersectionObserver(
       (entries) => {
         setVisiveis((prev) => {
@@ -931,7 +933,7 @@ function BlocoIntegrado({
   grupo: RegistroIntegrado;
   integracaoNome: string;
   podeApagar: boolean;
-  aoEditar: (g: RegistroIntegrado) => void;
+  aoEditar: (g: RegistroIntegrado, foco?: number) => void;
   aoApagar: (g: RegistroIntegrado) => Promise<void>;
   aoAtualizarRegistro?: (r: Registro) => void;
 }): JSX.Element {
@@ -952,7 +954,11 @@ function BlocoIntegrado({
           <AcaoApagarIntegrado grupo={grupo} podeApagar={podeApagar} aoApagar={aoApagar} />
         </div>
       </div>
-      <PreviaCorpo grupo={grupo} aoAtualizarRegistro={aoAtualizarRegistro} />
+      <PreviaCorpo
+        grupo={grupo}
+        aoAtualizarRegistro={aoAtualizarRegistro}
+        aoPreencher={(foco) => aoEditar(grupo, foco)}
+      />
     </article>
   );
 }

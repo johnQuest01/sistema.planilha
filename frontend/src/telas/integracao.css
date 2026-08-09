@@ -498,7 +498,8 @@
   border: 1px solid var(--linha);
   border-radius: var(--raio-2);
   box-shadow: var(--sombra);
-  overflow: hidden;
+  /* visible (não hidden): deixa o cabeçalho sticky grudar no topo da .rolagem. */
+  overflow: visible;
 }
 /* Mobile-first: título em cima (largura total, mostrado por inteiro) e as ações
    embaixo — mesmo padrão das outras planilhas (RegistroPreview). Assim o título
@@ -510,6 +511,14 @@
   gap: var(--e2);
   padding: var(--e3);
   border-bottom: 1px solid var(--linha);
+  /* Cabeçalho (título + "Preencher / alterar" + lixeira) FIXO no topo ao rolar o
+     resultado da busca — os botões ficam sempre alcançáveis. Vale mobile e desktop. */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--papel);
+  border-top-left-radius: var(--raio-2);
+  border-top-right-radius: var(--raio-2);
 }
 .integ-resultado__titulo-area {
   display: flex;
