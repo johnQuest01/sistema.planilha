@@ -399,6 +399,40 @@ function temDestinoDeCor(campos: Campo[], cor: string): boolean {
   );
 }
 
+// Cor detectada só pelo NOME do arquivo (sem contexto): marcador "cor.X" explícito ou
+// sufixo que é cor conhecida ("4587.vermelho"). Decide se o arquivo é foto de cor.
+export function corSimplesDoNome(nome: string): string | null {
+  const p = parseNomeArquivo(nome);
+  if (p.cor !== null) return p.cor;
+  if (p.sufixo !== null && ehCorConhecida(p.sufixo)) return p.sufixo;
+  return null;
+}
+
+// O registro já tem ALGUM destino de cor (seção "Cor", bloco por cor de alguma das
+// cores, ou bloco "Cor" genérico)?
+export function temAlgumDestinoDeCor(campos: Campo[], cores: string[]): boolean {
+  if (secaoCor(campos) !== null || blocoImagemCorGenerico(campos) !== null) return true;
+  return cores.some((c) => blocoImagemPorCor(campos, c) !== null);
+}
+
+// Cria uma seção "Cor" nova (nome da cor + foto por linha) para anexar ao corpo de um
+// registro que ainda NÃO tem bloco de cor — sem afetar os outros registros.
+function novaSecaoCor(colecaoId: string, posicao: number): Campo {
+  return {
+    id: crypto.randomUUID(),
+    colecaoId,
+    nome: 'Cor',
+    tipo: 'secao',
+    ordem: posicao * 100,
+    config: {
+      subcampos: [
+        { id: crypto.randomUUID(), nome: 'Cor', tipo: 'texto', config: {} },
+        { id: crypto.randomUUID(), nome: 'Foto', tipo: 'imagem', config: { maxFotos: 30 } },
+      ],
+    },
+  };
+}
+
 export type Destino =
   | { tipo: 'blocoNome'; bloco: Campo }
   | { tipo: 'cor'; cor: string }
@@ -454,10 +488,23 @@ export async function importarNoRegistro(
   aoProgresso?: (p: ProgressoImport) => void,
 ): Promise<{ registro: Registro; relatorio: RelatorioImport }> {
   const rel = relatorioVazio();
-  const campos = camposDoRegistro(colecao, registro);
+  let campos = camposDoRegistro(colecao, registro);
   const valores: Record<string, unknown> = { ...registro.valores };
   const total = arquivos.length;
   let feito = 0;
+
+  // Se há foto(s) de cor e o registro NÃO tem nenhum destino de cor, cria uma seção
+  // "Cor" só neste registro (corpo próprio). Assim a foto de cor entra mesmo em
+  // registros que ainda não tinham bloco de cor — cada registro fica com sua própria
+  // ordem de blocos, sem afetar os demais.
+  const coresDosArquivos = arquivos
+    .map((f) => corSimplesDoNome(f.name))
+    .filter((c): c is string => c !== null);
+  let corpoNovo: Campo[] | null = null;
+  if (coresDosArquivos.length > 0 && !temAlgumDestinoDeCor(campos, coresDosArquivos)) {
+    campos = [...campos, novaSecaoCor(colecao.id, campos.length)];
+    corpoNovo = campos;
+  }
 
   const secCor = secaoCor(campos);
 
@@ -486,8 +533,13 @@ export async function importarNoRegistro(
     aoProgresso?.({ feito, total });
   }
 
-  // Um PATCH só com tudo que mudou neste registro.
+  // Se criamos a seção "Cor", persiste o corpo novo ANTES de gravar os valores (senão
+  // o servidor descartaria as linhas de cor, cujo bloco ainda não existia no registro).
   let atualizado = registro;
+  if (corpoNovo !== null && rel.corOk > 0) {
+    atualizado = await api.salvarCorpoRegistro(registro.id, corpoNovo);
+  }
+  // Um PATCH só com tudo que mudou neste registro.
   if (rel.refOk > 0 || rel.corOk > 0) {
     atualizado = await api.editarRegistro(registro.id, valores);
   }
