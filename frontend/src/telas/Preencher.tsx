@@ -18,6 +18,7 @@ import { FolhaInferior } from '../ui/FolhaInferior';
 import { useFecharAoVoltar } from '../ui/useVoltar';
 import { FormBloco, type DadosBloco } from './FormBloco';
 import { BotaoImportarFotos } from '../importar/BotaoImportarFotos';
+import { BotaoConversao } from '../importar/BotaoConversao';
 import '../preencher/preencher.css';
 
 const PAGINA = 20;
@@ -394,6 +395,10 @@ export function Preencher({
           Adicionar campo
         </Botao>
         <BotaoImportarFotos
+          colecao={colecao}
+          aoConcluir={(atualizados) => atualizados.forEach(aoAtualizar)}
+        />
+        <BotaoConversao
           colecao={colecao}
           aoConcluir={(atualizados) => atualizados.forEach(aoAtualizar)}
         />
