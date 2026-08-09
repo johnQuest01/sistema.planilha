@@ -512,6 +512,24 @@
   flex-direction: column;
   gap: 6px;
 }
+/* Botão "Usar como título" abaixo de cada campo de texto (marca o bloco como fonte
+   do título do registro). */
+.ficha__titulo-btn {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tinta-2);
+  background: transparent;
+  border: 1px solid var(--linha-2);
+  border-radius: 999px;
+}
+.ficha__titulo-btn--on {
+  color: var(--tinta);
+  background: rgba(217, 138, 61, 0.16);
+  border-color: var(--fita);
+}
 .ficha__rotulo {
   font-family: var(--mono);
   font-size: 13px;

@@ -38,6 +38,7 @@ export interface ConfigCampo {
   autoAgora?: boolean;    // data/datahora: já vem com a data/hora atual ao criar registro
   subcampos?: SubCampo[]; // secao: os "quadradinhos" que se repetem por linha
   titulo?: string;        // opcional: cabeçalho exibido ACIMA do bloco (qualquer tipo)
+  ehTitulo?: boolean;     // marca o bloco como fonte do TÍTULO do registro (botão "Título")
   [k: string]: ValorJson | undefined;
 }
 

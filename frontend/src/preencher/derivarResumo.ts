@@ -102,7 +102,24 @@ function linhasDeSecao(registro: Registro, campoId: string): Record<string, unkn
 //  - um ou mais blocos de topo cujo nome é "Referência"/"ref.", e/ou
 //  - um subcampo "Referência" dentro de uma seção (uma parte por LINHA da seção).
 // Ex. com uma seção de 3 linhas -> "4578 | 5486 | 4458". Sem nada -> "Sem nome".
+// Blocos de topo marcados como "título" pelo botão (config.ehTitulo). Quando existe
+// ao menos um, ELE manda no título (em qualquer planilha) — o nome "Referência" vira
+// só o padrão quando nada foi marcado.
+export function camposTituloMarcados(campos: Campo[]): Campo[] {
+  return campos.filter((c) => TIPOS_TITULO.includes(c.tipo) && c.config.ehTitulo === true);
+}
+
 export function tituloDoRegistro(campos: Campo[], registro: Registro): string {
+  const marcados = camposTituloMarcados(campos);
+  if (marcados.length > 0) {
+    // Valor do bloco marcado; se vazio, o cabeçalho (config.titulo) ou o nome do bloco.
+    const partesM = marcados.map((c) => {
+      const v = formatarValor(c, registro.valores[c.id]).trim();
+      return v !== '' ? v : (c.config.titulo?.trim() ?? '') || c.nome;
+    });
+    const juntos = partesM.filter((p) => p.trim() !== '').join(' | ');
+    return juntos === '' ? 'Sem nome' : juntos;
+  }
   const partes: string[] = [];
   for (const c of campos) {
     if (TIPOS_TITULO.includes(c.tipo) && nomeEhReferencia(c.nome)) {
@@ -139,6 +156,9 @@ export interface AlvoTitulo {
 const TIPOS_RENOMEAR: TipoCampo[] = ['texto', 'paragrafo', 'numero', 'selecao'];
 
 export function alvoTitulo(campos: Campo[]): AlvoTitulo | undefined {
+  // Bloco marcado como título (botão Título) é o alvo do renomear, se houver.
+  const marcado = campos.find((c) => TIPOS_RENOMEAR.includes(c.tipo) && c.config.ehTitulo === true);
+  if (marcado !== undefined) return { campoId: marcado.id, tipo: marcado.tipo };
   const topo = campos.find((c) => TIPOS_RENOMEAR.includes(c.tipo) && nomeEhReferencia(c.nome));
   if (topo !== undefined) return { campoId: topo.id, tipo: topo.tipo };
   for (const c of campos) {
@@ -196,7 +216,7 @@ export function patchAlvoTitulo(
 // Resumo = próximos até 3 campos de texto/número/data/seleção (fora os de
 // referência de topo), com valor preenchido.
 export function resumoDoRegistro(campos: Campo[], registro: Registro): string {
-  const refs = new Set(camposReferencia(campos).map((c) => c.id));
+  const refs = new Set([...camposReferencia(campos), ...camposTituloMarcados(campos)].map((c) => c.id));
   const tiposResumo: Campo['tipo'][] = ['texto', 'numero', 'data', 'selecao'];
   const partes: string[] = [];
   for (const c of campos) {

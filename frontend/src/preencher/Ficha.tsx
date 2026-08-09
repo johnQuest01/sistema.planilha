@@ -31,11 +31,13 @@ interface Props {
   aoApagar: (id: string) => void;
   /** Cria um novo registro a partir deste (mesma estrutura em branco ou duplicado). */
   aoCriarDerivado: (base: { campos?: Campo[]; valores: Record<string, unknown> }) => Promise<void>;
+  /** Atualiza os blocos da COLEÇÃO (ex.: marcar um bloco como título vale p/ toda a planilha). */
+  aoMudarCampos?: (fn: (campos: Campo[]) => Campo[]) => void;
 }
 
 const DEBOUNCE_MS = 400;
 
-export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCriarDerivado }: Props): JSX.Element {
+export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCriarDerivado, aoMudarCampos }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   // Qualquer usuário logado pode enviar o registro para a lixeira (soft-delete, dá para
@@ -196,6 +198,29 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
     }
   }
 
+  // Marca/desmarca um bloco como TÍTULO do registro. Em esquema compartilhado, muda o
+  // bloco da COLEÇÃO (vale para toda a planilha). Em corpo próprio, muda só este registro.
+  async function alternarTitulo(campoId: string): Promise<void> {
+    const campo = corpo.find((c) => c.id === campoId);
+    if (campo === undefined) return;
+    const novoConfig = { ...campo.config, ehTitulo: !(campo.config.ehTitulo === true) };
+    if (Array.isArray(registro.campos) && registro.campos.length > 0) {
+      await salvarCorpo(corpo.map((c) => (c.id === campoId ? { ...c, config: novoConfig } : c)));
+      return;
+    }
+    setErroSalvar(null);
+    try {
+      const atualizado = await api.editarCampo(campoId, { config: novoConfig });
+      aoMudarCampos?.((cs) => cs.map((c) => (c.id === campoId ? atualizado : c)));
+    } catch (e) {
+      setErroSalvar(
+        e instanceof ErroApi
+          ? `Não foi possível marcar o título: ${e.message}`
+          : 'Não foi possível marcar o título.',
+      );
+    }
+  }
+
   // Reflete o registro depois de importar fotos (valores já atualizados no servidor).
   function aoImportarFotos(atualizados: Registro[]): void {
     const r = atualizados[0];
@@ -299,6 +324,17 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
                 }}
                 aoSairFoco={() => void flush()}
               />
+            )}
+            {(['texto', 'paragrafo', 'numero', 'selecao'] as Campo['tipo'][]).includes(campo.tipo) && (
+              <button
+                type="button"
+                className={`ficha__titulo-btn${campo.config.ehTitulo === true ? ' ficha__titulo-btn--on' : ''}`}
+                onClick={() => void alternarTitulo(campo.id)}
+                disabled={salvandoCorpo}
+                title="Usar o conteúdo deste campo como título do registro"
+              >
+                {campo.config.ehTitulo === true ? '★ Título do registro' : 'Usar como título'}
+              </button>
             )}
           </div>
         ))}

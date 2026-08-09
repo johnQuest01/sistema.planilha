@@ -188,10 +188,16 @@ export function Preencher({
     });
   }, []);
 
-  async function novo(valores?: Record<string, unknown>): Promise<void> {
+  async function novo(): Promise<void> {
     try {
-      const iniciais = valores ?? valoresVaziosDe(colecao.campos);
-      const r = await api.criarRegistro(colecao.id, iniciais);
+      // Novo registro herda a ESTRUTURA (blocos) do registro mais recente (topo da
+      // lista), em branco — inclui os blocos e o que foi marcado como título. Sem
+      // nenhum registro ainda, usa o esquema da coleção.
+      const base = registros?.[0];
+      const corpo = base !== undefined ? camposDoRegistro(colecao, base) : colecao.campos;
+      const proprio =
+        base !== undefined && Array.isArray(base.campos) && base.campos.length > 0 ? corpo : undefined;
+      const r = await api.criarRegistro(colecao.id, valoresVaziosDe(corpo), proprio);
       inserirNovo(r);
       setAberta(r);
     } catch (e) {
@@ -532,6 +538,7 @@ export function Preencher({
           aoAtualizar={aoAtualizar}
           aoApagar={aoApagar}
           aoCriarDerivado={criarDerivado}
+          aoMudarCampos={aoMudarCampos}
         />
       )}
     </>

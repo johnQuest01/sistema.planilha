@@ -10,6 +10,8 @@ const subConfigSchema = z
     autoAgora: z.boolean().optional(),
     // maxFotos: só para subcampo de imagem. Mesmo teto do bloco de imagem (1..30).
     maxFotos: z.number().int().min(1).max(30).optional(),
+    // ehTitulo: marca o subcampo como fonte do título do registro (botão "Título").
+    ehTitulo: z.boolean().optional(),
   })
   .strict();
 
@@ -52,6 +54,8 @@ const configSchema = z
     subcampos: z.array(subCampoSchema).min(1).max(50).optional(),
     // opcional: cabeçalho exibido acima do bloco (qualquer tipo).
     titulo: z.string().trim().max(80).optional(),
+    // marca o bloco como fonte do título do registro (botão "Título").
+    ehTitulo: z.boolean().optional(),
   })
   .strict();
 
