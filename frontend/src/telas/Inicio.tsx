@@ -29,9 +29,27 @@ export function Inicio(): JSX.Element {
   const [apagandoId, setApagandoId] = useState<string | null>(null);
   const [arquivandoId, setArquivandoId] = useState<string | null>(null);
   const [arquivandoIntegId, setArquivandoIntegId] = useState<string | null>(null);
+  const [ajudaAberta, setAjudaAberta] = useState(() => {
+    try {
+      if (sessionStorage.getItem('mostruario_ajuda_oculta') === '1') return false;
+      return sessionStorage.getItem('mostruario_ajuda_inicio') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   // Só o dono do workspace (Bruno) arquiva/desarquiva e vê as arquivadas.
   const ehDono = usuario?.podeGerirSenhas === true;
+
+  function fecharAjuda(): void {
+    setAjudaAberta(false);
+    try {
+      sessionStorage.removeItem('mostruario_ajuda_inicio');
+      sessionStorage.setItem('mostruario_ajuda_oculta', '1');
+    } catch {
+      /* ignore */
+    }
+  }
 
   function podeApagar(c: ColecaoResumo): boolean {
     return usuario !== null && (usuario.papel === 'dono' || c.criadoPor === usuario.id);
@@ -165,6 +183,19 @@ export function Inicio(): JSX.Element {
     };
   }, [contaId]);
 
+  // Conta nova ou Home vazia: mostra o cartão de ajuda (até o usuário fechar).
+  useEffect(() => {
+    if (colecoes === null) return;
+    try {
+      if (sessionStorage.getItem('mostruario_ajuda_oculta') === '1') return;
+      if (sessionStorage.getItem('mostruario_ajuda_inicio') === '1' || colecoes.length === 0) {
+        setAjudaAberta(true);
+      }
+    } catch {
+      if (colecoes.length === 0) setAjudaAberta(true);
+    }
+  }, [colecoes]);
+
   async function criar(e: FormEvent): Promise<void> {
     e.preventDefault();
     const limpo = nome.trim();
@@ -232,6 +263,29 @@ export function Inicio(): JSX.Element {
       <TopoApp />
       {vazio ? (
         <div className="faixa">
+          {ajudaAberta && (
+            <div className="inicio-ajuda" role="region" aria-label="Como começar">
+              <button type="button" className="inicio-ajuda__fechar" aria-label="Fechar ajuda" onClick={fecharAjuda}>
+                ×
+              </button>
+              <h2 className="inicio-ajuda__titulo">Como criar suas planilhas</h2>
+              <ol className="inicio-ajuda__lista">
+                <li>
+                  Use <strong>Criação automático</strong>: cole o texto, dê um nome e o app monta
+                  os registros com blocos (referência, cor, fotos…).
+                </li>
+                <li>
+                  Escreva o nome do bloco no texto — ex.: <strong>cor: rosa</strong>,{' '}
+                  <strong>4785</strong>, <strong>modelagem</strong>, <strong>observação:</strong> —
+                  e ele aparece no registro com esse título.
+                </li>
+                <li>
+                  Ou crie <strong>do zero</strong> / importe um backup. Depois, em Integrações, una
+                  planilhas pela mesma referência.
+                </li>
+              </ol>
+            </div>
+          )}
           <div className="inicio-vazio">
             <div className="corte inicio-vazio__corte" aria-hidden="true" />
             <h1 className="inicio-vazio__titulo">Nenhuma planilha ainda</h1>
@@ -265,6 +319,24 @@ export function Inicio(): JSX.Element {
         </div>
       ) : (
         <div className="faixa faixa--app">
+            {ajudaAberta && (
+              <div className="inicio-ajuda" role="region" aria-label="Como começar">
+                <button type="button" className="inicio-ajuda__fechar" aria-label="Fechar ajuda" onClick={fecharAjuda}>
+                  ×
+                </button>
+                <h2 className="inicio-ajuda__titulo">Dica rápida</h2>
+                <ol className="inicio-ajuda__lista">
+                  <li>
+                    <strong>Criação automático</strong> cola texto e cria blocos no registro pelo
+                    nome (ex.: <strong>cor: azul</strong>, <strong>modelagem</strong>).
+                  </li>
+                  <li>
+                    Em <strong>Integrações</strong>, una planilhas que compartilham a mesma
+                    referência.
+                  </li>
+                </ol>
+              </div>
+            )}
             <div className="inicio-cabeca">
               <h1 className="inicio-cabeca__titulo">Suas planilhas</h1>
               <Link to="/integracoes" className="btn">

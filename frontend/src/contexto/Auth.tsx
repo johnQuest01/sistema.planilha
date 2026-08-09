@@ -108,6 +108,12 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
       setEstado({ fase: 'logado', usuario });
       setAvisoPedido(null);
       limparCache();
+      // Home mostra um cartão rápido de como criar planilhas (criação automática).
+      try {
+        sessionStorage.setItem('mostruario_ajuda_inicio', '1');
+      } catch {
+        /* ignore */
+      }
       await recarregarContas();
     },
     [recarregarContas],

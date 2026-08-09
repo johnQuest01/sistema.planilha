@@ -143,6 +143,108 @@ export interface BlocoInfo {
   cores: string[];
 }
 
+/** Tipo de bloco que o estoque cria no registro. */
+export type TipoEstoque = 'imagem' | 'texto' | 'cor' | 'referencia';
+
+export interface EntradaEstoque {
+  /** Como a pessoa escreve (sem acento, minúsculo). */
+  chaves: string[];
+  /** Título que aparece no registro. */
+  titulo: string;
+  tipo: TipoEstoque;
+  /** Texto curto pro cartão de ajuda na UI. */
+  dica: string;
+}
+
+// Estoque: nome escrito no texto → bloco que nasce no registro.
+// Ampliar esta lista deixa a criação automática mais “inteligente” sem NLP.
+export const ESTOQUE_BLOCOS: EntradaEstoque[] = [
+  {
+    chaves: [
+      'imagem', 'imagens', 'foto', 'fotos',
+      'imagem da referencia', 'imagens da referencia',
+      'foto da referencia', 'fotos da referencia',
+      'imagem de referencia', 'imagens de referencia',
+      'foto de referencia', 'fotos de referencia',
+    ],
+    titulo: 'Imagem da referência',
+    tipo: 'imagem',
+    dica: 'bloco de fotos da referência',
+  },
+  {
+    chaves: ['modelagem', 'imagem da modelagem', 'fotos da modelagem', 'foto da modelagem'],
+    titulo: 'Modelagem',
+    tipo: 'imagem',
+    dica: 'bloco de fotos chamado Modelagem',
+  },
+  {
+    chaves: ['caderno', 'foto do caderno', 'fotos do caderno'],
+    titulo: 'Caderno',
+    tipo: 'imagem',
+    dica: 'bloco de fotos chamado Caderno',
+  },
+  {
+    chaves: ['oficina', 'foto da oficina', 'fotos da oficina'],
+    titulo: 'Oficina',
+    tipo: 'imagem',
+    dica: 'bloco de fotos chamado Oficina',
+  },
+  {
+    chaves: ['cor', 'cores'],
+    titulo: 'Cor',
+    tipo: 'cor',
+    dica: 'use “cor: rosa” (com o nome da cor)',
+  },
+  {
+    chaves: ['referencia', 'ref', 'ref.'],
+    titulo: 'Referência',
+    tipo: 'referencia',
+    dica: 'use “ref: 4785” ou só o código',
+  },
+  {
+    chaves: ['observacao', 'observacoes', 'obs'],
+    titulo: 'Observação',
+    tipo: 'texto',
+    dica: 'bloco de texto (pode ficar vazio)',
+  },
+  {
+    chaves: ['tecido', 'tecidos'],
+    titulo: 'Tecido',
+    tipo: 'texto',
+    dica: 'bloco de texto “Tecido”',
+  },
+  {
+    chaves: ['tamanho', 'tamanhos'],
+    titulo: 'Tamanho',
+    tipo: 'texto',
+    dica: 'bloco de texto “Tamanho”',
+  },
+  {
+    chaves: ['descricao', 'detalhe', 'detalhes', 'nota', 'notas'],
+    titulo: 'Descrição',
+    tipo: 'texto',
+    dica: 'bloco de texto livre',
+  },
+];
+
+const MAPA_ESTOQUE = new Map<string, EntradaEstoque>();
+for (const e of ESTOQUE_BLOCOS) {
+  for (const k of e.chaves) MAPA_ESTOQUE.set(k, e);
+}
+
+/** Linhas para a UI: o que escrever → o que aparece no registro. */
+export function linhasEstoqueAjuda(): { escreve: string; vira: string }[] {
+  return [
+    { escreve: '4785 ou ref: 4785', vira: 'bloco Referência' },
+    { escreve: 'cor: rosa', vira: 'bloco Cor (rosa)' },
+    { escreve: 'modelagem', vira: 'bloco de fotos Modelagem' },
+    { escreve: 'imagem da referência', vira: 'bloco de fotos da referência' },
+    { escreve: 'observação:', vira: 'bloco Observação (vazio)' },
+    { escreve: 'tecido: algodão', vira: 'bloco Tecido com texto' },
+    { escreve: 'qualquer frase.', vira: 'bloco Texto' },
+  ];
+}
+
 // "cor: rosa" / "cor rosa" / "cores: rosa, azul" (o \b evita casar "corte"/"corpo").
 const RE_COR = /^\s*cor(?:es)?\b\s*[:\-]?\s*(.+)$/i;
 // "ref: 4785" / "referência 4785" / "ref. 4785" (o \b evita casar "referente").
@@ -153,19 +255,15 @@ const RE_REF_CODE = /^\s*\d{3,}[a-z0-9]*(?:\s+.+)?$/i;
 // pode ser VAZIO: "observação:" vira um bloco chamado "Observação" em branco.
 const RE_ROTULO = /^\s*([\p{L}][\p{L}\s]{0,28}?)\s*:\s*(.*)$/u;
 
-// Nomes que DECLARAM um bloco de imagem da referência (bloco sem valor de texto).
-const NOMES_IMAGEM = new Set([
-  'imagem', 'imagens', 'foto', 'fotos', 'modelagem',
-  'imagem da referencia', 'imagens da referencia', 'foto da referencia', 'fotos da referencia',
-  'imagem de referencia', 'imagens de referencia', 'foto de referencia', 'fotos de referencia',
-  'imagem da modelagem', 'fotos da modelagem',
-]);
-
 function separarCores(txt: string): string[] {
   return txt
     .split(/\s*(?:,|;|\/|\be\b)\s*/i)
     .map((c) => c.trim())
     .filter((c) => c !== '');
+}
+
+function doEstoque(chave: string): EntradaEstoque | undefined {
+  return MAPA_ESTOQUE.get(normalizar(chave));
 }
 
 export function classificarBloco(bloco: string): BlocoInfo {
@@ -181,14 +279,43 @@ export function classificarBloco(bloco: string): BlocoInfo {
   if (RE_REF_CODE.test(b)) {
     return { classe: 'referencia', rotulo: 'Referência', valor: b, cores: [] };
   }
-  if (NOMES_IMAGEM.has(normalizar(b))) {
-    return { classe: 'imagemref', rotulo: 'Imagem da referência', valor: b, cores: [] };
+
+  // Nome sozinho do estoque (ex.: "modelagem", "observação", "tecido").
+  const soNome = doEstoque(b);
+  if (soNome !== undefined) {
+    if (soNome.tipo === 'imagem') {
+      return { classe: 'imagemref', rotulo: soNome.titulo, valor: b, cores: [] };
+    }
+    if (soNome.tipo === 'texto') {
+      return { classe: 'rotulo', rotulo: soNome.titulo, valor: '', cores: [] };
+    }
+    if (soNome.tipo === 'cor') {
+      return { classe: 'cor', rotulo: 'Cor', valor: '', cores: [] };
+    }
+    if (soNome.tipo === 'referencia') {
+      return { classe: 'referencia', rotulo: 'Referência', valor: '', cores: [] };
+    }
   }
+
   // "rótulo: valor" -> bloco NOMEADO pelo rótulo (o valor é o texto do campo e pode
   // ser vazio: "observação:" nasce como bloco "Observação" em branco pra preencher).
   const mRot = b.match(RE_ROTULO);
   if (mRot?.[1] !== undefined && mRot[1].trim() !== '') {
-    return { classe: 'rotulo', rotulo: capitalizar(mRot[1].trim()), valor: (mRot[2] ?? '').trim(), cores: [] };
+    const rot = mRot[1].trim();
+    const valor = (mRot[2] ?? '').trim();
+    const est = doEstoque(rot);
+    if (est?.tipo === 'imagem') {
+      return { classe: 'imagemref', rotulo: est.titulo, valor: rot, cores: [] };
+    }
+    if (est?.tipo === 'cor' && valor !== '') {
+      return { classe: 'cor', rotulo: 'Cor', valor, cores: separarCores(valor) };
+    }
+    return {
+      classe: 'rotulo',
+      rotulo: est?.titulo ?? capitalizar(rot),
+      valor,
+      cores: [],
+    };
   }
   return { classe: 'texto', rotulo: null, valor: b, cores: [] };
 }
@@ -315,9 +442,27 @@ export function montarCorpo(
   let refFeita = false;
   let corFeita = false;
   const coresTexto: string[] = [];
-  const temImg = (): boolean => campos.some((c) => c.id === comuns.img.id);
-  const addImg = (): void => {
-    if (!temImg()) add({ ...comuns.img });
+  const temImgPadrao = (): boolean => campos.some((c) => c.id === comuns.img.id);
+  const temImgComNome = (nome: string): boolean =>
+    campos.some((c) => c.tipo === 'imagem' && normalizar(c.nome) === normalizar(nome));
+  const addImgPadrao = (): void => {
+    if (!temImgPadrao()) add({ ...comuns.img });
+  };
+  const addImgNomeada = (nome: string): void => {
+    const titulo = nome.trim() || 'Imagem da referência';
+    if (normalizar(titulo) === normalizar(comuns.img.nome)) {
+      addImgPadrao();
+      return;
+    }
+    if (temImgComNome(titulo)) return;
+    add({
+      id: crypto.randomUUID(),
+      colecaoId: colId,
+      nome: titulo.slice(0, 60),
+      tipo: 'imagem',
+      ordem: 0,
+      config: { maxFotos: MAX_FOTOS },
+    });
   };
   const addCor = (): void => {
     if (!corFeita) {
@@ -334,16 +479,16 @@ export function montarCorpo(
     if (b.classe === 'referencia') {
       if (!refFeita) {
         add({ ...comuns.ref });
-        valores[comuns.ref.id] = b.valor;
+        if (b.valor !== '') valores[comuns.ref.id] = b.valor;
         refFeita = true;
-        if (temImagensRef && !temDeclaracaoImg) addImg(); // fotos ficam logo abaixo do título
+        if (temImagensRef && !temDeclaracaoImg) addImgPadrao(); // fotos ficam logo abaixo do título
       } else {
         addTexto('Referência', b.valor); // 2ª referência vira só texto
       }
       continue;
     }
     if (b.classe === 'imagemref') {
-      addImg();
+      addImgNomeada(b.rotulo ?? 'Imagem da referência');
       continue;
     }
     if (b.classe === 'cor') {
@@ -361,7 +506,7 @@ export function montarCorpo(
   // Fotos de cor sem "cor:" no texto: garante a seção mesmo assim.
   if (coresDeImagens.length > 0) addCor();
   // Fotos de referência sem bloco de referência escrito: cria o "Imagens" no fim.
-  if (temImagensRef) addImg();
+  if (temImagensRef) addImgPadrao();
 
   // Preenche as linhas da seção Cor com as cores do TEXTO (o "título" da cor
   // aparece mesmo antes de anexar a foto).

@@ -526,7 +526,7 @@
   font-weight: 700;
 }
 .desbloquear__ajuda {
-  color: var(--tinta-3);
+  color: var(--tinta-2);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -534,4 +534,53 @@
   display: flex;
   flex-direction: column;
   gap: var(--e3);
+}
+
+/* Ajuda pós-cadastro / primeira visita (Home) */
+.inicio-ajuda {
+  position: relative;
+  margin: 0 0 var(--e4);
+  padding: var(--e4);
+  border-radius: var(--raio-2);
+  border: 1px solid rgba(217, 138, 61, 0.45);
+  background: rgba(217, 138, 61, 0.16);
+  color: var(--giz);
+  text-align: left;
+}
+.inicio-ajuda__titulo {
+  margin: 0 0 var(--e2);
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  padding-right: 2rem;
+}
+.inicio-ajuda__lista {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(238, 243, 236, 0.95);
+}
+.inicio-ajuda__lista li + li {
+  margin-top: 0.35rem;
+}
+.inicio-ajuda__lista strong {
+  color: #fff;
+}
+.inicio-ajuda__fechar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--giz);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.inicio-ajuda__fechar:hover {
+  background: rgba(255, 255, 255, 0.1);
 }

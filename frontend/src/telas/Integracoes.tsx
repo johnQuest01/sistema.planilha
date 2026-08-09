@@ -131,7 +131,7 @@ export function Integracoes(): JSX.Element {
   return (
     <div className="pagina">
       <TopoApp />
-      <div className="faixa">
+      <div className="faixa integ-setup">
         <div className="inicio-cabeca">
           <h1 className="inicio-cabeca__titulo">
             <Layers size={22} aria-hidden /> Integrações de planilhas

@@ -89,7 +89,8 @@ p {
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--tinta-3);
+  /* Mais legível que --tinta-3 (quase some em metadados de cartão). */
+  color: var(--tinta-2);
 }
 
 .visualmente-oculto {

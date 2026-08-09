@@ -3,7 +3,12 @@ import { ImagePlus, Sparkles } from 'lucide-react';
 import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
 import { FolhaInferior } from '../ui/FolhaInferior';
-import { criarPlanilhaAutomatica, resumoAuto, type ProgressoAuto } from './criacaoAutomatica';
+import {
+  criarPlanilhaAutomatica,
+  linhasEstoqueAjuda,
+  resumoAuto,
+  type ProgressoAuto,
+} from './criacaoAutomatica';
 import { ehArquivoImagem } from './importarFotos';
 import './importar.css';
 
@@ -69,16 +74,24 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
           <div className="importar-zip">
             <p className="importar-zip__ajuda">
               Cole um texto. Cada <strong>ponto final</strong> (.) — ou item numerado{' '}
-              (<code>1 …</code> <code>2 …</code>) — vira um <strong>bloco</strong>. Escreva{' '}
-              <code>cor: rosa</code> para um bloco de cor, <code>4785</code> (ou <code>ref: 4785</code>)
-              para a referência e <code>imagem da referência</code> para o bloco de fotos. Qualquer{' '}
-              <code>rótulo: texto</code> (ex.: <code>observação:</code>) vira um bloco com esse título
-              (o texto pode ficar em branco para preencher depois). Vários
-              registros: separe com uma linha só com <code>---</code>. As imagens (opcional) entram
-              pelo <strong>nome do campo</strong>: <code>imagem.da.referencia.png</code> nas fotos da
-              referência; <code>cor.rosa.png</code>, <code>rosa.png</code> ou{' '}
-              <code>4785.cor.rosa.png</code> no bloco de cor <strong>rosa</strong>.
+              (<code>1 …</code> <code>2 …</code>) — vira um <strong>bloco</strong> no registro.
+              Vários registros: separe com uma linha só com <code>---</code>. Imagens (opcional)
+              entram pelo <strong>nome do arquivo</strong> (ex.: <code>4785.png</code>,{' '}
+              <code>cor.rosa.png</code>).
             </p>
+
+            <div className="criacao-estoque">
+              <p className="criacao-estoque__titulo">Estoque — o que escrever → o que aparece</p>
+              <ul className="criacao-estoque__lista">
+                {linhasEstoqueAjuda().map((l) => (
+                  <li key={l.escreve}>
+                    <code>{l.escreve}</code>
+                    <span aria-hidden> → </span>
+                    <strong>{l.vira}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             <Campo
               rotulo="Nome da planilha"
@@ -93,7 +106,9 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
               multilinha
               rows={10}
               rotulo="Cole o texto aqui"
-              placeholder={'4785 bory. cor: rosa. tecido: algodão. manga curta.\n---\n4786 curto. cor: azul.'}
+              placeholder={
+                '4785 bory. cor: rosa. modelagem. tecido: algodão. observação:\n---\n4786 curto. cor: azul. caderno.'
+              }
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
               disabled={ocupado}

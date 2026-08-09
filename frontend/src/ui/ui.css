@@ -79,7 +79,7 @@
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--tinta-2);
+  color: var(--tinta);
   font-weight: 600;
 }
 .campo__controle {
@@ -96,7 +96,10 @@
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .campo__controle::placeholder {
-  color: var(--tinta-3);
+  /* Contraste legível no papel claro (antes --tinta-3 + opacity do browser ≈ invisível). */
+  color: var(--tinta-2);
+  opacity: 1;
+  -webkit-text-fill-color: var(--tinta-2);
 }
 textarea.campo__controle {
   padding: var(--e3);

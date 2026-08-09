@@ -1,14 +1,42 @@
-.integ-ajuda {
+/* Setup em /integracoes: conteúdo sobre o tapete escuro — texto claro.
+   (Antes títulos herdavam --tinta escura e sumiam; placeholders claros no papel.) */
+.integ-setup {
   color: var(--giz);
-  font-size: 0.92rem;
-  line-height: 1.5;
+}
+.integ-setup .integ-secao__titulo,
+.integ-setup .integ-cartao__nome,
+.integ-setup .integ-reordena__nome {
+  color: var(--giz);
+}
+.integ-setup .integ-chip {
+  color: var(--giz);
+}
+.integ-setup .campo__rotulo {
+  color: rgba(238, 243, 236, 0.92);
+}
+.integ-setup .campo__controle::placeholder {
+  color: var(--tinta-2);
+  opacity: 1;
+  -webkit-text-fill-color: var(--tinta-2);
+}
+
+.integ-ajuda {
+  color: rgba(238, 243, 236, 0.95);
+  font-size: 0.95rem;
+  line-height: 1.55;
   margin: 0 0 1.2rem;
   max-width: 46rem;
 }
+.integ-ajuda strong {
+  color: #fff;
+  font-weight: 700;
+}
 
 .integ-secao__titulo {
-  font-size: 1.05rem;
+  font-size: 1.1rem;
+  font-weight: 700;
   margin: 1.6rem 0 0.6rem;
+  color: var(--giz);
 }
 
 .integ-criar {
@@ -16,9 +44,9 @@
   flex-direction: column;
   gap: 0.7rem;
   padding: 1rem;
-  border: 1px solid var(--linha, rgba(255, 255, 255, 0.12));
+  border: 1px solid rgba(238, 243, 236, 0.22);
   border-radius: 0.9rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .integ-criar .integ-secao__titulo {
@@ -27,8 +55,8 @@
 
 .integ-dica,
 .integ-vazio {
-  color: var(--giz);
-  font-size: 0.85rem;
+  color: rgba(238, 243, 236, 0.9);
+  font-size: 0.9rem;
   margin: 0;
 }
 
@@ -81,13 +109,14 @@
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.9rem 1rem;
-  border: 1px solid var(--linha, rgba(255, 255, 255, 0.12));
+  border: 1px solid rgba(238, 243, 236, 0.2);
   border-radius: 0.9rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--giz);
 }
 
 .integ-cartao--off {
-  opacity: 0.62;
+  opacity: 0.78;
 }
 
 .integ-cartao__topo {
@@ -97,8 +126,9 @@
 }
 
 .integ-cartao__nome {
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--giz);
 }
 
 .integ-cartao__estado {
@@ -108,8 +138,8 @@
   letter-spacing: 0.04em;
   padding: 0.12rem 0.5rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--giz);
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(238, 243, 236, 0.95);
 }
 
 .integ-cartao__estado.on {
@@ -122,7 +152,7 @@
   flex-wrap: wrap;
   gap: 0.35rem 0.6rem;
   font-size: 0.85rem;
-  color: var(--giz);
+  color: rgba(238, 243, 236, 0.9);
 }
 
 .integ-cartao__col {
@@ -143,8 +173,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--giz);
+  font-size: 0.9rem;
+  color: rgba(238, 243, 236, 0.95);
 }
 
 .integ-reordena__setas {
@@ -180,7 +210,7 @@
 }
 
 .integ-apagar {
-  color: var(--giz);
+  color: rgba(238, 243, 236, 0.85);
   margin-left: auto;
 }
 
@@ -197,7 +227,8 @@
   align-items: center;
   gap: 0.4rem;
   font-size: 0.78rem;
-  color: var(--giz);
+  /* Sobre papel/lista clara — não usar --giz (some). */
+  color: var(--tinta-2);
 }
 
 .integ-fonte__ponto {
@@ -224,14 +255,14 @@
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--giz);
+  color: var(--tinta-2);
 }
 
 .integ-parte-rotulo::after {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--linha, rgba(255, 255, 255, 0.12));
+  background: var(--linha);
 }
 
 .integ-parte-rotulo--ausente {
@@ -405,10 +436,10 @@
   align-items: center;
   gap: 0.3rem;
   padding: 0.15rem 0.5rem;
-  border: 1px solid var(--linha, rgba(255, 255, 255, 0.16));
+  border: 1px solid var(--linha-2);
   border-radius: 999px;
   background: transparent;
-  color: var(--giz);
+  color: var(--tinta-2);
   font-size: 0.7rem;
   text-transform: none;
   letter-spacing: 0;
@@ -416,13 +447,13 @@
   white-space: nowrap;
 }
 .integ-parte-blocos:hover {
-  border-color: var(--marca, #6d4aff);
-  color: var(--tinta, #fff);
+  border-color: var(--fita);
+  color: var(--tinta);
 }
 .integ-parte-blocos[aria-pressed='true'] {
-  border-color: var(--marca, #6d4aff);
-  background: color-mix(in srgb, var(--marca, #6d4aff) 18%, transparent);
-  color: var(--tinta, #fff);
+  border-color: var(--fita);
+  background: color-mix(in srgb, var(--fita) 18%, transparent);
+  color: var(--tinta);
 }
 
 .integ-filtro {
@@ -432,22 +463,35 @@
 }
 .integ-chip {
   padding: 0.3rem 0.75rem;
-  border: 1px solid var(--linha, rgba(255, 255, 255, 0.16));
+  border: 1px solid rgba(238, 243, 236, 0.28);
   border-radius: 999px;
   background: transparent;
   color: var(--giz);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 .integ-chip--on {
-  border-color: var(--marca, #6d4aff);
-  background: color-mix(in srgb, var(--marca, #6d4aff) 20%, transparent);
-  color: var(--tinta, #fff);
+  border-color: var(--fita, #d98a3d);
+  background: rgba(217, 138, 61, 0.22);
+  color: #fff;
+}
+/* Chips de filtro sobre papel (tela integrada): tinta escura. */
+.faixa--app .integ-filtro .integ-chip,
+.folha .integ-filtro .integ-chip,
+.integ-lista-registros ~ .integ-filtro .integ-chip {
+  color: var(--tinta-2);
+  border-color: var(--linha-2);
+}
+.faixa--app .integ-filtro .integ-chip--on,
+.folha .integ-filtro .integ-chip--on {
+  color: var(--tinta);
+  border-color: var(--fita);
+  background: color-mix(in srgb, var(--fita) 18%, transparent);
 }
 
 .integ-salvo {
   font-size: 0.8rem;
-  color: var(--giz);
+  color: var(--tinta-2);
   margin-left: auto;
 }
 
