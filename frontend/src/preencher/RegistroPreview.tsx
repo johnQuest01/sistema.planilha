@@ -27,6 +27,9 @@ interface Props {
   aoApagar?: (id: string) => void;
   /** Alavanca travada: esconde o "Abrir registro" (edição) e mostra um aviso. */
   edicaoBloqueada?: boolean;
+  /** Avisa o pai ao entrar/sair do modo compartilhar (a prévia unida usa para esconder
+   *  a nav flutuante, que cobria a barra/FAB de compartilhar). */
+  aoModoShare?: (ativo: boolean) => void;
 }
 
 function keysDe(valor: unknown): string[] {
@@ -149,6 +152,7 @@ export function RegistroPreview({
   aoAtualizar,
   aoApagar,
   edicaoBloqueada = false,
+  aoModoShare,
 }: Props): JSX.Element {
   const { estado } = useAuth();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
@@ -181,6 +185,13 @@ export function RegistroPreview({
   useEffect(() => {
     setLocal(registro);
   }, [registro]);
+
+  // Avisa o pai quando entra/sai do compartilhar (a prévia unida esconde a nav
+  // flutuante nesse momento, senão ela cobre os controles de compartilhar).
+  useEffect(() => {
+    aoModoShare?.(modoShare);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoShare]);
 
   function entrarShare(): void {
     // Comeca sem nada marcado: o usuario escolhe manualmente o que compartilhar.

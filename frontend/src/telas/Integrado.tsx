@@ -742,6 +742,9 @@ function PreviaCorpo({
   const [visiveis, setVisiveis] = useState<Set<number>>(new Set());
   // Última planilha para onde o usuário pulou pelos chips — o "Preencher" abre nela.
   const [alvo, setAlvo] = useState<number | null>(null);
+  // Partes atualmente em modo COMPARTILHAR — enquanto houver alguma, some a nav
+  // flutuante (senão ela cobre a barra/FAB de compartilhar e trava a seleção).
+  const [compartilhando, setCompartilhando] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Na prévia (folha) a raiz é .folha__corpo; na BUSCA (inline) é .rolagem.
@@ -790,6 +793,14 @@ function PreviaCorpo({
                 colecao={parte.colecao}
                 registro={parte.registro}
                 aoAtualizar={aoAtualizarRegistro}
+                aoModoShare={(ativo) =>
+                  setCompartilhando((prev) => {
+                    const n = new Set(prev);
+                    if (ativo) n.add(parte.colecao.id);
+                    else n.delete(parte.colecao.id);
+                    return n;
+                  })
+                }
               />
             </article>
           ) : (
@@ -803,7 +814,9 @@ function PreviaCorpo({
         </div>
       ))}
 
-      {grupo.partes.length > 1 && (naoVisiveis.length > 0 || aoPreencher !== undefined) && (
+      {compartilhando.size === 0 &&
+        grupo.partes.length > 1 &&
+        (naoVisiveis.length > 0 || aoPreencher !== undefined) && (
         <div className="integ-nav-previa" aria-label="Ir para planilha / preencher">
           {naoVisiveis.length > 0 && (
             <div className="integ-nav-previa__planilhas">
