@@ -456,12 +456,7 @@ export function Preencher({
       {erro !== null && <p className="aviso-erro">{erro}</p>}
       {erroExport !== null && <p className="aviso-erro">{erroExport}</p>}
 
-      <BuscaReferencia
-        colecao={colecao}
-        aoAbrir={abrirEdicao}
-        aoAtualizar={aoAtualizar}
-        aoApagar={aoApagar}
-      />
+      <BuscaReferencia colecao={colecao} aoAbrir={abrirPrevia} />
 
       {adicionandoCampo && (
         <div className="add-campo-inline">
@@ -508,6 +503,7 @@ export function Preencher({
 
       {previa !== null && (
         <FolhaInferior
+          alta
           titulo={tituloDoRegistro(camposDoRegistro(colecao, previa), previa)}
           subtitulo={
             edicaoLiberada

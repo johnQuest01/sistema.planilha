@@ -1,19 +1,22 @@
-import { Search, X } from 'lucide-react';
+import { ImageOff, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, ErroApi } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
-import { RegistroPreview } from './RegistroPreview';
+import { camposDoRegistro, capaDoRegistro, resumoDoRegistro, tituloDoRegistro } from './derivarResumo';
+import { Miniatura } from './Miniatura';
 
 const DEBOUNCE_MS = 300;
 
 interface Props {
   colecao: Colecao;
+  // Toque num resultado: abre a PRÉVIA COMPLETA (folha grande com X), igual à lista.
   aoAbrir: (r: Registro) => void;
-  aoAtualizar?: (r: Registro) => void;
-  aoApagar?: (id: string) => void;
 }
 
-export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar, aoApagar }: Props): JSX.Element {
+// Busca por referência. Os resultados aparecem como CARDS COMPACTOS (miniatura +
+// título + resumo); tocar abre a prévia completa (grande) para ver com precisão e,
+// de lá, preencher/alterar/compartilhar.
+export function BuscaReferencia({ colecao, aoAbrir }: Props): JSX.Element {
   const [q, setQ] = useState('');
   const [resultados, setResultados] = useState<Registro[] | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -88,21 +91,31 @@ export function BuscaReferencia({ colecao, aoAbrir, aoAtualizar, aoApagar }: Pro
           )}
           {!buscando &&
             resultados !== null &&
-            resultados.map((r) => (
-              <RegistroPreview
-                key={r.id}
-                colecao={colecao}
-                registro={r}
-                aoAbrir={() => aoAbrir(r)}
-                aoAtualizar={aoAtualizar}
-                aoApagar={(id) => {
-                  setResultados((atual) =>
-                    atual === null ? atual : atual.filter((x) => x.id !== id),
-                  );
-                  aoApagar?.(id);
-                }}
-              />
-            ))}
+            resultados.map((r) => {
+              const campos = camposDoRegistro(colecao, r);
+              const capa = capaDoRegistro(campos, r);
+              const resumo = resumoDoRegistro(campos, r);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  className="busca-ref__item"
+                  onClick={() => aoAbrir(r)}
+                >
+                  <span className="busca-ref__item-capa" aria-hidden="true">
+                    {capa !== null ? (
+                      <Miniatura fotoKey={capa} tamanho={56} />
+                    ) : (
+                      <ImageOff size={20} />
+                    )}
+                  </span>
+                  <span className="busca-ref__item-corpo">
+                    <span className="busca-ref__item-titulo">{tituloDoRegistro(campos, r)}</span>
+                    {resumo !== '' && <span className="busca-ref__item-resumo">{resumo}</span>}
+                  </span>
+                </button>
+              );
+            })}
         </div>
       )}
     </div>
