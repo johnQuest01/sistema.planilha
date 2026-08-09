@@ -1,674 +1,1069 @@
-# Documentação do projeto (para humanos e para a próxima IA)
+# Documentação completa do Mostruário (sistema-corte)
 
-> Este arquivo explica o projeto inteiro: o que é, a arquitetura, o banco de dados e
-> as migrations, o formato dos dados (planilhas, blocos, registros, seções, imagens),
-> o backend, o frontend, a API, o deploy e as convenções/armadilhas. O objetivo é que
-> qualquer pessoa — ou outra IA — consiga entender e evoluir o sistema com segurança.
+> Manual **de cabo a rabo** para humanos e para a próxima IA: banco, migrations,
+> backend, frontend, shared, fotos, estilização, deploy (Vercel + Fly.io), auth
+> multi-conta, realtime, importação e regras de negócio.
 >
-> Regra de ouro do projeto: **nunca apagar dados**. Migrations são aditivas; a exclusão
-> de registros/planilhas é sempre "soft-delete" (lixeira) até o "apagar definitivo".
+> **Regra de ouro: nunca apagar dados sem soft-delete.** Migrations são aditivas.
+> Apagar registro/planilha = lixeira; “apagar definitivo” (só admin) remove do DB e do R2.
+
+**URLs de produção (referência):**
+
+| Peça | URL |
+|------|-----|
+| Frontend (Vercel) | `https://sistema-planilha-backend.vercel.app` |
+| Backend (Fly.io) | `https://mostruario-api.fly.dev` |
+| WebSocket | `wss://mostruario-api.fly.dev` |
+| R2 público | `https://pub-856c1e1b6dc645308495de9e44b391e0.r2.dev` |
+| Neon | Postgres `sa-east-1` (SP), app usa URL **pooled** (`-pooler`) |
 
 ---
 
-## 1. Visão geral
+## Sumário
 
-É um app web (PWA) de **planilhas visuais / mostruário**: cada **planilha** (`coleção`)
-guarda **registros** (linhas/cartões), e cada registro é composto por **blocos**
-(`campos`) — texto, número, seleção, data, imagem, seção repetível etc. É muito usado
-para catálogos com **referência + fotos + cor** (ex.: planilhas "MODELAGEM", "Caderno
-do Hugo", "Oficina").
-
-Características centrais:
-
-- **Schema como dado**: os blocos de uma planilha são LINHAS na tabela `campos`; os
-  valores do registro moram num `jsonb` (`registros.valores`). Não há `ALTER TABLE` em
-  runtime nem EAV.
-- **Corpo próprio por registro**: um registro pode ter sua própria estrutura de blocos
-  (`registros.campos` em jsonb), independente da planilha.
-- **Multi-tenant + workspace compartilhado**: tudo é isolado por `conta` via RLS do
-  Postgres; várias pessoas (`usuarios`) logam e caem na MESMA conta-workspace.
-- **Imagens no Cloudflare R2**: upload direto do navegador via URL pré-assinada; o
-  registro guarda só a **key**. Duas derivadas: "cheia" (2560px) e "mini" (240px).
-- **Tempo real**: WebSocket de presença + eco de mudanças de registro entre clientes.
-- **Integrações**: unir várias planilhas numa "planilha só", casando registros por
-  referência (ex.: a Oficina une Modelagem + Caderno do Hugo).
+1. [O que é o app e qual é o MOTOR](#1-o-que-é-o-app-e-qual-é-o-motor)
+2. [Arquitetura e monorepo](#2-arquitetura-e-monorepo)
+3. [Stacks e versões](#3-stacks-e-versões)
+4. [Como rodar, buildar e deployar](#4-como-rodar-buildar-e-deployar)
+5. [Variáveis de ambiente](#5-variáveis-de-ambiente)
+6. [Shared (`shared/tipos.ts`)](#6-shared-sharedtiposts)
+7. [Banco de dados (Neon Postgres)](#7-banco-de-dados-neon-postgres)
+8. [Migrations (001 → 023)](#8-migrations-001--023)
+9. [Backend (Fastify) — mapa e boot](#9-backend-fastify--mapa-e-boot)
+10. [API completa (rotas)](#10-api-completa-rotas)
+11. [Auth, sessão, multi-conta](#11-auth-sessão-multi-conta)
+12. [Realtime / WebSocket](#12-realtime--websocket)
+13. [Fotos e Cloudflare R2](#13-fotos-e-cloudflare-r2)
+14. [Importação, conversão e criação automática](#14-importação-conversão-e-criação-automática)
+15. [Frontend — rotas, pastas, telas](#15-frontend--rotas-pastas-telas)
+16. [Design system e estilização](#16-design-system-e-estilização)
+17. [Modelo de UI: blocos, seções, corpo próprio](#17-modelo-de-ui-blocos-seções-corpo-próprio)
+18. [Integrações (planilhas unidas)](#18-integrações-planilhas-unidas)
+19. [Cache, prefetch, PWA](#19-cache-prefetch-pwa)
+20. [Lixeira, arquivar, senha, trava](#20-lixeira-arquivar-senha-trava)
+21. [Backup / export / import ZIP](#21-backup--export--import-zip)
+22. [Convenções, armadilhas e checklist para a próxima IA](#22-convenções-armadilhas-e-checklist-para-a-próxima-ia)
 
 ---
 
-## 2. Arquitetura e stack
+## 1. O que é o app e qual é o MOTOR
 
-Monorepo com **npm workspaces** (raiz `package.json`): `backend`, `frontend`, e uma
-pasta `shared` (tipos compartilhados por ambos via caminho relativo `../../shared`).
+### O que é
+
+PWA de **planilhas visuais / mostruário** para catálogo (costura/oficina): cada
+**planilha** (`coleção`) tem **registros** (cartões). Cada registro é feito de
+**blocos** (`campos`) — texto, número, seleção, data, imagem, seção repetível.
+Casos típicos: MODELAGEM, Caderno do Hugo, Oficina — com **referência + fotos + cor**.
+
+### O MOTOR (núcleo do sistema)
+
+O motor **não** é um ORM nem um spreadsheet clássico. É o padrão **schema-as-data**:
+
+1. **Blocos = linhas** na tabela `campos` (nome, tipo, ordem, `config` jsonb).
+2. **Valores = jsonb** em `registros.valores`, chaveada por `campo.id` (UUID).
+3. **Corpo próprio opcional**: `registros.campos` (jsonb) — estrutura só daquele registro.
+4. **Imagens fora do DB**: keys no jsonb; bytes no **Cloudflare R2**.
+5. **Integração = visão**: merge no frontend pela **referência** (código inicial), sem fundir tabelas.
+
+Em uma frase: **Postgres (Neon) + jsonb de valores + blocos como dados + R2 para fotos + Fastify + React**.
+
+Fluxo mental:
+
+```
+Conta (tenant)
+ └─ Coleções (planilhas)
+     ├─ Campos (blocos do template compartilhado)
+     └─ Registros
+         ├─ valores { [campoId]: ... }
+         ├─ campos? (corpo próprio)
+         └─ ordem (posição na lista)
+ └─ Integrações (lista ordenada de colecaoIds — só config)
+ └─ Usuários / conta_membros / sessões
+```
+
+---
+
+## 2. Arquitetura e monorepo
+
+Nome npm da raiz: `sistema-corte`. Workspaces: `backend`, `frontend`.
+A pasta `shared/` **não** é workspace npm — ambos importam por caminho relativo
+(`../../shared` ou `../../../shared`).
 
 ```
 sistema.planilha-main/
-├─ backend/            # API Fastify (TypeScript) + migrations SQL
-│  ├─ migrations/      # 001..018 .sql + run.ts (runner)
+├─ package.json                 # workspaces + scripts dev/migrate/build
+├─ backend/
+│  ├─ package.json
+│  ├─ migrations/               # 001..023 .sql + run.ts
+│  ├─ scripts/                  # backup-r2.mjs etc.
 │  └─ src/
-│     ├─ server.ts     # bootstrap Fastify (plugins, rotas, health)
-│     ├─ config.ts     # leitura das variáveis de ambiente
-│     ├─ db/           # client (postgres.js), comConta (RLS), schemaPronto
-│     ├─ auth/         # sessões, cookies, senha (argon2), workspace, exigeDono
-│     ├─ rotas/        # colecoes, campos, registros, auth, integracoes, ...
-│     ├─ repositorios/ # acesso a dados por tabela
-│     ├─ validacao/    # schemas Zod (campo, valores, colecao, upload, ...)
-│     ├─ r2/           # Cloudflare R2 (presign, keys)
-│     ├─ ws/           # WebSocket (presencaHub, rotasWs)
-│     ├─ publico/      # link público (assinatura/verificação)
-│     └─ scripts/      # limparR2 (GC de órfãos no bucket)
-├─ frontend/           # SPA React + Vite (PWA)
-│  └─ src/
-│     ├─ App.tsx       # rotas (react-router-dom) + guarda de auth
-│     ├─ main.tsx      # bootstrap React (createRoot, StrictMode)
-│     ├─ api/          # cliente REST, realtime (ws), cache SWR, runtime (wsBase), prefetch
-│     ├─ contexto/     # Auth (contexto React)
-│     ├─ telas/        # Inicio, Colecao, Criar, Preencher, Integrado, Integracoes, Config, Lixeira, Entrar, TopoApp, FormBloco
-│     ├─ preencher/    # Ficha, ListaDensa, Tabela, BuscaReferencia, RegistroPreview, CampoValor, SecaoEditor, CorpoRegistroEditor, derivarResumo, valoresVazios, compartilhar
-│     ├─ imagens/      # derivadas, enviar, urls, Grade, Visor, FotoZoomavel (Miniatura fica em preencher/)
-│     ├─ importar/     # criacaoAutomatica, importarFotos, importarTexto, importarBackup + botões
-│     ├─ backup/       # exportarColecao (backup de planilha e de integração)
-│     ├─ integracao/   # merge, FichaIntegrada, ParteEditor, PreviewIntegrado
-│     ├─ ui/           # Botao, Campo, Segmentado, Chip, IconeTipo, FolhaInferior, Carregando, Presenca, InstalarApp, BotaoLixeiraFlutuante, useVoltar, useMedia, travaScroll
-│     ├─ estilos/      # tokens.css (design tokens) + base.css (reset + app shell)
-│     └─ publico/      # RegistroPublico (link público /r/:token, só leitura)
+│     ├─ server.ts              # boot Fastify
+│     ├─ config.ts              # env
+│     ├─ db/                    # client Neon, comConta (RLS), schemaPronto
+│     ├─ auth/                  # cookie, sessão, argon2, workspace, exigeDono
+│     ├─ rotas/                 # HTTP handlers
+│     ├─ repositorios/          # SQL por domínio
+│     ├─ validacao/             # Zod
+│     ├─ r2/                    # presign / keys / delete
+│     ├─ ws/                    # presencaHub + rotasWs
+│     ├─ publico/               # link HMAC legado
+│     └─ scripts/               # limparR2
+├─ frontend/
+│  ├─ package.json
+│  ├─ vite.config.ts            # PWA + proxy /api → :3333
+│  ├─ vercel.json               # rewrites (espelho)
+│  └─ src/                      # ver §15
 ├─ shared/
-│  └─ tipos.ts         # tipos TypeScript compartilhados (Campo, Colecao, Registro, ...)
-├─ Dockerfile          # imagem do backend (Fly)
-├─ fly.toml            # config do backend no Fly.io
-├─ vercel.json         # rewrites do frontend (proxy /api -> Fly)
-└─ .github/workflows/deploy-fly.yml  # CI que sobe o backend no push (paths do backend)
+│  └─ tipos.ts                  # ÚNICA fonte de tipos de domínio
+├─ Dockerfile                   # Node 20 → migrate + start (Fly)
+├─ fly.toml                     # mostruario-api @ gru
+├─ vercel.json                  # build frontend + proxy /api → Fly
+├─ r2-cors.json                 # CORS do bucket
+├─ render.yaml                  # legado (não é o deploy ativo)
+├─ .github/workflows/
+│  ├─ deploy-fly.yml
+│  └─ backup-r2.yml
+├─ DOCUMENTACAO.md              # este arquivo
+├─ DEPLOY.md / atualizacao*.MD / informacoes.MD
+└─ docs/                        # docs auxiliares (se houver)
 ```
 
-### Stacks
+### Diagrama de produção
 
-- **Backend**: Node 20, **Fastify 5** (TypeScript). Plugins: `@fastify/cors`,
-  `@fastify/helmet`, `@fastify/cookie`, `@fastify/rate-limit`, `@fastify/websocket`.
-  Banco via **postgres.js** (`postgres`), validação com **Zod**, senha com
-  **@node-rs/argon2**, storage com **@aws-sdk/client-s3** + `s3-request-presigner`.
-- **Frontend**: **React 18**, **Vite 5**, **react-router-dom 6**,
-  **@tanstack/react-virtual** (listas grandes), **lucide-react** (ícones),
-  **jszip** (backup/import), **vite-plugin-pwa** (offline/instalável).
-- **Banco**: **PostgreSQL (Neon)**, região `sa-east-1` (SP), com RLS.
-- **Storage**: **Cloudflare R2** (bucket `mostruario-midia`), servido pelo domínio
-  público `pub-...r2.dev`.
-- **Deploy**: backend no **Fly.io** (app `mostruario-api`, região `gru`), frontend na
-  **Vercel** (`sistema-planilha-backend.vercel.app`).
+```
+Navegador (PWA na Vercel)
+  │  fetch('/api/...')  credentials same-origin
+  │  WebSocket (wsBase de /api/config)
+  ▼
+Vercel (SPA + rewrite /api → Fly)
+  ▼
+Fly.io mostruario-api (Fastify :3333, 1 máquina)
+  ├─ Neon Postgres (RLS por conta)
+  └─ Cloudflare R2 (presigned PUT; leitura pública)
+```
+
+O frontend **nunca** embute `VITE_API_URL`. Em prod, Vercel faz proxy; em dev, Vite proxy.
 
 ---
 
-## 3. Como rodar, buildar e deployar
+## 3. Stacks e versões
 
-### Dev (local)
+### Raiz
+
+- Node `>=20`
+- `concurrently` para `npm run dev` (api + web)
+
+### Backend (`backend/package.json`)
+
+| Pacote | Papel |
+|--------|--------|
+| `fastify` ^5 | HTTP |
+| `@fastify/cookie` | Cookie assinado `sessao` |
+| `@fastify/cors` | CORS com credentials |
+| `@fastify/helmet` | Headers |
+| `@fastify/rate-limit` | 300/min global; auth mais apertado |
+| `@fastify/websocket` | Presença |
+| `postgres` (postgres.js) | Driver Neon |
+| `zod` | Validação de body/query |
+| `@node-rs/argon2` | Hash de senha |
+| `@aws-sdk/client-s3` + `s3-request-presigner` | R2 |
+| `tsx` | Dev + migrate |
+| `typescript` | Build |
+
+Scripts típicos: `dev` (`tsx watch src/server.ts`), `build` (`tsc`), `start` (`node dist/...`), `migrate` (`tsx migrations/run.ts`).
+
+### Frontend (`frontend/package.json`)
+
+| Pacote | Papel |
+|--------|--------|
+| `react` / `react-dom` ^18.3 | UI |
+| `vite` ^5.4 | Bundler |
+| `react-router-dom` ^6.28 | Rotas |
+| `vite-plugin-pwa` | Instalável / SW |
+| `@tanstack/react-virtual` | Listas longas |
+| `lucide-react` | Ícones |
+| `jszip` | Backup/import ZIP |
+| `typescript` ^5.7 | Tipos |
+
+Scripts: `dev`, `build` (`tsc -b && vite build`), `preview`, `typecheck`.
+
+### Infra
+
+- **DB**: Neon PostgreSQL + RLS
+- **Storage**: Cloudflare R2 bucket `mostruario-midia`
+- **API host**: Fly.io `mostruario-api`, região `gru`, VM `shared-cpu-1x` 512MB
+- **Front host**: Vercel
+
+---
+
+## 4. Como rodar, buildar e deployar
+
+### Dev local
 
 ```bash
-npm install                 # na raiz (instala os workspaces)
-npm run dev                 # sobe backend (tsx watch) + frontend (vite) juntos
-# ou separadamente:
-npm run dev:backend
-npm run dev:frontend
+npm install
+# backend/.env com DATABASE_URL (+ R2_* para upload)
+npm run migrate
+npm run dev          # API :3333 + Vite :5173
 ```
 
-- Backend precisa de `backend/.env` com pelo menos `DATABASE_URL` (Neon) e, para
-  upload, as `R2_*`. Rode as migrations: `npm run migrate`.
-- Frontend fala com `/api` (mesma origem). Em dev, o Vite serve o front e a API roda
-  em `:3333` (o cliente usa caminhos relativos; ver `vercel.json`/proxy).
+Vite proxy (`vite.config.ts`): `/api`, `/health` → `http://localhost:3333`; `/ws` → WS.
 
 ### Build
 
 ```bash
-npm run typecheck           # tsc nos dois workspaces
-npm run build               # build backend (tsc) + frontend (vite)
+npm run typecheck
+npm run build
 ```
 
-### Deploy
+### Deploy backend (Fly)
 
-- **Backend (Fly)**: `Dockerfile` builda o backend e, ao subir, roda
-  `npm run migrate` (aplica migrations pendentes) e `npm run start`. O deploy é
-  automático via GitHub Actions (`.github/workflows/deploy-fly.yml`) **apenas quando
-  mudam** `backend/**`, `shared/**`, `Dockerfile`, `fly.toml` ou os manifests. Exige o
-  secret `FLY_API_TOKEN` no repositório. Também dá para disparar manualmente
-  (workflow_dispatch) ou `flyctl deploy --remote-only`.
-- **Frontend (Vercel)**: deploy automático a cada push na `main`. `vercel.json` faz o
-  rewrite de `/api/:path*` e `/health` para `https://mostruario-api.fly.dev`.
-- **Migrations** rodam sozinhas no boot do container (idempotentes; ver §6). O
-  `server.ts` ainda chama `garantirSchemaPronto()` no boot e **não sobe** se faltar
-  schema crítico (checa `colecoes.senha_hash` + tabela `colecao_acessos`).
-- Fly roda **1 máquina só** (min_machines_running=1, sem auto-stop): a presença em
-  tempo real é mantida **em memória por máquina**; com 2+ máquinas o WebSocket
-  quebraria (split-brain). Health check em `GET /health`.
-- Existe também um blueprint alternativo `render.yaml` (deploy no Render, mesmo
-  build/start) — não é o deploy ativo, mas serve de referência.
-- Backup do R2: workflow `.github/workflows/backup-r2.yml` roda `scripts/backup-r2.mjs`
-  todo dia (cron 06:00 UTC), copiando incrementalmente o bucket de mídia para um bucket
-  de backup (nunca apaga). Usa envs próprias: `R2_BACKUP_BUCKET`, `R2_SRC_ACCESS_KEY_ID`,
-  `R2_SRC_SECRET_ACCESS_KEY`, `R2_DST_ACCESS_KEY_ID`, `R2_DST_SECRET_ACCESS_KEY`.
+- `Dockerfile`: Node 20, `npm ci`, build backend, CMD = migrate + start.
+- `fly.toml`: porta 3333, health `GET /health`, **1 máquina sempre ligada**
+  (`min_machines_running = 1`, `auto_stop/start = false`) — presença WS é **em memória**.
+- CI: `.github/workflows/deploy-fly.yml` no push em `main` quando mudam
+  `backend/**`, `shared/**`, `Dockerfile`, `fly.toml` (ou `workflow_dispatch`).
+  Secret: `FLY_API_TOKEN`.
+- Manual: `flyctl deploy --remote-only`.
+- Boot ainda chama `garantirSchemaPronto()` — se faltar schema crítico, **não sobe**.
 
----
+### Deploy frontend (Vercel)
 
-## 4. Variáveis de ambiente (backend)
+- Push em `main` → build `npm run build -w frontend`, output `frontend/dist`.
+- `vercel.json` (raiz e espelho em `frontend/`):
 
-Lidas em `backend/src/config.ts` (e `r2/r2.ts` para as R2). Não-secretas ficam no
-`fly.toml [env]`; segredos vão por `fly secrets set`.
-
-| Variável | Obrigatória | Descrição |
-|---|---|---|
-| `DATABASE_URL` | sim | conexão Postgres (Neon) **POOLED** (host com `-pooler`) usada pelo app. |
-| `DATABASE_URL_DIRECT` | migrations | usada pelo runner de migrations (DIRECT, sem PgBouncer); cai para `DATABASE_URL` se ausente. |
-| `PORT` | não (3333) | porta do servidor. |
-| `NODE_ENV` | — | `production` em prod (exige `COOKIE_SECRET`). |
-| `CORS_ORIGIN` | não | origem liberada no CORS (a URL do frontend). |
-| `COOKIE_SECRET` | prod: sim | assina o cookie de sessão. Em dev tem fallback. |
-| `LINK_PUBLICO_SEGREDO` | não | assina os links públicos; sem env, reusa `COOKIE_SECRET`. Trocar revoga todos os links. |
-| `LINK_PUBLICO_DIAS` | não (30) | validade do link público em dias (0 = nunca). |
-| `WORKSPACE_OWNER_EMAIL` | não | e-mail do dono do workspace (todo cadastro cai na conta dele). Default: `brunoacre07@gmail.com`. |
-| `PLANILHA_ACESSO_LIVRE_EMAILS` | não | e-mails que não precisam digitar a senha da planilha "Oficina" (lista por vírgula). |
-| `R2_ACCOUNT_ID` | upload | conta Cloudflare R2. |
-| `R2_ACCESS_KEY_ID` | upload | credencial R2. |
-| `R2_SECRET_ACCESS_KEY` | upload | credencial R2. |
-| `R2_BUCKET` | upload | nome do bucket (ex.: `mostruario-midia`). |
-| `R2_PUBLIC_BASE` | upload | base pública das imagens (ex.: `https://pub-...r2.dev`). |
-| `WS_PUBLIC_BASE` | não | base pública do WebSocket (ex.: `wss://mostruario-api.fly.dev`). |
-
----
-
-## 5. Modelo de dados (conceitual)
-
-- **Coleção (`Colecao`)** = uma planilha. Tem `nome` e uma lista de **campos**
-  (o schema compartilhado). Pode ter senha (Oficina) e estar arquivada.
-- **Campo (`Campo`)** = um **bloco** do registro. Tem `nome`, `tipo`, `ordem` e
-  `config`. Tipos: `texto`, `paragrafo`, `numero`, `imagem`, `selecao`, `data`,
-  `datahora`, `booleano`, `secao`.
-- **Registro (`Registro`)** = uma linha/cartão. Tem `valores` (mapa `campoId -> valor`)
-  e, opcionalmente, **`campos` (corpo próprio)** — quando presente, a estrutura de
-  blocos daquele registro é independente da coleção.
-- **Seção (`secao`) e Subcampo (`SubCampo`)**: um bloco `secao` contém `subcampos`
-  (quadradinhos) que se repetem por **linha**. O valor de uma seção é um array de
-  linhas; cada linha é um objeto `{subcampoId: valor}`. Subcampo pode ser imagem
-  (foto por linha), mas não pode aninhar outra seção.
-- **Integração (`Integracao`)**: une várias coleções (`colecaoIds` ORDENADO) numa
-  visão só, casando registros por **referência**. É só configuração/visão — não altera
-  coleções/registros. Ligar/desligar (`ativo`) não toca em dado nenhum.
-
-Os tipos canônicos vivem em `shared/tipos.ts` (`Campo`, `ConfigCampo`, `SubCampo`,
-`Registro`, `Colecao`, `Integracao`, `Usuario`, `ItemLixeira`, `TipoCampo`).
-
-### `ConfigCampo` (config de um bloco/subcampo)
-
-```ts
-interface ConfigCampo {
-  opcoes?: string[];   // selecao
-  sufixo?: string;     // numero (ex.: "kg", "R$")
-  obrigatorio?: boolean;
-  maxFotos?: number;   // só 'imagem' (1..30, default 1)
-  autoAgora?: boolean; // data/datahora: já vem preenchido ao criar
-  subcampos?: SubCampo[]; // secao
-  titulo?: string;     // cabeçalho exibido acima do bloco
-  ehTitulo?: boolean;  // marca este bloco como fonte do TÍTULO do registro
-}
-```
-
-### Formato de `registros.valores` por tipo
-
-```jsonc
+```json
 {
-  "<campoId texto/paragrafo>": "texto livre",
-  "<campoId numero>": 12.5,
-  "<campoId data>": "2026-08-09",              // YYYY-MM-DD
-  "<campoId datahora>": "2026-08-09T14:30",     // YYYY-MM-DDTHH:mm
-  "<campoId booleano>": true,
-  "<campoId selecao>": "uma das opcoes",
-  "<campoId imagem>": ["<key R2>", "<key R2>"], // array de keys
-  "<campoId secao>": [                            // array de linhas
-    { "<subId cor>": "rosa", "<subId foto>": ["<key R2>"] },
-    { "<subId cor>": "preto", "<subId foto>": [] }
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://mostruario-api.fly.dev/api/:path*" },
+    { "source": "/health", "destination": "https://mostruario-api.fly.dev/health" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
 ```
 
-- `null` num campo = "limpar" (o PATCH é merge; gravar `null` faz o campo aparecer
-  vazio na leitura). Chave que não é id de campo da coleção é **rejeitada** (`.strict()`).
+**Nota:** o rewrite da Vercel **não** proxya `/ws`. O cliente usa `wsBase` de
+`GET /api/config` → `wss://mostruario-api.fly.dev` e conecta **direto** no Fly.
 
-### Key de imagem no R2 (formato exato)
+### Backup R2
+
+- `.github/workflows/backup-r2.yml` — cron 06:00 UTC + manual.
+- Script `backend/scripts/backup-r2.mjs` — cópia só-adição para bucket de backup.
+- Envs: `R2_BACKUP_BUCKET`, `R2_SRC_*`, `R2_DST_*`.
+
+### Legado
+
+- `render.yaml` — blueprint Render (não é o caminho ativo).
+
+---
+
+## 5. Variáveis de ambiente
+
+### Backend (obrigatórias / importantes)
+
+| Variável | Obrigatória | Uso |
+|----------|-------------|-----|
+| `DATABASE_URL` | sim | Neon **pooled** (app) |
+| `DATABASE_URL_DIRECT` | migrations | Neon **direct** (sem PgBouncer); fallback = `DATABASE_URL` |
+| `COOKIE_SECRET` | prod: sim | Assina cookie `sessao` |
+| `PORT` | não (3333) | Listen |
+| `NODE_ENV` | prod | Endurece secrets |
+| `CORS_ORIGIN` | não | URL do front (Vercel) |
+| `R2_ACCOUNT_ID` | upload | Conta CF |
+| `R2_ACCESS_KEY_ID` | upload | Key |
+| `R2_SECRET_ACCESS_KEY` | upload | Secret |
+| `R2_BUCKET` | upload | `mostruario-midia` |
+| `R2_PUBLIC_BASE` | upload | Base pública das imagens |
+| `WS_PUBLIC_BASE` | não | Exposto em `/api/config` |
+| `LINK_PUBLICO_DIAS` | não (30) | Validade link público |
+| `LINK_PUBLICO_SEGREDO` | não | HMAC legado; default = `COOKIE_SECRET` |
+| `WORKSPACE_OWNER_EMAIL` | não | Quem pode **arquivar** (default Bruno) |
+| `PLANILHA_ACESSO_LIVRE_EMAILS` | não | Whitelist senha de planilha |
+
+Não-secretas no `fly.toml [env]`; secretas via `fly secrets set`.
+
+### Frontend
+
+- **Sem `VITE_*` de API.** Paths relativos `/api`.
+- Runtime: `GET /api/config` → `{ r2PublicBase, wsBase }`.
+
+---
+
+## 6. Shared (`shared/tipos.ts`)
+
+Única fonte de tipos de domínio. Backend e frontend importam daqui.
+
+### Tipos de bloco
+
+```ts
+TIPOS_CAMPO = texto | paragrafo | numero | imagem | selecao | data | datahora | booleano | secao
+TIPOS_SUBCAMPO = texto | numero | selecao | data | datahora | booleano | imagem  // sem seção aninhada
+```
+
+### `ConfigCampo`
+
+| Campo | Uso |
+|-------|-----|
+| `opcoes?` | seleção |
+| `sufixo?` | número (R$, kg…) |
+| `obrigatorio?` | validação |
+| `maxFotos?` | imagem, 1..30 (default 1) |
+| `autoAgora?` | data/datahora pré-preenchida |
+| `subcampos?` | seção |
+| `titulo?` | cabeçalho visual acima do bloco |
+| `ehTitulo?` | bloco é fonte do título do registro |
+
+### Entidades
+
+| Tipo | Essência |
+|------|----------|
+| `Campo` | id, colecaoId, nome, tipo, ordem, config |
+| `Registro` | id, colecaoId, valores, campos?, criadoPor/Id, **ordem**, timestamps |
+| `Colecao` | id, nome, criadoPor, campos[], **protegida**, **bloqueada**, **arquivada** |
+| `Integracao` | id, nome, colecaoIds[], ativo, arquivada, timestamps |
+| `ItemLixeira` | snapshot soft-delete + fotosReferencia |
+| `Usuario` | papel dono\|membro, contaId/Home/Nome, pedido?, podeGerirSenhas? |
+| `UsuarioResumo` | painel admin (origem nativo\|convidado) |
+| `ContaAcessivel` | seletor multi-conta |
+| `ValorJson` | JSON serializável (postgres.js) |
+
+---
+
+## 7. Banco de dados (Neon Postgres)
+
+### Conexão (`backend/src/db/`)
+
+- Driver **postgres.js**, `ssl: 'require'`, pool `max: 10`.
+- App: `DATABASE_URL` (pooled).
+- Migrations: `DATABASE_URL_DIRECT ?? DATABASE_URL`.
+- Isolamento: `comConta(contaId)` → `set_config('app.conta_id', …, true)` + **FORCE RLS**.
+- Controle: tabela `_migrations (nome PK, aplicada_em)`.
+
+### Tabelas (estado atual após 023)
+
+#### `contas` (tenant / workspace)
+
+| Coluna | Notas |
+|--------|--------|
+| `id` uuid PK | |
+| `email` unique | legado do dono original |
+| `senha_hash` | legado; auth real em `usuarios` |
+| `criado_em` | |
+| `codigo_convite_hash` | código legado do workspace |
+| `edicao_liberada` boolean default false | trava de edição global |
+| `nome` | nome amigável (multi-tenant) |
+
+Sem RLS — o app media o acesso.
+
+#### `usuarios`
+
+| Coluna | Notas |
+|--------|--------|
+| `id` uuid PK | |
+| `conta_id` → contas CASCADE | **home** do usuário |
+| `nome`, `email` unique, `senha_hash` | Argon2 |
+| `papel` | `dono` \| `membro` (na home) |
+| `criado_em`, `visto_em` | presença |
+
+#### `sessoes`
+
+| Coluna | Notas |
+|--------|--------|
+| `id` text PK | 32 bytes base64url — valor do cookie |
+| `conta_id` | conta **ativa** da sessão |
+| `usuario_id` → usuarios | |
+| `criado_em`, `expira_em`, `revogado_em` | |
+
+Fora do RLS (lookup pelo id do cookie).
+
+#### `colecoes`
+
+| Coluna | Notas |
+|--------|--------|
+| `id`, `conta_id`, `nome` (1–80) | |
+| `criado_por` → usuarios SET NULL | quem pode apagar (além do dono) |
+| `senha_hash` | planilha protegida |
+| `arquivada` boolean | some p/ todos menos workspace owner |
+| timestamps | |
+
+RLS por `conta_id`.
+
+#### `campos`
+
+| Coluna | Notas |
+|--------|--------|
+| `id`, `colecao_id` CASCADE | |
+| `nome` (1–60), `tipo`, `ordem`, `config` jsonb | |
+| tipos CHECK | inclui `datahora`, `secao` (mig 005) |
+
+#### `registros`
+
+| Coluna | Notas |
+|--------|--------|
+| `id`, `colecao_id` | |
+| `valores` jsonb | `{ "<campo_uuid>": valor }` |
+| `campos` jsonb | corpo próprio (mig 014); null = herda coleção |
+| `ordem` double precision | maior = topo (mig 018) |
+| `criado_por` text, `criado_por_id` → usuarios SET NULL | |
+| timestamps | |
+| índices | GIN em `valores`; `(colecao_id, ordem DESC)` |
+
+#### `integracoes`
+
+| Coluna | Notas |
+|--------|--------|
+| `conta_id`, `nome` | |
+| `colecao_ids` jsonb | array **ordenado** de UUIDs (≥2) |
+| `ativo`, `arquivada` | |
+| `criado_por` | |
+
+Só configuração — **não altera** registros.
+
+#### `compartilhamentos`
+
+| Coluna | Notas |
+|--------|--------|
+| `codigo` PK | link curto público |
+| `registro_id`, `conta_id` | |
+| `blocos` jsonb | quais blocos mostrar |
+| `partes` jsonb, `titulo` | multi-registro (mig 019) |
+| `expira_em`, `revogado_em`, `criado_por` | |
+| policy | SELECT público; escrita só da conta |
+
+#### `convites_conta` + `conta_membros`
+
+Tokens de convite multi-conta (`MOST-XXXX-XXXX` no UX):
+
+- `convites_conta`: token, conta_id, rotulo, usos/max_usos, expira, revogado
+- `conta_membros`: PK (conta_id, usuario_id), status `pendente|ativo|revogado`,
+  papel `membro|dono`, token_origem, timestamps
+
+#### Outras
+
+| Tabela | Papel |
+|--------|--------|
+| `convites` | legado por coleção (preencher/ler) |
+| `colecao_acessos` | PK (colecao_id, usuario_id) — desbloqueio de senha |
+| `lixeira_registros` / `lixeira_colecoes` | soft-delete + snapshots + `fotos_referencia` |
+| `lixo_r2` | keys órfãs para GC |
+| `entradas` | log “X entrou” |
+
+---
+
+## 8. Migrations (001 → 023)
+
+Runner: `backend/migrations/run.ts` — aplica arquivos `.sql` em ordem lexicográfica,
+registra em `_migrations`. Idempotente.
+
+| # | Arquivo | O que faz |
+|---|---------|-----------|
+| 001 | `001_init.sql` | `pgcrypto`; `contas`, `colecoes`, `campos`, `registros`, `convites` |
+| 002 | `002_rls.sql` | ENABLE/FORCE RLS + policy `conta_isola` |
+| 003 | `003_sessoes.sql` | `sessoes` |
+| 004 | `004_lixo_r2.sql` | `lixo_r2` |
+| 005 | `005_tipos_datahora_secao.sql` | tipos `datahora`, `secao` |
+| 006 | `006_usuarios_workspace.sql` | `usuarios`; sessão→usuario; convite workspace; `criado_por` |
+| 007 | `007_presenca.sql` | `visto_em`; `entradas` |
+| 008 | `008_lixeira_registros.sql` | soft-delete registros |
+| 009 | `009_lixeira_fotos_referencia.sql` | `fotos_referencia` jsonb |
+| 010 | `010_lixeira_colecoes.sql` | soft-delete coleções |
+| 011 | `011_senha_oficina.sql` | `senha_hash` + `colecao_acessos` |
+| 012 | `012_idx_registros_paginacao.sql` | índice paginação |
+| 013 | `013_conta_edicao_trava.sql` | `edicao_liberada` |
+| 014 | `014_registro_corpo_proprio.sql` | `registros.campos` jsonb |
+| 015a | `015_integracoes.sql` | `integracoes` |
+| 015b | `015_compartilhamentos.sql` | links públicos curtos |
+| 016 | `016_colecao_arquivada.sql` | `colecoes.arquivada` |
+| 017 | `017_integracao_arquivada.sql` | `integracoes.arquivada` |
+| 018 | `018_registros_ordem.sql` | `ordem` double + índice |
+| 019 | `019_compartilhamentos_partes.sql` | `partes`, `titulo` |
+| 020 | `020_contas_multi_tenant.sql` | `contas.nome`; `convites_conta` |
+| 021 | `021_usuarios_delete_set_null.sql` | FKs `criado_por` → ON DELETE SET NULL |
+| 022 | `022_conta_membros.sql` | membros pendente/ativo/revogado |
+| 023 | `023_conta_membros_papel.sql` | `conta_membros.papel` |
+
+**Ao criar migration nova:** número seguinte (`024_...sql`), só ADDITIVE, nunca DROP de dados; testar com `npm run migrate`; o boot do Fly aplica sozinho.
+
+---
+
+## 9. Backend (Fastify) — mapa e boot
+
+### Boot (`server.ts`)
+
+1. Plugins: websocket, helmet, cors (`credentials: true`), cookie assinado, rate-limit 300/min.
+2. Error handler: Zod → 400.
+3. Registra todas as rotas + `/health` + `/ws/presenca`.
+4. `garantirSchemaPronto()` — aborta se schema crítico faltar.
+5. `listen(PORT, '0.0.0.0')`.
+
+### Pastas `backend/src/`
+
+| Pasta | Responsabilidade |
+|-------|------------------|
+| `auth/` | cookies, sessoes, exigeDono, senha argon2, acessoColecao, workspace |
+| `db/` | client, comConta, schemaPronto |
+| `rotas/` | handlers HTTP |
+| `repositorios/` | SQL |
+| `validacao/` | Zod (campo, valores, colecao, upload…) |
+| `r2/` | keys, presign PUT, delete |
+| `ws/` | hub em memória + rota WS |
+| `publico/` | token HMAC legado |
+| `config.ts` | env tipado |
+| `erros.ts` | erros de domínio |
+
+### Isolamento de tenant
+
+Quase toda rota autenticada:
+
+```ts
+await comConta(contaIdDaSessao, async (sql) => { ... });
+```
+
+RLS garante que queries só veem linhas da conta ativa.
+
+---
+
+## 10. API completa (rotas)
+
+Legenda: **Público** · **Sessão** (cookie) · **Admin** (`papel === 'dono'` na conta ativa) · **Workspace owner** (e-mail `WORKSPACE_OWNER_EMAIL`).
+
+### Infra
+
+| Método | Path | Auth |
+|--------|------|------|
+| GET | `/health` | Público (ping DB) |
+| GET | `/api/config` | Público → `{ r2PublicBase, wsBase }` |
+| GET | `/ws/presenca?ticket=` | Ticket one-shot |
+
+### Auth
+
+| Método | Path | Notas |
+|--------|------|--------|
+| POST | `/api/auth/registrar` | Token → membro; sem token → cria workspace + dono |
+| POST | `/api/auth/entrar` | Token opcional (pedido/acesso) |
+| POST | `/api/auth/olhar-token` | Não consome uso |
+| POST | `/api/auth/pre-pedido` | E-mail+token → pedido |
+| POST | `/api/auth/sair` | Revoga sessão |
+| GET | `/api/auth/eu` | Sessão |
+| GET | `/api/auth/contas` | Home + convidadas |
+| POST | `/api/auth/trocar-conta` | Nova sessão na conta alvo |
+| POST | `/api/auth/pedir-acesso` | Sessão |
+| GET/POST | `/api/auth/pedidos-acesso…` | Admin aprovar/recusar |
+| GET/PATCH/DELETE | `/api/auth/usuarios…` | Admin (papel, senha, delete) |
+| PATCH | `/api/auth/codigo-convite` | Código legado |
+| GET/POST/DELETE | `/api/auth/tokens-convite…` | Admin |
+
+Rate-limit auth tipicamente 10/min (olhar-token 30/min).
+
+### Conta / presença / lixeira
+
+| Método | Path | Auth |
+|--------|------|------|
+| GET/PATCH | `/api/conta/edicao-trava` | Sessão |
+| GET | `/api/presenca` | Sessão (fallback) |
+| GET | `/api/presenca/ws-ticket` | Sessão |
+| GET/POST/DELETE | `/api/lixeira…` | **Admin** |
+
+### Coleções / campos / registros
+
+| Método | Path | Notas |
+|--------|------|--------|
+| POST/GET | `/api/colecoes` | |
+| GET | `/api/colecoes/:id` | Respeita senha/arquivo |
+| POST | `/api/colecoes/:id/desbloquear` | Senha |
+| PATCH/DELETE | `/api/colecoes/:id/senha` | |
+| PATCH | `/api/colecoes/:id` | Renomear |
+| POST | `/api/colecoes/:id/arquivar` \| `desarquivar` | Workspace owner |
+| POST | `/api/colecoes/:id/duplicar` | |
+| DELETE | `/api/colecoes/:id` | Soft → lixeira |
+| POST | `/api/colecoes/:id/campos` | |
+| PATCH | `/api/campos/:id` | |
+| PATCH | `/api/colecoes/:id/campos/ordem` | |
+| DELETE | `/api/campos/:id` | |
+| GET | `/api/colecoes/:id/registros?before=` | Cursor por `ordem` |
+| GET | `/api/colecoes/:id/registros/busca?q=` | |
+| POST | `/api/colecoes/:id/registros` | |
+| PATCH | `/api/registros/:id` | Valores |
+| PUT | `/api/registros/:id/corpo` | Corpo próprio |
+| POST | `/api/registros/:id/mover` | `direcao` |
+| DELETE | `/api/registros/:id` | Soft → lixeira |
+| POST | `/api/registros/:id/upload` | Presigned R2 |
+
+### Integrações / público
+
+| Método | Path | Notas |
+|--------|------|--------|
+| CRUD | `/api/integracoes` | |
+| POST | `/api/integracoes/:id/arquivar` \| `desarquivar` | Workspace owner |
+| POST | `/api/registros/:id/link` | Código curto |
+| POST | `/api/compartilhamentos/grupo` | Multi-parte |
+| DELETE | `/api/registros/:id/link/:codigo` | Revogar |
+| GET | `/api/publico/r/:codigo` | Público (DB ou HMAC legado) |
+
+---
+
+## 11. Auth, sessão, multi-conta
+
+**Não há JWT de acesso.**
+
+1. Cookie HTTP-only **`sessao`**, assinado (`COOKIE_SECRET`), `sameSite: 'lax'`, `secure` em prod, ~30 dias.
+2. Valor = `sessoes.id` opaco (não o UUID da conta).
+3. Senhas: **Argon2**.
+4. `exigeDono` (nome histórico): qualquer usuário autenticado com sessão válida + membro ativo da conta da sessão.
+
+### Multi-conta
+
+- Cada usuário tem **home** (`usuarios.conta_id`).
+- Outras contas: `conta_membros` + token `convites_conta` (ou código legado).
+- Fluxo típico: olhar token → pré-pedido (não gasta o único uso) → entrar/registrar → admin aprova → status `ativo`.
+- Trocar conta = nova sessão apontando para outro `conta_id`.
+- Papel efetivo: na home = `usuarios.papel`; convidado = `conta_membros.papel`.
+- Admin (`dono`): usuários, tokens, lixeira, senhas de planilha (`podeGerirSenhas`).
+- Remover usuário: FKs `criado_por` SET NULL (mig 021) + kick WS `acesso_revogado`.
+
+---
+
+## 12. Realtime / WebSocket
+
+Arquivo: `backend/src/ws/presencaHub.ts` — salas **em memória** por `contaId`.
+
+### Fluxo
+
+1. Cliente logado: `GET /api/presenca/ws-ticket` (60s, one-shot).
+2. Conecta `GET /ws/presenca?ticket=…`.
+3. Heartbeat: cliente `ping` ~25s → `pong`; `visto_em` no DB no máx. a cada 60s.
+4. Timeout 60s; sweep 15s.
+5. **Fly: 1 máquina só** — 2+ quebram presença (split-brain).
+
+### Eventos JSON (`tipo`)
+
+| tipo | Uso |
+|------|-----|
+| `presenca` | `{ online[], entradas[] }` |
+| `entrada` | alguém logou |
+| `registro` | criado \| atualizado \| apagado (+ colecaoId) |
+| `trava` | `{ liberada }` |
+| `pedido_acesso` | admin ao vivo |
+| `acesso_revogado` | fecha socket (code 4001) |
+| `ping` / `pong` | heartbeat |
+
+Fallback REST: `GET /api/presenca` (poll ~20s se WS cair).
+
+Frontend: `frontend/src/api/realtime.ts` + UI `ui/Presenca.tsx`.
+
+---
+
+## 13. Fotos e Cloudflare R2
+
+### Princípio
+
+- DB guarda só a **key** (string) no jsonb do campo imagem (array de keys).
+- Bytes no R2; leitura pela URL pública `R2_PUBLIC_BASE/{key}`.
+
+### Key gerada no servidor
 
 ```
-<colecaoId uuid>/<registroId uuid>/<nano21>.<jpg|png|webp>
+{colecaoId}/{registroId}/{nano21}.jpg
 ```
 
-- A key é **sempre gerada pelo servidor** (`r2/r2.ts → novaKey`). O cliente nunca
-  escolhe — é a única proteção num bucket público.
-- A **miniatura** é por convenção: `.<ext>` → `_t.<ext>` (`keyMini`). Não se guarda a
-  key da mini no jsonb; ela é derivada.
-- O validador (`validacao/valores.ts`) exige exatamente esse formato via regex `R2_KEY`.
+Miniatura por **convenção de nome**: `foto.jpg` → `foto_t.jpg`.
+
+### Upload (cliente → R2 direto)
+
+1. Frontend `imagens/enviar.ts` → `gerarDerivadas`:
+   - **Cheia**: ≤2560px JPEG ~0.88 (teto ~4 MB)
+   - **Mini**: ≤240px JPEG 0.7 (teto ~200 KB)
+2. `POST /api/registros/:id/upload` → `{ key, urlCheia, urlMini }` (presign PUT 60s, ContentType + ContentLength assinados).
+3. Cliente PUT no R2 (só `content-type: image/jpeg` — CORS do bucket em `r2-cors.json`).
+4. PATCH do registro com a key no array do bloco.
+
+### UI de fotos
+
+| Peça | Arquivo | Função |
+|------|---------|--------|
+| Grade | `imagens/Grade.tsx` | Upload, reordenar, remover, abre Visor; respeita `maxFotos` |
+| Visor | `imagens/Visor.tsx` | Portal fullscreen, carrossel, fundo `--visor-fundo` |
+| FotoZoomavel | `imagens/FotoZoomavel.tsx` | Blur-up mini→cheia, pinch/wheel zoom 1–4×, `touch-action: none` |
+| Miniatura | `preencher/Miniatura.tsx` | Lazy, fade-in, `urlMini` |
+| urls | `imagens/urls.ts` | `definirBaseR2`, `urlCheia`, `urlMini` |
+
+### Limites
+
+| Limite | Valor |
+|--------|--------|
+| `maxFotos` por bloco (shared) | 1..30 |
+| FormBloco (UI criar template) | costuma limitar a 10 |
+| Import / criação automática | até 30 no bloco |
+| Lote import Home | `MAX_FOTOS_LOTE = 100` (concorrência controlada) |
+| MIME aceitos | jpeg / png / webp (normaliza p/ jpeg nas derivadas) |
+
+### GC
+
+- Soft-delete: fotos ficam no R2.
+- Apagar definitivo na lixeira: `DeleteObject` + limpa keys.
+- Órfãos: `lixo_r2` + `npm run limpar-r2` (script).
 
 ---
 
-## 6. Banco de dados e migrations
+## 14. Importação, conversão e criação automática
 
-- **Runner**: `backend/migrations/run.ts`. Cria a tabela `_migrations` (nome PK),
-  lê os `*.sql` da pasta em ordem alfabética e aplica os que ainda não constam, cada um
-  numa transação. Idempotente. Usa `DATABASE_URL_DIRECT` (ou `DATABASE_URL`).
-- **RLS (Row-Level Security)**: caminho "DONO" abre transação e faz
-  `select set_config('app.conta_id', <uuid>, true)` (ver `db/comConta.ts`). As
-  políticas filtram tudo por `conta_id`. Como o app conecta com a role dona, usa-se
-  `FORCE ROW LEVEL SECURITY` → sem `set_config`, `current_setting('app.conta_id', true)`
-  é NULL e **nada aparece** (deny por padrão). Tabelas de auth (`contas`, `usuarios`,
-  `sessoes`) e filas de manutenção (`lixo_r2`) ficam FORA da RLS de conta — a auth
-  media o acesso e as rotas filtram por `conta_id` explicitamente.
+Pasta: `frontend/src/importar/`.
 
-### Tabelas (estado final após as migrations 001–020)
+### Regras de nome de arquivo (`importarFotos.ts`)
 
-> Arquivos `001`–`020`, com **dois** de prefixo `015` (`015_compartilhamentos` e
-> `015_integracoes`). O runner ordena por nome.
+| Nome | Destino |
+|------|---------|
+| `4621.png` | Bloco de imagens da referência 4621 |
+| `cor.vermelho.png` / `4621.cor.vermelho.png` | Seção **Cor**, linha vermelho |
+| `4784.vermelho.png` | Cor se cor conhecida ou já existir no registro |
+| `modelagem.png` | Bloco de imagem cujo nome casa com o arquivo |
+| Sem match | Foto de referência (não se perde) |
 
-| Tabela | Colunas principais | Observações |
-|---|---|---|
-| `contas` | id, email(unique), senha_hash, nome, codigo_convite_hash, edicao_liberada, criado_em | Workspace isolado. `nome` = rótulo amigável (mig. 020). |
-| `usuarios` | id, conta_id, nome, email(unique), senha_hash, papel(`dono`\|`membro`), visto_em, criado_em | Login; cada um pertence a **uma** conta. |
-| `convites_conta` | token(PK), conta_id, rotulo, criado_por, expira_em, revogado_em, usos, max_usos, criado_em | Tokens do admin para outros entrarem na conta (fora da RLS; mig. 020). |
-| `sessoes` | id(text PK), conta_id, usuario_id, criado_em, expira_em, revogado_em | Cookie carrega `sessoes.id` (opaco). Fora da RLS. |
-| `colecoes` | id, conta_id, nome, criado_por(→usuarios), senha_hash, arquivada, criado_em, atualizado_em | Planilha. `senha_hash` = senha da planilha (Oficina). |
-| `campos` | id, colecao_id, nome, tipo, ordem, config(jsonb), criado_em | Blocos compartilhados da planilha (o schema). |
-| `registros` | id, colecao_id, valores(jsonb), campos(jsonb, nullable), criado_por(text), criado_por_id(→usuarios), ordem(double), criado_em, atualizado_em | `campos` = corpo próprio (null = herda da coleção). `ordem` = ordem manual (maior no topo). |
-| `convites` | token(PK), colecao_id, papel(`preencher`\|`ler`), expira_em, revogado_em | Reservada para a "Fase 6" (link de preenchimento com role separada). **Sem rotas ativas** hoje — o compartilhamento atual é só o link público read-only. |
-| `compartilhamentos` | codigo(PK), conta_id, registro_id, blocos, partes(jsonb\|null), titulo, expira_em, revogado_em, criado_por, criado_em | Link público CURTO (1 registro ou unido via `partes`). SELECT público liberado; escrita só do dono. |
-| `integracoes` | id, conta_id, nome, colecao_ids(jsonb ordenado), ativo, arquivada, criado_por, criado_em, atualizado_em | Une planilhas por referência. Só configuração/visão. |
-| `lixeira_registros` | id, conta_id, colecao_id, colecao_nome, registro_id, valores(jsonb), campos(jsonb), fotos_referencia(jsonb), criado_por/_id, criado_em, atualizado_em, apagado_em, apagado_por_id/_nome | Soft-delete de registro (snapshot completo, inclui corpo próprio). |
-| `lixeira_colecoes` | id, conta_id, colecao_id, colecao_nome, snapshot(jsonb), fotos_referencia(jsonb), qtd_registros, criado_por, criado_em, atualizado_em, apagado_em, apagado_por_id/_nome | Soft-delete de planilha inteira (campos + registros). Restaurar recria com os mesmos ids. |
-| `colecao_acessos` | (colecao_id, usuario_id) PK, criado_em | Quem já desbloqueou a senha da planilha. |
-| `entradas` | id, conta_id, usuario_id, nome, criado_em | Log de logins ("Fulano entrou"). |
-| `lixo_r2` | key(PK), motivo, criado_em, limpo_em | Fila de GC de imagens órfãs no R2 (`npm run limpar-r2` apaga o que tem >7 dias). |
-| `_migrations` | nome(PK), aplicada_em | Controle do runner. |
+Lista `CORES_CONHECIDAS`: dezenas de nomes PT (vermelho, bege, offwhite, terracota…).
 
-### Migrations (resumo, em ordem)
+Funções chave: `parseNomeArquivo`, `importarNaColecao`, `importarNoRegistro`,
+`blocoImagemReferencia`, `blocoImagemPorNomeArquivo`, `todasReferencias`.
 
-- **001_init** — extensão pgcrypto; `contas`, `colecoes`, `campos`, `registros`,
-  `convites`; índices (inclui GIN em `registros.valores`).
-- **002_rls** — habilita e FORÇA RLS em colecoes/campos/registros/convites; política
-  `conta_isola` por `app.conta_id`.
-- **003_sessoes** — tabela `sessoes` (fora da RLS).
-- **004_lixo_r2** — fila `lixo_r2` para GC de órfãos no bucket.
-- **005_tipos_datahora_secao** — adiciona os tipos `datahora` e `secao` ao CHECK de
-  `campos.tipo`.
-- **006_usuarios_workspace** — cria `usuarios`; liga `sessoes.usuario_id`; adiciona
-  `contas.codigo_convite_hash`, `colecoes.criado_por`, `registros.criado_por_id`;
-  backfill (cada conta vira um usuário `dono`).
-- **007_presenca** — `usuarios.visto_em` + tabela `entradas`.
-- **008_lixeira_registros** — soft-delete de registros (com RLS).
-- **009_lixeira_fotos_referencia** — `lixeira_registros.fotos_referencia` (prévia).
-- **010_lixeira_colecoes** — soft-delete de planilhas (com RLS).
-- **011_senha_oficina** — `colecoes.senha_hash` + `colecao_acessos`.
-- **012_idx_registros_paginacao** — índice nomeado para paginação por `criado_em`.
-- **013_conta_edicao_trava** — `contas.edicao_liberada` (alavanca de edição).
-- **014_registro_corpo_proprio** — `registros.campos` e `lixeira_registros.campos`
-  (corpo próprio por registro).
-- **015_integracoes** — tabela `integracoes` (com RLS).
-- **015_compartilhamentos** — tabela `compartilhamentos` (link público curto; SELECT
-  público liberado por política).
-- **016_colecao_arquivada** — `colecoes.arquivada`.
-- **017_integracao_arquivada** — `integracoes.arquivada`.
-- **018_registros_ordem** — `registros.ordem` (double, ordem manual; backfill = epoch
-  do `criado_em`); índice `(colecao_id, ordem desc)` para paginação por cursor.
-- **019_compartilhamentos_partes** — `compartilhamentos.partes` + `titulo` (link unido).
-- **020_contas_multi_tenant** — `contas.nome` + tabela `convites_conta` (tokens por
-  conta; cadastro cria workspace próprio ou entra com token).
-- **021_usuarios_delete_set_null** — FKs de autoria (`colecoes.criado_por`,
-  `registros.criado_por_id`, `integracoes.criado_por`) passam a `ON DELETE SET NULL`
-  para o admin poder remover membro sem apagar planilhas/registros.
-- **022_conta_membros** — vínculo N:N (`pendente`/`ativo`/`revogado`): usuário com
-  conta própria pode pedir acesso à conta de um admin via token no login; sessão
-  aponta para a conta ativa.
-- **023_conta_membros_papel** — `conta_membros.papel` (`membro`|`dono`) para passar
-  autoridade de admin a convidados (token).
+### Botões
 
-> Nota: há dois arquivos com prefixo `015` (`015_integracoes.sql` e
-> `015_compartilhamentos.sql`); o runner aplica por ordem alfabética, então
-> `compartilhamentos` roda depois de `integracoes`. Ambos são independentes.
+| Componente | Onde | Função |
+|------------|------|--------|
+| `BotaoImportarFotos` | Preencher / ficha | Distribui por nome (coleção ou 1 registro) |
+| `BotaoConversao` | Dentro da planilha | Cola refs → 1 foto/ref renomeada → import |
+| `BotaoConversaoHome` | Home | Idem + escolher planilha(s) |
+| `BotaoImportarZip` | Home | Backup (`dados.json` / `integracao.json`) ou texto+imagens |
+| `BotaoCriacaoAutomatica` | Home | Texto colado (+ fotos) → planilha nova |
+
+### Criação automática (`criacaoAutomatica.ts`)
+
+- Registros separados **só** por linha `---`.
+- Blocos: ponto final `.` (não quebra decimal `19.90`) e quebras de linha.
+- Listas numeradas (`1 …` `2 …`) têm limpeza de ordinais.
+- **`ESTOQUE_BLOCOS`**: dicionário nome escrito → bloco no registro:
+
+| Escreve | Vira |
+|---------|------|
+| `4785` / `ref: 4785` | Referência |
+| `cor: rosa` | Seção Cor |
+| `modelagem` / `caderno` / `oficina` | Bloco de **fotos** com esse título |
+| `imagem da referência` | Bloco padrão de fotos |
+| `observação` / `tecido` / `tamanho` | Bloco de texto (pode nascer vazio) |
+| `rótulo: valor` | Bloco nomeado |
+| frase solta | Bloco Texto |
+
+UI mostra a tabela “estoque” em `BotaoCriacaoAutomatica`.
 
 ---
 
-## 7. Segurança e multi-tenant
+## 15. Frontend — rotas, pastas, telas
 
-- **Cadastro dual** (`POST /api/auth/registrar`):
-  - **Com token** (`token` ou `codigo`): entra como `membro` na conta do admin
-    (`convites_conta`) — ou, legado, código da conta Bruno (`codigo_convite_hash`).
-  - **Sem token**: cria **workspace novo** (`INSERT contas` + usuário `dono`).
-    Dados isolados por `conta_id` + RLS — nunca misturam com outras contas.
-- **Tokens**: tabela `convites_conta` (migration `020`). Admin gera/lista/revoga em
-  Config (`/api/auth/tokens-convite`).
-- **Login**: `usuarios` (e-mail único global). Senha **argon2** (`auth/senha.ts`).
-- **Sessão**: cookie assinado com `sessoes.id`. `auth/sessoes.ts`, `auth/cookies.ts`.
-- **Papéis**: `dono` = admin da **própria** conta (Config/engrenagem, tokens,
-  usuários, lixeira restaurar/apagar definitivo, senhas, arquivar). `membro` =
-  preenche/cria, sem essas telas. O preHandler `exigeDono` só exige sessão; o
-  papel é checado rota a rota.
-- **RLS por conta**: `comConta(contaId, fn)` (ver §6).
-- **Senha por planilha (Oficina)**: `colecoes.senha_hash` + `colecao_acessos`.
-- **Arquivamento**: `colecoes.arquivada` / `integracoes.arquivada` — some para
-  membros; admin desarquiva.
-- **Link público**: `compartilhamentos` (código curto). `rotas/publico.ts`.
-- **Rate limit** / **Helmet** / **CORS** como antes.
-- Ver também `atualizacao.MD` (pedido multi-conta organizado).
+### Rotas (`App.tsx`)
 
----
+| Rota | Tela | Auth |
+|------|------|------|
+| `/entrar` | `Entrar` | Pública (logado → `/`) |
+| `/` | `Inicio` | Protegida |
+| `/c/:id` | `Colecao` | Protegida — modos **Criar** \| **Preencher** (não é rota separada) |
+| `/integracoes` | `Integracoes` | Protegida |
+| `/i/:id` | `Integrado` | Protegida |
+| `/config` | `Config` | Protegida (admin) |
+| `/lixeira` | `Lixeira` | Protegida (dono) |
+| `/r/:token` | `RegistroPublico` | Pública |
+| `*` | redirect `/` | |
 
-## 8. Backend em detalhe
+Shell global (dentro de `ProvedorAuth`): `BotaoLixeiraFlutuante`, `Presenca`,
+`AvisoPedidoAcesso`, `InstalarApp`.
 
-- **`server.ts`** — `buildServer()` registra: websocket, helmet, cors, cookie,
-  rate-limit e as rotas (`config`, `publico`, `conta`, `auth`, `colecoes`, `campos`,
-  `registros`, `integracoes`, `upload`, `presenca`, `lixeira`) + `GET /health`.
-  `bodyLimit` 64 KB (binário vai direto pro R2); `maxParamLength` 8192 (link público no
-  path). ErrorHandler traduz `ZodError` → 400 `{erro:'validação', detalhes}`; demais
-  usam `statusCode` do erro. No boot, `garantirSchemaPronto()` derruba o processo se o
-  schema estiver velho (evita planilha "vazia").
-- **`db/`** — `client.ts` (pool postgres.js, `ssl:'require'`, `max:10`),
-  `comConta.ts` (transação + `set_config app.conta_id`), `schemaPronto.ts` (checagem de
-  schema no boot).
-- **`repositorios/`** — SQL por tabela: `colecoes`, `campos`, `registros`, `lixeira`,
-  `integracoes`, `compartilhamentos`, `presenca`, `lixo`. Aqui moram as queries e as
-  regras que dependem do estado do banco (ex.: mover/reordenar registro).
-- **`validacao/`** — Zod: `campo.ts` (config de bloco/subcampo + `corpoRegistroSchema`
-  para corpo próprio; aceita `colecaoId`/`ordem` "não confiáveis"), `valores.ts`
-  (valores por tipo + `R2_KEY`), `colecao.ts`, `integracao.ts`, `upload.ts`,
-  `credenciais.ts`, `params.ts`.
-- **`r2/r2.ts`** — S3Client apontando pro endpoint R2; `novaKey`, `keyMini`,
-  `presignPut` (assina ContentType + ContentLength; **sem** cache-control para não
-  quebrar o preflight CORS do R2), `apagarObjeto`. Config R2 lida sob demanda (o app
-  sobe sem R2; só o upload falha com mensagem clara). Detalhe importante: o SDK v3
-  novo força checksum CRC32 que o R2 rejeita → `requestChecksumCalculation:
-  'WHEN_REQUIRED'` + `unsignableHeaders` resolvem.
-- **`ws/`** — `presencaHub.ts` (salas em memória por máquina) e `rotasWs.ts`
-  (`/ws/presenca`, upgrade WebSocket). Por isso o Fly roda 1 máquina só.
-- **`scripts/limparR2.ts`** — GC: apaga do bucket as keys de `lixo_r2` com >7 dias.
+### Pastas `frontend/src/`
 
-### Fluxo de upload de imagem (importante)
+| Pasta | Propósito |
+|-------|-----------|
+| `api/` | `cliente.ts` (REST), `cache.ts`, `prefetch.ts`, `realtime.ts`, runtime R2/WS |
+| `contexto/` | `Auth.tsx` |
+| `estilos/` | `tokens.css`, `base.css` |
+| `ui/` | Botao, Campo, FolhaInferior, Chip, Segmentado, Carregando, Presenca… |
+| `telas/` | Inicio, Colecao, Criar, Preencher, Integrado, Integracoes, Config, Lixeira, Entrar, TopoApp, FormBloco + CSS |
+| `preencher/` | Ficha, ListaDensa, Tabela, Busca, Preview, CampoValor, SecaoEditor, CorpoRegistroEditor, Miniatura, compartilhar |
+| `imagens/` | enviar, derivadas, Grade, Visor, FotoZoomavel, urls |
+| `importar/` | fotos, conversão, ZIP, criação automática |
+| `integracao/` | merge, FichaIntegrada, ParteEditor, PreviewIntegrado |
+| `backup/` | export ZIP |
+| `publico/` | página `/r/:token` |
 
-1. Cliente gera as 2 derivadas (cheia/mini) no canvas.
-2. `POST /api/registros/:id/upload` com `{mime, tamanhoCheia, tamanhoMini}` →
-   servidor gera a **key** e devolve `{key, urlCheia, urlMini}` (dois presigned PUT).
-3. Cliente faz `PUT` das duas derivadas direto no R2 (só header `content-type`).
-4. Cliente faz `PATCH` do registro guardando a **key** no bloco de imagem.
+### Telas — comportamento
 
----
+**Inicio:** lista coleções + integrações ativas; criar; criação automática; ZIP;
+conversão Home; arquivar (workspace owner); apagar (dono ou criador); ajuda
+pós-cadastro (`sessionStorage mostruario_ajuda_inicio`).
 
-## 9. API REST (todos os endpoints)
+**Colecao `/c/:id`:** Segmentado Criar | Preencher. Criar = editar blocos do template
+(`FormBloco`). Preencher = lista/tabela + ficha em `FolhaInferior`, busca, import,
+backup, realtime. Se `bloqueada` → senha.
 
-Base: mesma origem do frontend; a Vercel faz proxy de `/api/*` para o Fly. Todas as
-rotas (exceto `/api/config`, `/api/publico/*`, `/health` e auth de entrada) exigem
-sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente.ts`.
+**Integracoes:** criar união (≥2 planilhas, ordem = ordem das partes), ligar/desligar,
+reordenar, apagar.
 
-**Config / Auth**
-- `GET /api/config` → `{ r2PublicBase, wsBase? }`
-- `GET /api/auth/eu` → usuário logado
-- `POST /api/auth/entrar` `{email, senha}`
-- `POST /api/auth/registrar` `{nome, email, senha, codigo}`
-- `POST /api/auth/sair`
-- `PATCH /api/auth/codigo-convite` `{codigo}` (dono)
-- `GET /api/auth/usuarios` (dono)
-- `PATCH /api/auth/usuarios/:id/senha` `{senha}` (dono)
+**Integrado:** carrega N planilhas, agrupa por código de referência, modos Unidos/Geral,
+preview, ficha unificada, chips para pular planilha, Preencher na parte certa, share, export.
 
-**Coleções**
-- `GET /api/colecoes` → lista (resumo, sem campos)
-- `POST /api/colecoes` `{nome}`
-- `GET /api/colecoes/:id` → coleção com `campos`
-- `POST /api/colecoes/:id/desbloquear` `{senha}`
-- `PATCH /api/colecoes/:id/senha` `{senha}` / `DELETE /api/colecoes/:id/senha`
-- `PATCH /api/colecoes/:id` `{nome}` (renomear)
-- `POST /api/colecoes/:id/duplicar`
-- `DELETE /api/colecoes/:id` (vai pra lixeira de coleções)
-- `POST /api/colecoes/:id/arquivar` / `POST /api/colecoes/:id/desarquivar`
+**Config:** tokens, usuários, pedidos, senhas, link do app, trava.
 
-**Campos (blocos compartilhados)**
-- `POST /api/colecoes/:colecaoId/campos` `{nome, tipo, config?}`
-- `PATCH /api/campos/:id` `{nome?, tipo?, config?}`
-- `PATCH /api/colecoes/:colecaoId/campos/ordem` `{ids: string[]}`
-- `DELETE /api/campos/:id`
+**Entrar:** login / registro (conta nova ou token); confirma senha 2×; pré-pedido.
 
-**Registros**
-- `GET /api/colecoes/:colecaoId/registros?before=<cursor>` (paginação; cursor = `ordem`)
-- `GET /api/colecoes/:colecaoId/registros/busca?q=<termo>`
-- `POST /api/colecoes/:colecaoId/registros` `{valores, campos?}` — `campos` presente ⇒
-  o registro nasce com **corpo próprio**.
-- `PATCH /api/registros/:id` `{valores}` (merge; `null` limpa)
-- `PUT /api/registros/:id/corpo` `{campos}` — torna o corpo do registro independente.
-- `POST /api/registros/:id/mover` `{direcao: 'cima'|'baixo'}`
-- `DELETE /api/registros/:id` (vai pra lixeira)
+**Lixeira:** restaurar / apagar definitivo (admin).
 
-**Link público**
-- `POST /api/registros/:registroId/link` `{campos: string[]}` → `{codigo}` (código curto)
-- `POST /api/compartilhamentos/grupo` `{titulo?, partes:[{registroId,fonte,campos}]}` →
-  `{codigo}` — link unido (várias planilhas num `/r/:codigo`; migração `019`)
-- `DELETE /api/registros/:registroId/link/:codigo` — revoga um link específico
-- `GET /api/publico/r/:codigo` → `{campos, valores, r2PublicBase}` **ou**
-  `{titulo, partes:[{fonte,campos,valores}], r2PublicBase}` (sem login; aceita o
-  **código curto** novo OU um **token assinado legado** — HMAC, se contiver `.`)
+**Público:** só leitura; 1 registro ou várias partes.
 
-**Integrações**
-- `GET /api/integracoes` / `GET /api/integracoes/:id`
-- `POST /api/integracoes` `{nome, colecaoIds, ativo?}`
-- `PATCH /api/integracoes/:id` `{nome?, colecaoIds?, ativo?}`
-- `DELETE /api/integracoes/:id`
-- `POST /api/integracoes/:id/arquivar` / `.../desarquivar`
+### Cliente API (`api/cliente.ts`)
 
-**Lixeira**
-- `GET /api/lixeira`
-- `POST /api/lixeira/:id/restaurar`
-- `DELETE /api/lixeira/:id` (apagar definitivo; remove keys do R2)
-
-**Conta / Presença / Upload**
-- `GET /api/conta/edicao-trava` / `PATCH /api/conta/edicao-trava` `{liberada}`
-- `GET /api/presenca` → `{online, entradas}`
-- `GET /api/presenca/ws-ticket` → `{ticket, expiraEm}` (para abrir o WS)
-- `POST /api/registros/:registroId/upload` `{mime, tamanhoCheia, tamanhoMini}` →
-  `{key, urlCheia, urlMini}`
-- `WS /ws/presenca` (WebSocket; usa o ticket)
+- `fetch('/api/...')` + `credentials: 'same-origin'`
+- Timeout ~60s; após ~4s sinaliza “servidor lento” (cold start raro — Fly fica ligado)
+- `ErroApi(status, message)`
+- Métodos cobrem auth, contas, coleções, campos, registros, corpo, mover, upload
+  (só presign), integrações, lixeira, trava, presença, público
 
 ---
 
-## 10. Frontend em detalhe
+## 16. Design system e estilização
 
-### Rotas (`src/App.tsx`)
+### Metáfora: base de corte
 
-- `/` → **Inicio** (lista de planilhas e planilhas unidas; criar/importar)
-- `/c/:id` → **Colecao** (uma planilha: criar/preencher/registros)
-- `/i/:id` → **Integrado** (planilha unida)
-- `/integracoes` → **Integracoes** (gerir uniões)
-- `/config` → **Config**
-- `/lixeira` → **Lixeira**
-- `/r/:token` → **RegistroPublico** (link público, sem login)
-- Guarda de autenticação; telas carregadas com `lazy()`.
+Definida em `frontend/src/estilos/tokens.css`:
 
-### Estado e dados (`src/api/`, `src/contexto/`)
+| Token | Cor / valor | Significado |
+|-------|-------------|-------------|
+| `--tapete` | `#1f2a26` | Fundo verde-escuro (mesa de corte) |
+| `--tapete-2` | `#24312c` | Variação |
+| `--papel` | `#f7f5ef` | Superfície clara de trabalho |
+| `--papel-2` / `--cartao` | `#ffffff` | Campos / cartões |
+| `--tinta` | `#17201c` | Texto principal (sobre papel) |
+| `--tinta-2` | `#495650` | Secundário / placeholders legíveis |
+| `--tinta-3` | `#7d8a83` | Terciário (usar com cuidado — some fácil) |
+| `--giz` | `#eef3ec` | Texto/realce **sobre o tapete** |
+| `--fita` | `#d98a3d` | Ação primária (fita métrica) |
+| `--fita-forte` | `#c6771f` | Hover primário |
+| `--perigo` | `#c0392b` | Destrutivo |
+| `--visor-fundo` | `#14181a` | Fullscreen de fotos |
+| `--linha` / `--linha-2` | beges | Bordas no papel |
+| `--grade` | branco 6% | Grade 24px no tapete |
+| `--fonte` | Inter | UI |
+| `--mono` | Martian Mono | Etiquetas, códigos, números |
+| `--e1`…`--e6` | 4…32px | Espaçamento |
+| `--toque` | 44px | Alvo de toque mínimo |
+| `--raio` / `--raio-2` | 8 / 12 | Cantos |
+| `--sombra` / `--sombra-folha` | — | Elevação |
 
-- **`api/cliente.ts`** — funções REST (§9). Tratamento de "servidor lento" (cold start),
-  timeout, e um fallback para backend antigo (remove chaves `null`).
-- **`api/cache.ts`** — snapshots em `localStorage` para abrir as telas instantâneas
-  (mostra o cache e revalida em background).
-- **`api/realtime.ts`** — WebSocket: eco de `registro criado/atualizado/apagado` e
-  presença; as telas assinam e atualizam a lista ao vivo.
-- **`contexto/Auth`** — usuário logado, papel, login/logout.
+### `base.css`
 
-### Fluxo "Preencher" (`src/preencher/`)
+- Body: tinta + fundo tapete + grade.
+- `touch-action: pan-x pan-y` no documento (bloqueia zoom do browser; fotos têm gestos próprios).
+- `.pagina`, `.faixa`, `.pagina--app` / `.faixa--app` / `.rolagem`: viewport fixo;
+  só a lista interna rola (Home e planilha).
+- `.etiqueta`, `.mono`, `.visualmente-oculto`.
 
-- **`Preencher.tsx`** — orquestra a planilha: barra/busca fixas e a **lista rolável**
-  (app shell: `.pagina--app`/`.faixa--app`/`.rolagem` → só a lista rola).
-- **`Ficha.tsx`** — editor de UM registro (autosave por bloco: debounce ~400ms + flush
-  garantido ao fechar). Botão "Título" por bloco (marca `config.ehTitulo`). "Novo
-  registro" herda a estrutura do registro mais recente.
-- **`CampoValor.tsx`** — o input certo por tipo (texto/parágrafo/número+sufixo/
-  data/datahora com "Hoje/Agora"/booleano/seleção). **`CorpoRegistroEditor.tsx`** —
-  edita os blocos de UM registro (torna-o corpo próprio; PUT `/corpo`). **`FormBloco.tsx`**
-  (em `telas/`) — formulário de um bloco, reusado por `Criar` e pelos editores de corpo.
-- **`telas/Criar.tsx`** — editor dos **blocos compartilhados da coleção** (adicionar/
-  editar/reordenar/apagar campos) + prévia. Diferente do `CorpoRegistroEditor` (que
-  mexe só num registro).
-- **Alavanca de edição** (`edicao-trava`): trava/destrava a edição por conta (salva no
-  servidor, sincroniza ao vivo pelo evento `trava` do WebSocket).
-- **`ListaDensa.tsx`** (mobile) e **`Tabela.tsx`** (desktop) — listas virtualizadas
-  (`@tanstack/react-virtual`) que rolam dentro do container.
-- **`BuscaReferencia.tsx`** — busca por referência. Os resultados são **cards
-  compactos** (miniatura + título + resumo) que rolam por dentro; tocar abre a **prévia
-  completa** (folha grande com X). Se a busca acha **exatamente 1** registro, a prévia
-  **abre sozinha**. (Mesmo padrão vale na planilha unida.)
-- **`RegistroPreview.tsx`** — prévia de um registro. Os botões (Renomear /
-  Compartilhar / Abrir) vão no slot fixo **`folha__abaixoTitulo`** (logo abaixo do
-  título da Folha, fora do scroll) — sem faixa cinza de “barra de UI”. Prop
-  `fonte` = selo da planilha (prévia unida). Modo compartilhar: marca blocos e gera
-  link (`criarLinkRegistro`) ou imagem.
-- **`derivarResumo.ts`** — deriva **título**, **resumo**, **capa** e o **corpo efetivo**
-  do registro (`camposDoRegistro` = corpo próprio OU o da coleção). Título vem do bloco
-  marcado `ehTitulo`, senão do bloco "Referência".
-- **`valoresVazios.ts`** — gera `valores` vazios a partir de um conjunto de campos
-  (usado ao criar registro herdando estrutura).
-- **`SecaoEditor.tsx`** — edita seções (linhas de subcampos); `linhasDe()` lê o array
-  de linhas.
+### Componentes UI (`ui/ui.css`)
 
-### Imagens (`src/imagens/`)
+- **Botao**: `primario` (fita), `padrao`, `fantasma`, `perigo`; bloco / ícone.
+- **Campo**: rótulo mono + input/textarea no papel; placeholder `--tinta-2` opacity 1.
+- **FolhaInferior**: bottom sheet (modal); título; slot abaixo do título; corpo rolável; rodapé; variante `alta`.
+- **Segmentado**, **Chip**, **Carregando**, **InstalarApp**.
 
-- **`derivadas.ts`** — `gerarDerivadas(file)`: **cheia** (lado máx 2560px, JPEG ~0.88,
-  teto 4 MB) e **mini** (240px, 0.7, teto 200 KB). Fallback via `<img>` quando
-  `createImageBitmap` falha (HEIC etc.). Sempre sai JPEG.
-- **`enviar.ts`** — `enviarFoto(registroId, file)`: gera derivadas, pede presign,
-  faz os 2 PUT no R2 e devolve a **key**.
-- **`urls.ts`** — monta URLs pública/cheia/mini a partir da key + `r2PublicBase`.
-- **`Visor.tsx`** (zoom), **`Grade.tsx`** (galeria), **`Miniatura.tsx`** (thumb).
+### CSS por domínio
 
-### Integração unida (`src/integracao/` + `telas/Integrado.tsx`)
+| Arquivo | Estiliza |
+|---------|----------|
+| `telas/telas.css` | Home, Entrar, Config, cartões, ajuda pós-cadastro |
+| `telas/colecao.css` | Modo criar, título editável (giz no tapete) |
+| `telas/integracao.css` | Setup Integrações (texto claro no tapete) + vista unida no papel |
+| `telas/lixeira.css` | Lixeira |
+| `preencher/preencher.css` | Lista, tabela, ficha, preview, skeletons |
+| `preencher/secao.css` | Linhas da seção |
+| `preencher/valores.css` | Controles de valor |
+| `imagens/imagens.css` | Grade, visor, zoom |
+| `importar/importar.css` | Folhas de import/conversão/estoque |
+| `publico/publico.css` | Página pública |
+| `ui/presenca.css`, `avisoPedido.css`, `botao-lixeira.css` | Extras |
 
-- **`merge.ts`** — casa registros por **referência** (`chaveReferencia`), monta o
-  `RegistroIntegrado` (partes por coleção) e a lista unida.
-- **`Integrado.tsx`** — tela da planilha unida (app shell: header/busca/filtro fixos,
-  lista rolável). Busca → **cards compactos** → tocar abre a **prévia completa** (folha
-  ALTA, quase tela cheia, com X); busca com 1 resultado abre sozinha. "Novo registro
-  unificado" herda o corpo recente da 1ª planilha. Prévia com navegação entre planilhas
-  (chips das fora de vista) + botão flutuante "Preencher" — que **some no modo
-  compartilhar** para não cobrir os controles de compartilhar. Botão "Baixar backup"
-  (backup da união inteira). Realtime: assina eventos de registro de TODAS as planilhas
-  do grupo e recalcula os grupos — criar registro/fotos numa planilha membro reflete
-  aqui na hora.
-- **`FichaIntegrada.tsx`** — editor unido: edita cada planilha da referência num lugar
-  só. Ao abrir, **cria automaticamente** os registros faltantes das planilhas do grupo
-  (com a referência pré-preenchida) — todas já aparecem prontas para preencher, sem o
-  passo "criar registro". Navegação por planilha (chips) e foco inicial na planilha
-  escolhida pelo "Preencher" da prévia.
-- **Barra global da prévia unida:** os mesmos 3 botões da Modelagem — **Renomear /
-  Compartilhar / Abrir** — ficam **fixos abaixo do título da Folha** (não por
-  planilha). Renomear aplica o nome em todas as partes com campo de título;
-  Compartilhar marca blocos em **todas** as planilhas e gera **um** link
-  (`POST /api/compartilhamentos/grupo`) ou imagem empilhada; Abrir abre o Preencher.
+### Armadilha de contraste
 
-### Importação e backup
-
-- **`importar/criacaoAutomatica.ts`** + **`BotaoCriacaoAutomatica`** — cria uma
-  planilha a partir de TEXTO colado (blocos por ponto/label) + imagens do celular
-  (nome do arquivo define o bloco: `4785.png`, `cor.rosa.png`, `imagem.da.referencia.png`).
-- **`importar/importarFotos.ts`** + **`BotaoImportarFotos`** — importa fotos em massa
-  numa planilha existente, distribuindo por referência/cor pelo nome do arquivo
-  (ex.: `5412.cor.vermelho.png`), inclusive replicando por todas as linhas/registros da
-  referência.
-- **`importar/importarTexto.ts`** — importa um `.zip` de TEXTO (`.txt`/`.md`) + imagens
-  soltas (cada nota separada por `---` vira um registro).
-- **`importar/importarBackup.ts`** + **`BotaoImportarZip`** — **importa um BACKUP**
-  (ver §11): detecta `dados.json`/`integracao.json` e recria a planilha (ou a união)
-  igualzinha, com corpo próprio por registro e imagens reenviadas ao R2. Se o `.zip`
-  não for backup, cai no importador de texto (pede o nome).
-- **`importar/BotaoConversao.tsx`** — "Conversão": tira fotos uma a uma, cada uma
-  renomeada com a próxima referência de uma lista, e aplica em massa.
-- **`backup/exportarColecao.ts`** — **backup**: `exportarColecao` (uma planilha) e
-  `exportarIntegracao` (planilha unida). Baixa TODOS os registros num `.zip` com as
-  imagens em ALTA definição + um `dados.json` estruturado (ver §11).
-
-### Estilo
-
-- **Design tokens** em `estilos/tokens.css` (importado por `base.css`): superfícies
-  (`--tapete`, `--papel`, `--cartao`), tinta (`--tinta`, `--tinta-2/3`), acentos
-  (`--giz`, `--fita` = laranja de ação, `--perigo`), espaçamento `--e1..--e6`
-  (4/8/12/16/24/32 px), alvo de toque `--toque` (44px), fontes `--fonte`/`--mono`.
-- CSS puro (sem framework), **um `.css` por feature** (importado pelo componente).
-- **App shell** de scroll contido (em `base.css`): `.pagina--app` fixa a altura,
-  `.faixa--app` é coluna, só `.rolagem` recebe scroll — usado na Home, na planilha e na
-  integrada (cabeçalho/busca fixos; só a lista/registros rola).
-- Mobile × desktop é decidido em JS por `useMedia('(max-width: 768px)')` (lista densa ×
-  tabela), além de media queries no CSS.
+- Sobre **tapete**: usar `--giz` / branco.
+- Sobre **papel/folha**: usar `--tinta` / `--tinta-2` — **nunca** `--giz` (some).
+- Integrações (setup): classe `.integ-setup` força texto claro.
 
 ---
 
-## 11. Formatos de importação e backup (round-trip)
+## 17. Modelo de UI: blocos, seções, corpo próprio
 
-### Backup de uma planilha (`exportarColecao`)
+### Template vs corpo próprio
 
-Gera `backup-<nome>.zip` com:
-- `dados.json` na raiz: `{ exportadoEm, colecao:{id,nome,campos}, registros:[{id,
-  criadoEm, atualizadoEm, campos(corpo próprio|null), valores, imagens}] }`, onde
-  **`imagens`** é o mapa `keyAntiga -> caminho relativo do arquivo no zip` (`''` quando
-  a foto não pôde ser baixada).
-- Uma pasta por registro (numerada, com referência + cor no nome), contendo
-  `informacoes.txt` (texto legível) + as imagens em alta definição.
-- `LEIA-ME.txt` e, se faltou alguma foto, `_imagens-que-faltaram.txt`.
+- Coleção tem `campos[]` (template compartilhado).
+- Registro sem `campos` → herda template.
+- Registro com `campos` → estrutura independente; editar não altera os outros.
+- Persistência: `PUT /api/registros/:id/corpo`.
+- “Novo registro unificado” na integração deve herdar o **corpo recente**, não um modelo antigo.
 
-### Backup de uma planilha unida (`exportarIntegracao`)
+### Seção (`tipo: 'secao'`)
 
-Gera `backup-unido-<nome>.zip` com:
-- `integracao.json` na raiz: `{ nome, membros:[{nome, id, pasta}] }`.
-- Uma **subpasta por planilha membro**, cada uma com seu próprio `dados.json` +
-  pastas de registro com imagens (mesmo formato acima).
+- Valor = array de linhas: `{ [subcampoId]: valor }[]`.
+- Subcampo imagem → Grade por célula.
+- **Cor** na prática: seção com subcampo texto (nome da cor) + subcampo imagem (fotos).
+- Import cria linha da cor se ainda não existir.
 
-### Importação de backup (`importarArquivoBackup`)
+### Título do registro
 
-- Detecta `integracao.json` (união) ou `dados.json` (coleção). Se não achar nenhum,
-  lança `NaoEhBackup` e o `BotaoImportarZip` cai no importador de texto.
-- Para cada registro: cria com **corpo próprio** = `registro.campos` (ou os campos da
-  coleção), preservando os **ids** dos blocos → os `valores` continuam batendo. As
-  imagens são **reenviadas** ao R2 (`enviarFoto`) ganhando keys novas; `remapValores`
-  troca as keys antigas pelas novas dentro dos `valores` (em blocos de topo e em
-  seções) e descarta as que falharam. Registros criados do mais antigo ao mais novo
-  para preservar a ordem.
-- União: recria cada planilha membro e depois cria a `integracao` ligando os novos ids.
-- Importar **sempre cria planilhas novas** (não sobrescreve nada).
+- Bloco com `config.ehTitulo` e/ou heurística de referência (`derivarResumo.ts`).
+- Código de referência = primeiro token com dígitos (normalizado) — base do merge.
+
+### Autosave
+
+- Ficha / FichaIntegrada: debounce (~300ms) em PATCH de valores.
+- Ordem manual: `POST .../mover` altera `ordem`.
 
 ---
 
-## 12. Convenções e armadilhas (aprendizados)
+## 18. Integrações (planilhas unidas)
 
-- **Nunca apagar dados**: exclusão é soft-delete (lixeira). Migrations são aditivas.
-- **RLS deny-by-default**: fora de `comConta`, nenhuma query "dono" enxerga linhas.
-  Se algo "some", confira se passou por `comConta(contaId, ...)`.
-- **Key de imagem só o servidor gera**; o validador exige o formato exato. Regex
-  frouxa = key aceita que o servidor nunca emitiu.
-- **R2 + AWS SDK v3**: checksum CRC32 automático quebra o PUT no R2. Já resolvido em
-  `r2/r2.ts` (`WHEN_REQUIRED` + `unsignableHeaders`). Não reintroduzir `cache-control`
-  assinado no presign (quebra o preflight CORS).
-- **1 máquina no Fly**: presença/tempo real é em memória por máquina; escalar horizontal
-  quebra sem um backplane.
-- **CRLF (Windows)**: o repo tem `core.autocrlf=true`; alguns arquivos aparecem como
-  "modificados" no `git status` só por fim de linha (diff de conteúdo vazio). Commite
-  só o que tem diff real.
-- **Backend só redeploya** quando muda `backend/**`/`shared/**`/Dockerfile/fly.toml
-  (paths do workflow). Mudança só de frontend não sobe o Fly (e não precisa).
-- **`null` nos valores** = limpar o campo (o PATCH é merge). Sem `null`, limpar
-  número/data/seleção era descartado pelo JSON e o valor antigo voltava.
+### Backend
 
----
+Só CRUD de `integracoes` (nome, `colecao_ids` ordenado, ativo, arquivada).
+**Não** mescla dados no Postgres.
 
-## 13. Glossário (PT no código → conceito)
+### Frontend (`integracao/merge.ts`)
 
-| Código (PT) | Significado |
-|---|---|
-| `colecao` | planilha |
-| `campo` | bloco do registro (coluna/atributo) |
-| `registro` | linha/cartão |
-| `secao` / `subcampo` | grupo repetível de campos por linha |
-| `valores` | mapa `campoId -> valor` do registro |
-| `corpo próprio` (`registros.campos`) | estrutura de blocos independente da coleção |
-| `conta` | tenant/workspace |
-| `usuario` | pessoa que loga (papel dono/membro) |
-| `integracao` | união de planilhas por referência |
-| `lixeira` | soft-delete (registros e coleções) |
-| `key` | caminho do objeto no R2 (`<colecao>/<registro>/<nano>.<ext>`) |
-| `cheia` / `mini` | derivadas de imagem (2560px / 240px) |
-| `comConta` | abre transação + fixa `app.conta_id` (RLS) |
+1. Para cada registro, `chaveReferencia` = código inicial do bloco Referência/título.
+2. Mesma chave em planilhas diferentes → um `RegistroIntegrado` com `partes[]`.
+3. Duplicatas na mesma planilha → “zip” por posição (nada some).
+4. Sem referência → grupo `solto:*` (modo Geral).
+5. `colecaoVirtual` / `registroVirtual` só em memória para preview/ficha.
+
+### UI
+
+- Chips das planilhas **fora** da viewport para pular.
+- Botão **Preencher** abre edição já na parte certa.
+- Header sticky na prévia / busca.
+- Compartilhar grupo → `partes` no compartilhamento.
 
 ---
 
-*Última revisão desta documentação: gerada a partir do código atual (migrations
-001–018, Fastify 5 backend, React 18 + Vite frontend). Ao evoluir o sistema, atualize
-as seções de banco (§6), API (§9) e formatos (§11).*
+## 19. Cache, prefetch, PWA
+
+| Peça | Comportamento |
+|------|----------------|
+| `cache.ts` | localStorage `mostruario:cache:v1:`; SWR ~7 dias; limpa no logout / troca de conta |
+| `prefetch.ts` | Home: idle, até 6 coleções, concorrência 2 |
+| PWA | `vite-plugin-pwa`, nome Mostruário, `theme_color` tapete, `autoUpdate`, navigateFallback denylist `/api` `/health` `/ws` |
+| Fontes | CacheFirst Google Fonts (1 ano) |
+| Chunks | `react-vendor`, `ui-vendor` |
+
+**Não** cachear bytes de foto no localStorage — só keys/URLs públicas.
+
+---
+
+## 20. Lixeira, arquivar, senha, trava
+
+### Lixeira
+
+- DELETE registro/coleção → snapshot em `lixeira_*`; R2 intacto.
+- Listar / restaurar / apagar definitivo: **admin da conta**.
+- Definitivo: remove DB + objects R2.
+
+### Arquivar
+
+- `arquivada = true` → some para todos **exceto** `WORKSPACE_OWNER_EMAIL`.
+- Diferente de senha: sem desbloqueio; só o workspace owner arquiva.
+
+### Senha de planilha
+
+- `colecoes.senha_hash` (Argon2).
+- Desbloqueio grava `colecao_acessos`.
+- API devolve `protegida` / `bloqueada`.
+- Acesso livre: papel dono **ou** e-mail em `PLANILHA_ACESSO_LIVRE_EMAILS`.
+- Trocar senha invalida desbloqueios.
+
+### Trava de edição
+
+- `contas.edicao_liberada` (default false).
+- Broadcast WS `trava`.
+- Frontend respeita alavanca no Preencher.
+
+---
+
+## 21. Backup / export / import ZIP
+
+### Export (`backup/exportarColecao.ts`)
+
+- Gera ZIP com JSON da estrutura + imagens em alta.
+- Funciona para coleção e para integração (várias planilhas).
+
+### Import (`importar/importarBackup.ts`)
+
+- Detecta `dados.json` / `integracao.json` do backup.
+- Recria coleções, campos, registros, corpos, sobe fotos no R2.
+- Round-trip esperado: baixar → importar → igual ao original.
+
+### Import texto+imagens (ZIP simples)
+
+- Via `importarTexto` / fluxo do `BotaoImportarZip` quando não é backup completo.
+
+---
+
+## 22. Convenções, armadilhas e checklist para a próxima IA
+
+### Convenções
+
+1. Migrations só aditivas; nunca “limpar o banco” em prod.
+2. Tipos de domínio em `shared/tipos.ts` — não duplicar.
+3. SQL só em `repositorios/` (+ `comConta`).
+4. Validação de entrada com Zod em `validacao/`.
+5. Frontend: paths relativos `/api`; config runtime para R2/WS.
+6. Presença = 1 máquina Fly; não escalar horizontal sem Redis/NOTIFY.
+7. Responder ao usuário em português (produto PT-BR).
+
+### Armadilhas conhecidas
+
+| Armadilha | Detalhe |
+|-----------|---------|
+| Giz no papel | Texto some — usar tinta |
+| Token de convite 1 uso | Pré-pedido **não** deve consumir; Entrar consome |
+| RLS | Esquecer `comConta` = query vazia ou erro |
+| PgBouncer | Migrations na URL **direct** |
+| Presign CORS | Não enviar headers extras no PUT R2 |
+| Integração | É visão — não “salvar merge” no DB |
+| Corpo próprio | Novo unificado deve copiar corpo recente |
+| maxFotos | Shared 30; UI template às vezes 10 |
+| Vercel `/ws` | Não passa pelo rewrite — cliente usa `wsBase` direto |
+
+### Checklist ao implementar feature
+
+- [ ] Precisa migration? Número seguinte, aditiva, documentar aqui.
+- [ ] Tipos em `shared`?
+- [ ] Rota + repositório + Zod?
+- [ ] RLS / `comConta`?
+- [ ] Broadcast WS se outros clientes precisam ver?
+- [ ] UI: contraste tapete vs papel?
+- [ ] Fotos: keys only; derivadas cheia+mini?
+- [ ] Soft-delete vs hard-delete?
+- [ ] Deploy: muda backend → Fly CI; só front → Vercel.
+
+### Arquivos “comece por aqui”
+
+| Objetivo | Arquivo |
+|----------|---------|
+| Tipos | `shared/tipos.ts` |
+| Boot API | `backend/src/server.ts` |
+| Env | `backend/src/config.ts` |
+| Sessão | `backend/src/auth/` |
+| Upload | `backend/src/r2/r2.ts` + `frontend/src/imagens/enviar.ts` |
+| Import fotos | `frontend/src/importar/importarFotos.ts` |
+| Criação automática | `frontend/src/importar/criacaoAutomatica.ts` |
+| Merge integração | `frontend/src/integracao/merge.ts` |
+| Design tokens | `frontend/src/estilos/tokens.css` |
+| Cliente HTTP | `frontend/src/api/cliente.ts` |
+| Rotas UI | `frontend/src/App.tsx` |
+| Deploy | `fly.toml`, `vercel.json`, `Dockerfile` |
+
+---
+
+*Documento gerado/atualizado para cobrir o estado do monorepo incluindo migrations
+até `023_conta_membros_papel.sql`, multi-conta, estoque de criação automática,
+contraste de Integrações e pipeline Vercel ↔ Fly ↔ Neon ↔ R2.*
