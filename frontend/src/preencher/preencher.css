@@ -39,6 +39,34 @@
   border-radius: var(--raio-2);
 }
 
+/* --- App shell da planilha: barra/busca fixas; SÓ a lista de registros rola. --- */
+.colecao-conteudo {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.preencher-lista {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Lista mobile (virtual) e tabela desktop preenchem a área e rolam por dentro. */
+.preencher-lista .lista--virtual {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: max(var(--e3), env(safe-area-inset-bottom, 0px));
+}
+.preencher-lista .tabela-envolto {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
 /* ---- miniatura de capa (mini _t.jpg) ---- */
 .capa {
   flex: none;
@@ -576,6 +604,18 @@
   border: 1px solid var(--linha);
   border-radius: var(--raio-2);
   overflow: hidden;
+}
+/* Dentro da folha (prévia), o cabeçalho com Renomear/Compartilhar/Abrir/Lixeira fica
+   FIXO no topo e só o conteúdo do registro rola — não precisa subir para achar os botões. */
+.folha__corpo .preview-registro {
+  overflow: visible;
+}
+.folha__corpo .preview-registro__cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--papel);
+  box-shadow: 0 6px 14px rgba(23, 32, 28, 0.1);
 }
 .preview-registro__cabecalho {
   display: flex;

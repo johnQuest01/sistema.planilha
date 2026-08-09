@@ -267,9 +267,9 @@ export function Colecao(): JSX.Element {
     usuario !== null && (usuario.papel === 'dono' || colecao.criadoPor === usuario.id);
 
   return (
-    <div className="pagina">
+    <div className="pagina pagina--app">
       <TopoApp />
-      <div className="faixa">
+      <div className="faixa faixa--app">
         <div className="colecao-barra">
           <input
             className="titulo-editavel"
@@ -345,19 +345,23 @@ export function Colecao(): JSX.Element {
           </div>
         )}
 
-        {modo === 'criar' ? (
-          <Criar
-            colecao={colecao}
-            aoMudarCampos={atualizarCampos}
-            recarregar={() => void recarregar()}
-          />
-        ) : (
-          <Preencher
-            colecao={colecao}
-            aoMudarCampos={atualizarCampos}
-            registrosIniciais={regsIniciais}
-          />
-        )}
+        <div className="colecao-conteudo">
+          {modo === 'criar' ? (
+            <div className="rolagem">
+              <Criar
+                colecao={colecao}
+                aoMudarCampos={atualizarCampos}
+                recarregar={() => void recarregar()}
+              />
+            </div>
+          ) : (
+            <Preencher
+              colecao={colecao}
+              aoMudarCampos={atualizarCampos}
+              registrosIniciais={regsIniciais}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

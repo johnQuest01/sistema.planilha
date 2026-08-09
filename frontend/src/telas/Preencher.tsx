@@ -470,33 +470,35 @@ export function Preencher({
         </div>
       )}
 
-      {registros === null ? (
-        <EsqueletoLista mobile={ehMobile} />
-      ) : registros.length === 0 ? (
-        <div className="preencher-vazio">Nenhum registro ainda. Toque em “Novo registro”.</div>
-      ) : ehMobile ? (
-        <ListaDensa
-          key={solto ? 'lista-solto' : 'lista-compacto'}
-          colecao={colecao}
-          registros={registros}
-          solto={solto}
-          aoAbrir={abrirPrevia}
-          aoAtualizar={aoAtualizar}
-          aoMover={aoMover}
-          rodape={rodapeVerMais}
-          aoAproximarFim={carregarMais}
-        />
-      ) : (
-        <Tabela
-          colecao={colecao}
-          registros={registros}
-          aoAtualizar={aoAtualizar}
-          aoAbrirFicha={abrirPrevia}
-          aoApagar={aoApagar}
-          aoMover={aoMover}
-          rodape={rodapeVerMais}
-        />
-      )}
+      <div className="preencher-lista">
+        {registros === null ? (
+          <EsqueletoLista mobile={ehMobile} />
+        ) : registros.length === 0 ? (
+          <div className="preencher-vazio">Nenhum registro ainda. Toque em “Novo registro”.</div>
+        ) : ehMobile ? (
+          <ListaDensa
+            key={solto ? 'lista-solto' : 'lista-compacto'}
+            colecao={colecao}
+            registros={registros}
+            solto={solto}
+            aoAbrir={abrirPrevia}
+            aoAtualizar={aoAtualizar}
+            aoMover={aoMover}
+            rodape={rodapeVerMais}
+            aoAproximarFim={carregarMais}
+          />
+        ) : (
+          <Tabela
+            colecao={colecao}
+            registros={registros}
+            aoAtualizar={aoAtualizar}
+            aoAbrirFicha={abrirPrevia}
+            aoApagar={aoApagar}
+            aoMover={aoMover}
+            rodape={rodapeVerMais}
+          />
+        )}
+      </div>
 
       {previa !== null && (
         <FolhaInferior

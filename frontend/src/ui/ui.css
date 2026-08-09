@@ -209,10 +209,21 @@ textarea.campo__controle {
   color: var(--tinta-3);
 }
 .folha__corpo {
+  flex: 1;
+  min-height: 0;
   padding: var(--e4);
   /* Espaço para o indicador de home do iPhone não cobrir o último campo/botão. */
   padding-bottom: max(var(--e4), env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
+}
+/* Rodapé fixo da folha (ex.: navegação entre planilhas integradas). Fica fora da
+   rolagem, sempre visível. */
+.folha__rodape {
+  flex: none;
+  border-top: 1px solid var(--linha);
+  background: var(--papel);
+  padding: var(--e2) var(--e3);
+  padding-bottom: max(var(--e2), env(safe-area-inset-bottom, 0px));
 }
 
 /* ---- Carregando ---- */

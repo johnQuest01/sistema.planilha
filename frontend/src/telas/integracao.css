@@ -238,6 +238,41 @@
   color: rgba(255, 180, 120, 0.85);
 }
 
+/* Navegação entre planilhas do grupo (rodapé fixo da folha): chips só das que NÃO
+   estão à vista, para pular direto. Rola na horizontal se não couber. */
+.integ-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.integ-nav::-webkit-scrollbar {
+  display: none;
+}
+.integ-nav__rotulo {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tinta-3);
+}
+.integ-nav__chip {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--linha-2);
+  border-radius: 999px;
+  background: var(--papel-2);
+  color: var(--tinta);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.integ-nav__chip:active {
+  background: var(--linha);
+}
+
 /* Prévia unida: cada parte vira um cartão no padrão do registro da Modelagem
    (cabeçalho com planilha + título e, abaixo, os blocos via .preview-campos). */
 .integ-previa {

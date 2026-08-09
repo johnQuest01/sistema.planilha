@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
-import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronUp, ImageOff } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
@@ -204,32 +204,14 @@ export function ListaDensa({
   const [erro, setErro] = useState<string | null>(null);
   const listaRef = useRef<HTMLDivElement>(null);
 
-  // A lista rola JUNTO com a página (não tem rolagem interna própria): assim, no
-  // celular, o botão "Ver mais" e o restante dos registros sempre aparecem ao rolar.
-  // O virtualizer de janela precisa saber a que distância do topo do documento a
-  // lista começa (scrollMargin) para posicionar os itens no lugar certo.
-  const [margemScroll, setMargemScroll] = useState(0);
-  const medir = useCallback((): void => {
-    const el = listaRef.current;
-    if (el === null) return;
-    const nova = el.getBoundingClientRect().top + window.scrollY;
-    // Durante a rolagem, top diminui e scrollY aumenta na mesma medida → soma constante,
-    // então isso NÃO dispara re-render em cada scroll (só quando o layout acima muda).
-    setMargemScroll((prev) => (Math.abs(prev - nova) > 0.5 ? nova : prev));
-  }, []);
-  // Remede a cada render (pega mudanças de altura do que está acima: form de campo,
-  // resultados de busca, avisos) e também em resize da janela.
-  useLayoutEffect(() => {
-    medir();
-    window.addEventListener('resize', medir);
-    return () => window.removeEventListener('resize', medir);
-  });
-
-  const virtualizer = useWindowVirtualizer({
+  // A lista agora ROLA POR DENTRO (o próprio contêiner é a área de scroll), para a
+  // planilha caber na tela e só os registros rolarem (app shell). O virtualizer usa
+  // esse contêiner como elemento de rolagem.
+  const virtualizer = useVirtualizer({
     count: registros.length,
+    getScrollElement: () => listaRef.current,
     estimateSize: () => altura,
     overscan: 8,
-    scrollMargin: margemScroll,
   });
 
   // Ao trocar compacto/solto, recalcula posições (senão a capa “vaza” com altura velha).
@@ -314,7 +296,7 @@ export function ListaDensa({
               key={r.id}
               className="lista__virtual-item"
               style={{
-                transform: `translateY(${item.start - margemScroll}px)`,
+                transform: `translateY(${item.start}px)`,
                 height: item.size,
               }}
             >

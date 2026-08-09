@@ -13,9 +13,11 @@ interface Props {
   onFechar: () => void;
   children: ReactNode;
   acaoTopo?: ReactNode;
+  /** Barra fixa no rodapé da folha (fora da área de rolagem). */
+  rodape?: ReactNode;
 }
 
-export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo }: Props): JSX.Element {
+export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo, rodape }: Props): JSX.Element {
   const folhaRef = useRef<HTMLDivElement>(null);
   // onFechar é recriado a cada render do pai (Ficha). Guardamos numa ref para o
   // efeito de montagem NÃO depender dele — senão ele re-executava a cada tecla,
@@ -74,6 +76,7 @@ export function FolhaInferior({ titulo, subtitulo, onFechar, children, acaoTopo 
           </button>
         </div>
         <div className="folha__corpo">{children}</div>
+        {rodape !== undefined && rodape !== null && <div className="folha__rodape">{rodape}</div>}
       </div>
     </div>
   );

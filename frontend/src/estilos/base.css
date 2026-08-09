@@ -123,3 +123,29 @@ p {
     padding: var(--e3);
   }
 }
+
+/* --- App shell: viewport fixo; SÓ a área de lista rola. Aplicado apenas nas telas
+   que pedem (Home e planilha) via .pagina--app, para não afetar as demais telas. --- */
+.pagina--app {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+/* A faixa vira uma coluna que ocupa a altura restante; o cabeçalho fica fixo e só a
+   .rolagem (abaixo) recebe o scroll. */
+.faixa--app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+.rolagem {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* respiro no fim (indicador de home do iPhone) */
+  padding-bottom: max(var(--e4), env(safe-area-inset-bottom, 0px));
+}

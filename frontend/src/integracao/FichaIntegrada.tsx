@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, CopyPlus, PlusCircle, Save, SlidersHorizontal } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Integracao, Registro } from '../../../shared/tipos';
@@ -77,6 +77,38 @@ export function FichaIntegrada({
   const [blocosIdx, setBlocosIdx] = useState<number | null>(null);
   const [salvandoBlocos, setSalvandoBlocos] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Navegação entre as planilhas do grupo: detecta quais partes estão visíveis (na
+  // área de rolagem da folha) e mostra, no rodapé, botões só das que NÃO estão à
+  // vista, para pular direto até elas.
+  const fichaRef = useRef<HTMLDivElement>(null);
+  const parteRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [visiveis, setVisiveis] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    const root = fichaRef.current?.closest('.folha__corpo') ?? null;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        setVisiveis((prev) => {
+          const next = new Set(prev);
+          for (const e of entries) {
+            const idx = Number((e.target as HTMLElement).dataset.idx);
+            if (Number.isNaN(idx)) continue;
+            if (e.isIntersecting) next.add(idx);
+            else next.delete(idx);
+          }
+          return next;
+        });
+      },
+      { root, threshold: 0.25 },
+    );
+    for (const el of parteRefs.current) if (el !== null) obs.observe(el);
+    return () => obs.disconnect();
+  }, [partes.length]);
+
+  function irPara(indice: number): void {
+    parteRefs.current[indice]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   function marcarSalvando(delta: number): void {
     setSalvandoCount((n) => Math.max(0, n + delta));
@@ -202,18 +234,44 @@ export function FichaIntegrada({
   const titulo = tituloUnificado(chave, partes);
   const refCriar = refParaPreencher(chave, partes);
 
+  // Chips de navegação: só das planilhas do grupo que NÃO estão à vista (para pular
+  // direto até elas). Some quando todas estão visíveis.
+  const naoVisiveis =
+    partes.length > 1 ? partes.map((_, i) => i).filter((i) => !visiveis.has(i)) : [];
+  const navRodape =
+    naoVisiveis.length > 0 ? (
+      <div className="integ-nav" aria-label="Ir para planilha">
+        <span className="integ-nav__rotulo">Ir para</span>
+        {naoVisiveis.map((i) => {
+          const p = partes[i];
+          if (p === undefined) return null;
+          return (
+            <button
+              key={p.colecao.id}
+              type="button"
+              className="integ-nav__chip"
+              onClick={() => irPara(i)}
+            >
+              {p.colecao.nome}
+            </button>
+          );
+        })}
+      </div>
+    ) : undefined;
+
   return (
     <FolhaInferior
       titulo={titulo}
       subtitulo={`${integracao.nome} — preenchimento unido`}
       onFechar={fechar}
+      rodape={navRodape}
       acaoTopo={
         <span className={`integ-salvo${salvando ? '' : ' integ-salvo--ok'}`}>
           {salvando ? 'Salvando…' : 'Tudo salvo'}
         </span>
       }
     >
-      <div className="ficha">
+      <div className="ficha" ref={fichaRef}>
         <div className="ficha__bloco ficha__acoes-topo">
           <Botao variante="primario" onClick={() => void salvarTudo()} disabled={salvando || ocupado}>
             <Save size={16} />
@@ -232,7 +290,14 @@ export function FichaIntegrada({
         {erro !== null && <p className="aviso-erro">{erro}</p>}
 
         {partes.map((parte, indice) => (
-          <div key={parte.colecao.id} className="integ-parte">
+          <div
+            key={parte.colecao.id}
+            className="integ-parte"
+            data-idx={indice}
+            ref={(el) => {
+              parteRefs.current[indice] = el;
+            }}
+          >
             <div
               className={`integ-parte-rotulo${parte.registro === null ? ' integ-parte-rotulo--ausente' : ''}`}
             >

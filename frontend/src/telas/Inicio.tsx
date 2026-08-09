@@ -224,10 +224,10 @@ export function Inicio(): JSX.Element {
   const integracoesArquivadas = integracoes.filter((i) => i.arquivada);
 
   return (
-    <div className="pagina">
+    <div className={`pagina${vazio ? '' : ' pagina--app'}`}>
       <TopoApp />
-      <div className="faixa">
-        {vazio ? (
+      {vazio ? (
+        <div className="faixa">
           <div className="inicio-vazio">
             <div className="corte inicio-vazio__corte" aria-hidden="true" />
             <h1 className="inicio-vazio__titulo">Nenhuma planilha ainda</h1>
@@ -255,8 +255,9 @@ export function Inicio(): JSX.Element {
               </button>
             </form>
           </div>
-        ) : (
-          <>
+        </div>
+      ) : (
+        <div className="faixa faixa--app">
             <div className="inicio-cabeca">
               <h1 className="inicio-cabeca__titulo">Suas planilhas</h1>
               <Link to="/integracoes" className="btn">
@@ -278,6 +279,7 @@ export function Inicio(): JSX.Element {
               <BotaoImportarZip aoImportado={(id) => navegar(`/c/${id}`)} />
             </div>
             {erro !== null && <p className="aviso-erro">{erro}</p>}
+            <div className="rolagem">
             {integracoesVisiveis.length > 0 && (
               <>
                 <h2 className="inicio-secao-titulo">
@@ -465,9 +467,9 @@ export function Inicio(): JSX.Element {
                 </div>
               </>
             )}
-          </>
-        )}
-      </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }
