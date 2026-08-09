@@ -1,0 +1,45 @@
+name: Deploy backend (Fly.io)
+
+# Sobe o backend (Dockerfile + fly.toml na raiz) para o Fly a cada push na main.
+# O Dockerfile roda as migrations e inicia o servidor. Também dá para disparar na
+# mão em Actions -> Deploy backend (Fly.io) -> Run workflow.
+#
+# PRÉ-REQUISITO: criar o secret FLY_API_TOKEN no repositório
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+#   Nome: FLY_API_TOKEN
+#   Valor: gere com `fly tokens create deploy` (ou no dashboard do Fly).
+on:
+  push:
+    branches: [main]
+    # Só sobe o backend quando algo que afeta o servidor muda (evita deploy à toa
+    # em mudanças só de frontend). Ajuste os caminhos se precisar.
+    paths:
+      - 'backend/**'
+      - 'shared/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'fly.toml'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch: {}
+
+# Um deploy por vez; se vierem vários pushes juntos, cancela o anterior em andamento.
+concurrency:
+  group: deploy-fly
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # --remote-only: builda o Docker nos servidores do Fly (não precisa de Docker
+      # no runner). Usa o fly.toml da raiz.
+      - name: Deploy no Fly
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
