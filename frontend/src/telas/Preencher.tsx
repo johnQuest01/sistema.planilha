@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
 import { Download, ListPlus, Lock, Plus, Rows2, Rows3, Unlock } from 'lucide-react';
 import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
 import { assinarRealtime } from '../api/realtime';
@@ -64,8 +63,6 @@ export function Preencher({
   const [erro, setErro] = useState<string | null>(null);
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [previa, setPrevia] = useState<Registro | null>(null);
-  /** Barra Renomear/Compartilhar/Abrir fixa abaixo do título da Folha. */
-  const [barraPrevia, setBarraPrevia] = useState<ReactNode>(null);
   const [aberta, setAberta] = useState<Registro | null>(null);
   const [solto, setSolto] = useState(false);
   const [adicionandoCampo, setAdicionandoCampo] = useState(false);
@@ -507,23 +504,20 @@ export function Preencher({
       {previa !== null && (
         <FolhaInferior
           alta
+          comBarraAbaixo
           titulo={tituloDoRegistro(camposDoRegistro(colecao, previa), previa)}
           subtitulo={
             edicaoLiberada
               ? 'Prévia — toque em Abrir registro para editar'
               : 'Prévia (somente leitura) — libere a edição na barra para alterar'
           }
-          onFechar={() => {
-            setBarraPrevia(null);
-            setPrevia(null);
-          }}
-          abaixoTitulo={barraPrevia}
+          onFechar={() => setPrevia(null)}
         >
           <RegistroPreview
             colecao={colecao}
             registro={previa}
             ocultarTitulo
-            portaBarra={setBarraPrevia}
+            barraNaFolha
             aoAbrir={() => abrirEdicao(previa)}
             edicaoBloqueada={!edicaoLiberada}
             aoAtualizar={aoAtualizar}

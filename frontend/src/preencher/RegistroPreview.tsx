@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ExternalLink, Image as ImageIcon, Link as LinkIcon, Lock, Pencil, Share2, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
@@ -7,6 +8,7 @@ import { useAuth } from '../contexto/Auth';
 import { Visor } from '../imagens/Visor';
 import { urlMini } from '../imagens/urls';
 import { Botao } from '../ui/Botao';
+import { useFolhaBarraSlot } from '../ui/FolhaInferior';
 import {
   alvoTitulo,
   camposDoRegistro,
@@ -38,10 +40,10 @@ interface Props {
   /** Esconde Renomear/Compartilhar/Abrir internos (pai monta barra global na unida). */
   esconderAcoes?: boolean;
   /**
-   * Entrega a barra (ações ou painel de compartilhar) para o slot fixo
-   * `abaixoTitulo` da Folha — fora do scroll.
+   * Coloca a barra (ações / compartilhar) no slot fixo da Folha via portal
+   * (`comBarraAbaixo` na FolhaInferior).
    */
-  portaBarra?: (barra: ReactNode | null) => void;
+  barraNaFolha?: boolean;
   /**
    * Modo compartilhar controlado pelo pai (seleção global na prévia unida).
    * Quando definido, `selShare`/`onAlternarShare` também vêm do pai.
@@ -175,12 +177,13 @@ export function RegistroPreview({
   fonte,
   ocultarTitulo = false,
   esconderAcoes = false,
-  portaBarra,
+  barraNaFolha = false,
   modoShareExterno,
   selShareExterno,
   onAlternarShareExterno,
 }: Props): JSX.Element {
   const { estado } = useAuth();
+  const slotBarra = useFolhaBarraSlot();
   const usuario = estado.fase === 'logado' ? estado.usuario : null;
   // Qualquer usuário logado pode enviar o registro para a lixeira (soft-delete).
   const podeApagar = aoApagar !== undefined && usuario !== null;
@@ -399,9 +402,9 @@ export function RegistroPreview({
   }
 
   const tituloAtual = tituloDoRegistro(campos, local);
-  // Quando a barra vai pro slot fixo da Folha, o share local (link/imagem) também
-  // sobe pra lá. No modo controlado (unida), o pai monta a barra global.
-  const barraExterna = portaBarra !== undefined && !shareControlado;
+  // Quando a barra vai pro slot fixo da Folha (portal), o share local sobe pra lá.
+  // No modo controlado (unida), o pai monta a barra global.
+  const barraExterna = barraNaFolha && !shareControlado && slotBarra !== null;
   const acoesInternas = !esconderAcoes && !barraExterna;
 
   const caixaRenomear = (
@@ -578,43 +581,15 @@ export function RegistroPreview({
     </div>
   );
 
-  let barraFixa: ReactNode = null;
-  if (barraExterna) {
-    if (editando) barraFixa = caixaRenomear;
-    else if (confirmandoApagar) barraFixa = confirmaApagar;
-    else if (modoShare) barraFixa = painelShare;
-    else barraFixa = barraAcoes;
-  }
-
-  useLayoutEffect(() => {
-    if (portaBarra === undefined || shareControlado) return;
-    portaBarra(barraFixa);
-    return () => portaBarra(null);
-    // Só reenvia quando o modo da barra muda — senão setState no pai vira loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    portaBarra,
-    shareControlado,
-    barraExterna,
-    editando,
-    confirmandoApagar,
-    modoShare,
-    selShare.size,
-    preparandoShare,
-    enviandoShare,
-    gerandoLink,
-    imgShare,
-    avisoShare,
-    rascunho,
-    salvando,
-    erroNome,
-    erroApagar,
-    apagando,
-    edicaoBloqueada,
-    podeApagar,
-    tituloAtual,
-    alvo?.campoId,
-  ]);
+  const barraFixa = barraExterna
+    ? editando
+      ? caixaRenomear
+      : confirmandoApagar
+        ? confirmaApagar
+        : modoShare
+          ? painelShare
+          : barraAcoes
+    : null;
 
   const mostrarCabecalhoInterno =
     (!ocultarTitulo || (fonte !== undefined && fonte !== '') || (editando && !barraExterna)) &&
@@ -622,6 +597,7 @@ export function RegistroPreview({
 
   return (
     <article className="preview-registro preview-registro--completo">
+      {barraFixa !== null && slotBarra !== null && createPortal(barraFixa, slotBarra)}
       {mostrarCabecalhoInterno && (
         <div className="preview-registro__cabecalho">
           {fonte !== undefined && fonte !== '' && (

@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -23,7 +23,7 @@ import type { Colecao, Integracao, Registro } from '../../../shared/tipos';
 import { Botao } from '../ui/Botao';
 import { Segmentado } from '../ui/Segmentado';
 import { Carregando } from '../ui/Carregando';
-import { FolhaInferior } from '../ui/FolhaInferior';
+import { FolhaInferior, useFolhaBarraSlot } from '../ui/FolhaInferior';
 import { TopoApp } from './TopoApp';
 import { camposDoRegistro, capaDoRegistro, tituloDoRegistro } from '../preencher/derivarResumo';
 import { valoresVaziosDe } from '../preencher/valoresVazios';
@@ -175,8 +175,6 @@ export function Integrado(): JSX.Element {
   const [resultados, setResultados] = useState<RegistroIntegrado[] | null>(null);
 
   const [previa, setPrevia] = useState<RegistroIntegrado | null>(null);
-  /** Barra global (Renomear/Compartilhar/Abrir ou painel de share) fixa abaixo do título. */
-  const [barraPrevia, setBarraPrevia] = useState<ReactNode>(null);
   const [editando, setEditando] = useState<RegistroIntegrado | null>(null);
   const [criandoNovo, setCriandoNovo] = useState(false);
   const [exportando, setExportando] = useState(false);
@@ -623,13 +621,10 @@ export function Integrado(): JSX.Element {
       {previa !== null && (
         <FolhaInferior
           alta
+          comBarraAbaixo
           titulo={tituloDoGrupo(previa)}
           subtitulo={`${integracao.nome} — ${partesPresentes(previa)}/${previa.partes.length} planilhas unidas`}
-          onFechar={() => {
-            setBarraPrevia(null);
-            setPrevia(null);
-          }}
-          abaixoTitulo={barraPrevia}
+          onFechar={() => setPrevia(null)}
           acaoTopo={
             <Botao
               variante="primario"
@@ -651,7 +646,6 @@ export function Integrado(): JSX.Element {
           )}
           <PreviaCorpo
             grupo={previa}
-            portaBarra={setBarraPrevia}
             aoAtualizarRegistro={(r) => {
               const i = previa.partes.findIndex((p) => p.colecao.id === r.colecaoId);
               if (i >= 0) atualizarParte(i, r);
@@ -755,21 +749,20 @@ function CartaoRegistro({
 }
 
 /**
- * Corpo da prévia unida: cartões por planilha + barra GLOBAL (Renomear /
- * Compartilhar / Abrir) no slot fixo da Folha. Compartilhar marca blocos de
- * TODAS as planilhas e gera UM link (ou imagem) do grupo.
+ * Corpo da prévia unida: cartões por planilha + barra GLOBAL (Compartilhar /
+ * Abrir) no slot fixo da Folha (portal). Compartilhar marca blocos de TODAS as
+ * planilhas e gera UM link (ou imagem) do grupo.
  */
 function PreviaCorpo({
   grupo,
   aoAtualizarRegistro,
   aoPreencher,
-  portaBarra,
 }: {
   grupo: RegistroIntegrado;
   aoAtualizarRegistro?: (r: Registro) => void;
   aoPreencher?: (foco?: number) => void;
-  portaBarra?: (barra: ReactNode | null) => void;
 }): JSX.Element {
+  const slotBarra = useFolhaBarraSlot();
   const previaRef = useRef<HTMLDivElement>(null);
   const parteRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [visiveis, setVisiveis] = useState<Set<number>>(new Set());
@@ -984,125 +977,96 @@ function PreviaCorpo({
 
   const naoVisiveis = grupo.partes.map((_, i) => i).filter((i) => !visiveis.has(i));
 
-  let barraFixa: ReactNode = null;
-  if (portaBarra !== undefined) {
-    if (modoShare) {
-      barraFixa = (
-        <>
-          <div className="preview-share-topo">
-            <div className="preview-share-topo__info">
-              <LinkIcon size={16} aria-hidden />
-              <span>
-                Marque blocos em qualquer planilha — o link (ou imagem) junta tudo num só
-                compartilhamento.
-              </span>
-            </div>
-            <div className="preview-share-topo__acoes">
-              <span className="preview-share-topo__contador">{selShare.size} selecionado(s)</span>
-              <button type="button" className="preview-share-topo__btn" onClick={marcarTodasShare}>
-                Marcar todas
-              </button>
-              <button
-                type="button"
-                className="preview-share-topo__btn"
-                disabled={selShare.size === 0}
-                onClick={limparShare}
-              >
-                Limpar
-              </button>
-            </div>
+  const barraFixa =
+    slotBarra === null ? null : modoShare ? (
+      <>
+        <div className="preview-share-topo">
+          <div className="preview-share-topo__info">
+            <LinkIcon size={16} aria-hidden />
+            <span>
+              Marque blocos em qualquer planilha — o link (ou imagem) junta tudo num só
+              compartilhamento.
+            </span>
           </div>
-          <div className="preview-share-bar">
-            {avisoShare !== null && <p className="preview-share-bar__aviso">{avisoShare}</p>}
-            {imgShare !== null && (
-              <p className="preview-share-bar__ok">Imagem pronta! Toque em “Enviar imagem”.</p>
-            )}
-            <div className="preview-share-bar__acoes">
-              <Botao
-                variante="primario"
-                disabled={gerandoLink || selShare.size === 0}
-                onClick={() => void enviarLink()}
-              >
-                <LinkIcon size={16} aria-hidden />
-                {gerandoLink ? 'Gerando link…' : 'Compartilhar link'}
-              </Botao>
-              {imgShare === null ? (
-                <Botao
-                  variante="fantasma"
-                  disabled={preparandoShare || selShare.size === 0}
-                  onClick={() => void prepararShare()}
-                >
-                  <ImageIcon size={16} aria-hidden />
-                  {preparandoShare ? 'Montando imagem…' : 'Enviar como imagem'}
-                </Botao>
-              ) : (
-                <Botao
-                  variante="padrao"
-                  disabled={enviandoShare}
-                  onClick={() => void enviarShare()}
-                >
-                  <Share2 size={16} aria-hidden />
-                  {enviandoShare ? 'Abrindo…' : 'Enviar imagem'}
-                </Botao>
-              )}
-              <Botao
-                variante="fantasma"
-                disabled={preparandoShare || enviandoShare || gerandoLink}
-                onClick={sairShare}
-              >
-                Cancelar
-              </Botao>
-            </div>
+          <div className="preview-share-topo__acoes">
+            <span className="preview-share-topo__contador">{selShare.size} selecionado(s)</span>
+            <button type="button" className="preview-share-topo__btn" onClick={marcarTodasShare}>
+              Marcar todas
+            </button>
+            <button
+              type="button"
+              className="preview-share-topo__btn"
+              disabled={selShare.size === 0}
+              onClick={limparShare}
+            >
+              Limpar
+            </button>
           </div>
-        </>
-      );
-    } else {
-      barraFixa = (
-        <div className="preview-registro__acoes">
-          <Botao variante="padrao" onClick={entrarShare} aria-label="Compartilhar registro unido">
-            <Share2 size={16} aria-hidden />
-            <span className="preview-registro__btn-txt">Compartilhar</span>
-          </Botao>
-          {aoPreencher !== undefined && (
+        </div>
+        <div className="preview-share-bar">
+          {avisoShare !== null && <p className="preview-share-bar__aviso">{avisoShare}</p>}
+          {imgShare !== null && (
+            <p className="preview-share-bar__ok">Imagem pronta! Toque em “Enviar imagem”.</p>
+          )}
+          <div className="preview-share-bar__acoes">
             <Botao
               variante="primario"
-              onClick={() => aoPreencher(alvo ?? undefined)}
-              aria-label="Abrir para preencher"
+              disabled={gerandoLink || selShare.size === 0}
+              onClick={() => void enviarLink()}
             >
-              <ExternalLink size={16} aria-hidden />
-              <span className="preview-registro__btn-txt preview-registro__btn-txt--curto">
-                Abrir
-              </span>
-              <span className="preview-registro__btn-txt preview-registro__btn-txt--longo">
-                Abrir registro
-              </span>
+              <LinkIcon size={16} aria-hidden />
+              {gerandoLink ? 'Gerando link…' : 'Compartilhar link'}
             </Botao>
-          )}
+            {imgShare === null ? (
+              <Botao
+                variante="fantasma"
+                disabled={preparandoShare || selShare.size === 0}
+                onClick={() => void prepararShare()}
+              >
+                <ImageIcon size={16} aria-hidden />
+                {preparandoShare ? 'Montando imagem…' : 'Enviar como imagem'}
+              </Botao>
+            ) : (
+              <Botao variante="padrao" disabled={enviandoShare} onClick={() => void enviarShare()}>
+                <Share2 size={16} aria-hidden />
+                {enviandoShare ? 'Abrindo…' : 'Enviar imagem'}
+              </Botao>
+            )}
+            <Botao
+              variante="fantasma"
+              disabled={preparandoShare || enviandoShare || gerandoLink}
+              onClick={sairShare}
+            >
+              Cancelar
+            </Botao>
+          </div>
         </div>
-      );
-    }
-  }
-
-  useLayoutEffect(() => {
-    if (portaBarra === undefined) return;
-    portaBarra(barraFixa);
-    return () => portaBarra(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    portaBarra,
-    modoShare,
-    selShare.size,
-    preparandoShare,
-    enviandoShare,
-    gerandoLink,
-    imgShare,
-    avisoShare,
-    alvo,
-    aoPreencher,
-  ]);
+      </>
+    ) : (
+      <div className="preview-registro__acoes">
+        <Botao variante="padrao" onClick={entrarShare} aria-label="Compartilhar registro unido">
+          <Share2 size={16} aria-hidden />
+          <span className="preview-registro__btn-txt">Compartilhar</span>
+        </Botao>
+        {aoPreencher !== undefined && (
+          <Botao
+            variante="primario"
+            onClick={() => aoPreencher(alvo ?? undefined)}
+            aria-label="Abrir para preencher"
+          >
+            <ExternalLink size={16} aria-hidden />
+            <span className="preview-registro__btn-txt preview-registro__btn-txt--curto">Abrir</span>
+            <span className="preview-registro__btn-txt preview-registro__btn-txt--longo">
+              Abrir registro
+            </span>
+          </Botao>
+        )}
+      </div>
+    );
 
   return (
     <div className="integ-previa" ref={previaRef}>
+      {barraFixa !== null && slotBarra !== null && createPortal(barraFixa, slotBarra)}
       {grupo.partes.map((parte, i) => (
         <div
           key={parte.colecao.id}
