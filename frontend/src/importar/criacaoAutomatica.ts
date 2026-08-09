@@ -265,7 +265,7 @@ export function planejarRegistroDasImagens(
 // Esquema compartilhado + corpo próprio de cada registro
 // ---------------------------------------------------------------------------
 
-interface EsquemaComum {
+export interface EsquemaComum {
   ref: Campo;
   cor: Campo;
   img: Campo;
@@ -300,7 +300,7 @@ async function criarEsquemaComum(colecaoId: string): Promise<EsquemaComum> {
 
 // Monta o corpo próprio (blocos, na ordem do texto) + os valores iniciais de UM
 // registro. Reusa os campos compartilhados para Referência/Cor/Imagens.
-function montarCorpo(
+export function montarCorpo(
   comuns: EsquemaComum,
   blocos: BlocoInfo[],
   coresDeImagens: string[],

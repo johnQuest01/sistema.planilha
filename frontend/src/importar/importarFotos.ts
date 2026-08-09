@@ -141,7 +141,7 @@ function blocoImagemReferencia(campos: Campo[]): Campo | null {
 // -> bloco "Modelagem". Um código no início ("4785.imagem.da.referencia.png") é
 // referência (roteamento), não parte do nome do campo, então é ignorado aqui.
 // Blocos de cor ficam de fora (a foto de cor tem lógica própria).
-function blocoImagemPorNomeArquivo(nome: string, campos: Campo[]): Campo | null {
+export function blocoImagemPorNomeArquivo(nome: string, campos: Campo[]): Campo | null {
   const semExt = soNome(nome).replace(/\.[^.]+$/, '');
   const semRef = semExt.replace(/^\s*\d{2,}[\s._-]*/, ''); // tira o código do começo
   const alvo = normalizar(semRef.replace(/[._-]+/g, ' ')).trim();
@@ -155,6 +155,27 @@ function blocoImagemPorNomeArquivo(nome: string, campos: Campo[]): Campo | null 
       return n.length >= 3 && (alvo.startsWith(`${n} `) || alvo === n);
     }) ?? null
   );
+}
+
+// Seção (NÃO-cor) com subcampo de imagem — destino das fotos de referência quando o
+// registro guarda a foto DENTRO de uma seção (ex.: "REFERÊNCIA" da Modelagem: número
+// + imagem por linha), em vez de num bloco de imagem no topo.
+interface SecaoFoto {
+  secao: Campo;
+  subFoto: SubCampo;
+}
+export function secaoImagemReferencia(campos: Campo[]): SecaoFoto | null {
+  const comImagem = campos.filter(
+    (c) =>
+      c.tipo === 'secao' &&
+      !nomeEhCor(c.nome) &&
+      (c.config.subcampos ?? []).some((s) => s.tipo === 'imagem'),
+  );
+  const pref = comImagem.find((c) => nomeSugereFotoRef(c.nome)) ?? comImagem[0];
+  if (pref === undefined) return null;
+  const subFoto = (pref.config.subcampos ?? []).find((s) => s.tipo === 'imagem');
+  if (subFoto === undefined) return null;
+  return { secao: pref, subFoto };
 }
 
 export interface SecaoCor {
@@ -290,6 +311,7 @@ export async function importarNoRegistro(
   let feito = 0;
 
   const blocoRef = blocoImagemReferencia(campos);
+  const secRef = secaoImagemReferencia(campos);
   const secCor = secaoCor(campos);
 
   for (const file of arquivos) {
@@ -304,10 +326,14 @@ export async function importarNoRegistro(
         if (await colocarRef(registro.id, file, blocoPorNome, valores, rel)) rel.refOk += 1;
       } else if (cor !== null && temOndeColocarCor) {
         if (await colocarCor(registro.id, file, cor, campos, secCor, valores, rel)) rel.corOk += 1;
-      } else {
-        // Sem cor detectada (ou sem bloco "Cor"): vai para o bloco de imagens da
-        // referência, para a foto não se perder.
+      } else if (blocoRef !== null) {
+        // Foto de referência: bloco de imagem no topo.
         if (await colocarRef(registro.id, file, blocoRef, valores, rel)) rel.refOk += 1;
+      } else if (secRef !== null) {
+        // Sem bloco no topo: cai na seção de referência (formato Modelagem).
+        if (await colocarRefEmSecao(registro.id, file, secRef, valores, rel)) rel.refOk += 1;
+      } else {
+        rel.semBloco.push(file.name);
       }
     } catch {
       rel.erros.push(file.name);
@@ -344,6 +370,35 @@ async function colocarRef(
   }
   const key = await enviarFoto(registroId, file);
   valores[bloco.id] = [...atuais, key];
+  return true;
+}
+
+// Coloca uma foto de referência DENTRO de uma seção (1ª linha; cria uma se não
+// houver). Para registros no formato Modelagem, onde a foto da referência mora numa
+// seção (número + imagem) em vez de num bloco de imagem no topo.
+async function colocarRefEmSecao(
+  registroId: string,
+  file: File,
+  sec: SecaoFoto,
+  valores: Record<string, unknown>,
+  rel: RelatorioImport,
+): Promise<boolean> {
+  const { secao, subFoto } = sec;
+  const max = subFoto.config.maxFotos ?? 1;
+  const linhas = linhasDe(valores[secao.id]).map((l) => ({ ...l }));
+  let linha = linhas[0];
+  if (linha === undefined) {
+    linha = {};
+    linhas.push(linha);
+  }
+  const atuais = keysDe(linha[subFoto.id]);
+  if (atuais.length >= max) {
+    rel.cheios.push(file.name);
+    return false;
+  }
+  const key = await enviarFoto(registroId, file);
+  linha[subFoto.id] = [...atuais, key];
+  valores[secao.id] = linhas;
   return true;
 }
 
