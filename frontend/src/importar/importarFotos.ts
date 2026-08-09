@@ -296,6 +296,49 @@ export interface ProgressoImport {
   total: number;
 }
 
+// Bloco de imagem no topo que é "de cor" (ex.: um bloco "COR" que junta as fotos de
+// cor, sem linha por cor). Fallback para registros cujo "bloco da cor" é um bloco de
+// imagem simples (sem seção com linha por cor).
+function blocoImagemCorGenerico(campos: Campo[]): Campo | null {
+  return campos.find((c) => c.tipo === 'imagem' && nomeEhCor(c.nome)) ?? null;
+}
+
+// Há onde colocar uma foto de cor neste registro? (seção "Cor", bloco de imagem por
+// cor, ou um bloco de imagem "Cor" genérico).
+function temDestinoDeCor(campos: Campo[], cor: string): boolean {
+  return (
+    secaoCor(campos) !== null ||
+    blocoImagemPorCor(campos, cor) !== null ||
+    blocoImagemCorGenerico(campos) !== null
+  );
+}
+
+export type Destino =
+  | { tipo: 'blocoNome'; bloco: Campo }
+  | { tipo: 'cor'; cor: string }
+  | { tipo: 'blocoRef'; bloco: Campo }
+  | { tipo: 'secaoRef'; sec: SecaoFoto }
+  | { tipo: 'nenhum' };
+
+// Decide (SEM rede) para onde uma foto vai, pelo NOME do arquivo e pela estrutura do
+// registro. Ordem: nome do bloco -> cor -> bloco de imagem no topo -> seção de
+// referência (Modelagem) -> nenhum. Pura: dá para testar sem subir nada.
+export function decidirDestino(
+  nome: string,
+  campos: Campo[],
+  valores: Record<string, unknown>,
+): Destino {
+  const blocoPorNome = blocoImagemPorNomeArquivo(nome, campos);
+  if (blocoPorNome !== null) return { tipo: 'blocoNome', bloco: blocoPorNome };
+  const cor = corDaFoto(parseNomeArquivo(nome), secaoCor(campos), campos, valores);
+  if (cor !== null && temDestinoDeCor(campos, cor)) return { tipo: 'cor', cor };
+  const blocoRef = blocoImagemReferencia(campos);
+  if (blocoRef !== null) return { tipo: 'blocoRef', bloco: blocoRef };
+  const secRef = secaoImagemReferencia(campos);
+  if (secRef !== null) return { tipo: 'secaoRef', sec: secRef };
+  return { tipo: 'nenhum' };
+}
+
 // Importa um conjunto de arquivos NUM registro específico (usado com o registro
 // aberto). As fotos de cor não precisam da referência no nome aqui.
 export async function importarNoRegistro(
@@ -310,28 +353,23 @@ export async function importarNoRegistro(
   const total = arquivos.length;
   let feito = 0;
 
-  const blocoRef = blocoImagemReferencia(campos);
-  const secRef = secaoImagemReferencia(campos);
   const secCor = secaoCor(campos);
 
   for (const file of arquivos) {
-    const parse = parseNomeArquivo(file.name);
-    const blocoPorNome = blocoImagemPorNomeArquivo(file.name, campos);
-    const cor = corDaFoto(parse, secCor, campos, valores);
-    const temOndeColocarCor = cor !== null && (secCor !== null || blocoImagemPorCor(campos, cor) !== null);
+    // `valores` é mutado a cada foto, então a decisão vê o estado atual (ex.: a 1ª
+    // foto criou a linha da cor; a 2ª acha a mesma linha e SOMA — nunca sobrescreve).
+    const destino = decidirDestino(file.name, campos, valores);
     try {
-      if (blocoPorNome !== null) {
-        // O nome do arquivo bate com o nome de um bloco de imagem (ex.:
-        // "imagem.da.referencia.png" -> bloco "Imagem da referência").
-        if (await colocarRef(registro.id, file, blocoPorNome, valores, rel)) rel.refOk += 1;
-      } else if (cor !== null && temOndeColocarCor) {
-        if (await colocarCor(registro.id, file, cor, campos, secCor, valores, rel)) rel.corOk += 1;
-      } else if (blocoRef !== null) {
-        // Foto de referência: bloco de imagem no topo.
-        if (await colocarRef(registro.id, file, blocoRef, valores, rel)) rel.refOk += 1;
-      } else if (secRef !== null) {
-        // Sem bloco no topo: cai na seção de referência (formato Modelagem).
-        if (await colocarRefEmSecao(registro.id, file, secRef, valores, rel)) rel.refOk += 1;
+      if (destino.tipo === 'blocoNome') {
+        // Nome do arquivo bate com o nome de um bloco (ex.: "imagem.da.referencia.png").
+        if (await colocarRef(registro.id, file, destino.bloco, valores, rel)) rel.refOk += 1;
+      } else if (destino.tipo === 'cor') {
+        if (await colocarCor(registro.id, file, destino.cor, campos, secCor, valores, rel)) rel.corOk += 1;
+      } else if (destino.tipo === 'blocoRef') {
+        if (await colocarRef(registro.id, file, destino.bloco, valores, rel)) rel.refOk += 1;
+      } else if (destino.tipo === 'secaoRef') {
+        // Formato Modelagem: a foto da referência mora dentro de uma seção.
+        if (await colocarRefEmSecao(registro.id, file, destino.sec, valores, rel)) rel.refOk += 1;
       } else {
         rel.semBloco.push(file.name);
       }
@@ -447,6 +485,20 @@ async function colocarCor(
     }
     const key = await enviarFoto(registroId, file);
     valores[bloco.id] = [...atuais, key];
+    return true;
+  }
+
+  // Bloco de imagem "Cor" genérico (junta as fotos de cor num bloco só).
+  const generico = blocoImagemCorGenerico(campos);
+  if (generico !== null) {
+    const max = generico.config.maxFotos ?? 1;
+    const atuais = keysDe(valores[generico.id]);
+    if (atuais.length >= max) {
+      rel.cheios.push(file.name);
+      return false;
+    }
+    const key = await enviarFoto(registroId, file);
+    valores[generico.id] = [...atuais, key];
     return true;
   }
 
