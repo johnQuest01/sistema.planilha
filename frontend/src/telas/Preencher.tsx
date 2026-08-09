@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, ListPlus, Lock, Plus, Rows2, Rows3, Unlock } from 'lucide-react';
-import { api, ErroApi } from '../api/cliente';
+import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
 import { assinarRealtime } from '../api/realtime';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
@@ -164,7 +164,7 @@ export function Preencher({
     try {
       const ultimo = atual[atual.length - 1];
       if (ultimo === undefined) return;
-      const mais = await api.listarRegistros(colecao.id, ultimo.ordem);
+      const mais = await api.listarRegistros(colecao.id, cursorDeRegistro(ultimo));
       setRegistros((prev) => (prev === null ? mais : [...prev, ...mais]));
       const acabou = mais.length < PAGINA;
       setFim(acabou);

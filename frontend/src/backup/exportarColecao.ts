@@ -5,7 +5,7 @@
 // reconstruir tudo a partir do arquivo baixado.
 
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
-import { api } from '../api/cliente';
+import { api, cursorDeRegistro } from '../api/cliente';
 import { urlCheia } from '../imagens/urls';
 import {
   camposDoRegistro,
@@ -29,17 +29,19 @@ interface ImagemItem {
   rotulo: string;
 }
 
-// Carrega TODOS os registros paginando por cursor (ordem) até o fim.
+// Carrega TODOS os registros paginando por cursor (ordem, com fallback criadoEm) até o fim.
 async function carregarTodos(colecaoId: string): Promise<Registro[]> {
   const acc: Registro[] = [];
-  let cursor: number | undefined;
+  let cursor: number | string | undefined;
   for (let i = 0; i < 1000; i += 1) {
     const pagina = await api.listarRegistros(colecaoId, cursor);
     acc.push(...pagina);
     if (pagina.length < PAGINA) break;
     const ultimo = pagina[pagina.length - 1];
     if (ultimo === undefined) break;
-    cursor = ultimo.ordem;
+    const proximo = cursorDeRegistro(ultimo);
+    if (proximo === cursor) break; // cursor não avançou: evita loop
+    cursor = proximo;
   }
   return acc;
 }

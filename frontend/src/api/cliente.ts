@@ -189,9 +189,13 @@ export const api = {
   apagarCampo: (id: string) => pedir<void>(`/api/campos/${id}`, { method: 'DELETE' }),
 
   // --- registros ---
-  // `before` é o cursor de ordem (número) do último item da página anterior.
-  listarRegistros: (colecaoId: string, before?: number) => {
-    const q = before === undefined ? '' : `?before=${encodeURIComponent(String(before))}`;
+  // `before` é o cursor do último item da página anterior. Normalmente é o `ordem`
+  // (número) do backend novo; aceita string (criadoEm) como fallback para o backend
+  // antigo — ver cursorDeRegistro. Sem cursor válido a paginação nunca avançaria e
+  // entraria em loop (estourando o rate limit).
+  listarRegistros: (colecaoId: string, before?: number | string) => {
+    const q =
+      before === undefined || before === '' ? '' : `?before=${encodeURIComponent(String(before))}`;
     return pedir<Registro[]>(`/api/colecoes/${colecaoId}/registros${q}`);
   },
   buscarRegistros: (colecaoId: string, termo: string) =>
@@ -284,3 +288,12 @@ export const api = {
     dados: { mime: string; tamanhoCheia: number; tamanhoMini: number },
   ) => pedir<RespostaUpload>(`/api/registros/${registroId}/upload`, corpoJson(dados)),
 };
+
+// Cursor de paginação de um registro: usa `ordem` (backend novo) e cai para
+// `criadoEm` quando `ordem` não vem (backend ainda antigo). Sem esse fallback, o
+// cursor ficaria `undefined` a cada página e a paginação entraria em LOOP,
+// disparando centenas de requisições e estourando o rate limit do servidor.
+export function cursorDeRegistro(r: Registro): number | string {
+  const ordem = (r as { ordem?: number }).ordem;
+  return typeof ordem === 'number' ? ordem : r.criadoEm;
+}

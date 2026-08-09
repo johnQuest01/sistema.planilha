@@ -75,7 +75,7 @@ export function BotaoImportarFotos({ colecao, registro, aoConcluir, aoAntes, rot
         variante="padrao"
         onClick={() => inputRef.current?.click()}
         disabled={ocupado}
-        title="Importar fotos pelo nome do arquivo (ex.: 4621.png, cor.vermelho.png)"
+        title="Importar fotos pelo nome (ex.: 4621.png = referência; 4874vermelho.png ou 4784.vermelho.png = cor)"
       >
         <ImagePlus size={18} />
         {texto}

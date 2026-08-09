@@ -1,13 +1,18 @@
 // Importa fotos distribuindo-as automaticamente pelos blocos certos, a partir do
-// NOME do arquivo:
-//   - "4621.png" / "4621.jpg" ... -> bloco de imagens da referência 4621.
-//   - "cor.vermelho.png"          -> bloco "Cor" do registro, linha/título "vermelho".
+// NOME do arquivo. Reconhece:
+//   - "4621.png"                  -> bloco de imagens da referência 4621.
+//   - "cor.vermelho.png"          -> bloco "Cor" do registro, cor "vermelho".
 //   - "4621.cor.vermelho.png"     -> registro 4621, bloco "Cor", "vermelho".
-// Regras (conforme combinado):
-//   * A foto de cor só entra se o registro TIVER um bloco "Cor". Se não tiver, não entra.
-//   * Dentro do bloco "Cor", se a cor (ex.: "amarelo") ainda não existir, cria a
-//     linha/título automaticamente; se já existir, anexa a foto naquela linha.
-import { api } from '../api/cliente';
+//   - "4784.vermelho.png" / "4874vermelho.png" / "4784vermelho.jpeg"
+//       -> registro 4784/4874, bloco "Cor", cor "vermelho" (a cor vem logo após a
+//          referência, colada ou separada por . - _).
+// Regras:
+//   * A cor entra no bloco "Cor" do registro. Se a cor ainda não é uma linha/título,
+//     cria automaticamente; se já existe, ANEXA a foto (nunca sobrescreve).
+//   * O texto após a referência só é tratado como cor se for uma cor conhecida OU já
+//     existir no registro; senão (ex.: "4578sdskmdkm") é foto de referência.
+//   * Sem bloco "Cor", a foto vai para o bloco de imagens da referência (não se perde).
+import { api, cursorDeRegistro } from '../api/cliente';
 import { enviarFoto } from '../imagens/enviar';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { camposDoRegistro } from '../preencher/derivarResumo';
@@ -41,7 +46,11 @@ function nomeSugereFotoRef(nome: string): boolean {
 
 export interface NomeArquivo {
   referencia: string | null;
+  /** Cor EXPLÍCITA: veio com o marcador "cor" no nome (ex.: cor.vermelho). */
   cor: string | null;
+  /** Texto logo após a referência, SEM marcador "cor" (candidato a cor; pode ser
+   *  lixo). Ex.: "4874vermelho" -> "vermelho", "4578sdskmdkm" -> "sdskmdkm". */
+  sufixo: string | null;
 }
 
 // Só o nome do arquivo (sem pasta), útil para .zip com subpastas.
@@ -57,17 +66,34 @@ export function refDoNome(nome: string): string | null {
   return m?.[1] ?? null;
 }
 
-// Interpreta o nome do arquivo (sem extensão), separando por ".".
+// Interpreta o nome do arquivo (sem extensão).
 export function parseNomeArquivo(nome: string): NomeArquivo {
   const semExt = soNome(nome).replace(/\.[^.]+$/, '');
   const tokens = semExt.split('.').map((t) => t.trim()).filter((t) => t !== '');
   const idxCor = tokens.findIndex((t) => normalizar(t) === 'cor');
-  const antes = (idxCor >= 0 ? tokens.slice(0, idxCor) : tokens).join(' ').trim();
-  const cor = idxCor >= 0 ? tokens.slice(idxCor + 1).join(' ').trim() : '';
-  // Referência = código numérico do começo (tolerante a lixo); sem ele, o texto
-  // antes de "cor" (para referências não numéricas).
-  const referencia = refDoNome(semExt) ?? (antes === '' ? null : antes);
-  return { referencia, cor: cor === '' ? null : cor };
+  const ref = refDoNome(semExt);
+
+  // Formato explícito com "cor": <ref?>.cor.<cor> (a cor é sempre tratada como cor).
+  if (idxCor >= 0) {
+    const antes = tokens.slice(0, idxCor).join(' ').trim();
+    const cor = tokens.slice(idxCor + 1).join(' ').trim();
+    return {
+      referencia: ref ?? (antes === '' ? null : antes),
+      cor: cor === '' ? null : cor,
+      sufixo: null,
+    };
+  }
+
+  // Começa com a referência (dígitos): o que vem depois é o SUFIXO (candidato a
+  // cor), colado ou separado por . - _ — ex.: "4874vermelho" / "4784.vermelho".
+  if (ref !== null) {
+    const resto = semExt.slice(String(ref).length).replace(/^[\s._-]+/, '').replace(/[\s._-]+$/, '').trim();
+    return { referencia: ref, cor: null, sufixo: resto === '' ? null : resto };
+  }
+
+  // Sem dígitos no início e sem "cor": nome descritivo (sem cor).
+  const antes = tokens.join(' ').trim();
+  return { referencia: antes === '' ? null : antes, cor: null, sufixo: null };
 }
 
 // Bloco de imagem "de referência" do registro (onde caem as fotos da referência).
@@ -80,7 +106,7 @@ function blocoImagemReferencia(campos: Campo[]): Campo | null {
   return qualquer ?? null;
 }
 
-interface SecaoCor {
+export interface SecaoCor {
   secao: Campo;
   subCor: SubCampo | null; // subcampo de texto/seleção com o NOME da cor
   subFoto: SubCampo; // subcampo de imagem
@@ -88,7 +114,7 @@ interface SecaoCor {
 
 // Seção "Cor" do registro: precisa ter um subcampo de imagem. O subcampo de
 // texto/seleção (se houver) guarda o nome da cor (o "título").
-function secaoCor(campos: Campo[]): SecaoCor | null {
+export function secaoCor(campos: Campo[]): SecaoCor | null {
   for (const c of campos) {
     if (c.tipo !== 'secao' || !nomeEhCor(c.nome)) continue;
     const subs = c.config.subcampos ?? [];
@@ -122,6 +148,62 @@ function linhasDe(valor: unknown): Record<string, unknown>[] {
   return Array.isArray(valor)
     ? valor.filter((l): l is Record<string, unknown> => typeof l === 'object' && l !== null)
     : [];
+}
+
+// Cores comuns (PT-BR) para reconhecer a cor no nome mesmo sem a palavra "cor".
+// Um texto que não é cor conhecida (ex.: "sdskmdkm") NÃO vira cor — vira foto de
+// referência. Cores fora desta lista funcionam usando "cor." no nome ou quando a
+// cor já existe no registro.
+const CORES_CONHECIDAS = new Set([
+  'vermelho', 'azul', 'verde', 'amarelo', 'preto', 'branco', 'rosa', 'roxo',
+  'laranja', 'marrom', 'cinza', 'bege', 'dourado', 'prata', 'prateado', 'vinho',
+  'salmao', 'lilas', 'turquesa', 'nude', 'marinho', 'militar', 'caramelo',
+  'mostarda', 'coral', 'creme', 'gelo', 'grafite', 'chumbo', 'terracota',
+  'magenta', 'ciano', 'violeta', 'indigo', 'ocre', 'jeans', 'denim', 'pink',
+  'offwhite', 'cru', 'areia', 'tijolo', 'uva', 'menta', 'pistache', 'lavanda',
+  'fucsia', 'champagne', 'champanhe', 'castanho', 'mel', 'cobre', 'bronze',
+  'esmeralda', 'safira', 'rubi', 'pessego', 'abobora', 'oliva',
+]);
+
+export function ehCorConhecida(texto: string): boolean {
+  return CORES_CONHECIDAS.has(normalizar(texto));
+}
+
+// A cor já existe no registro? (linha na seção Cor com esse título, ou bloco de
+// imagem titulado com essa cor).
+function corExistenteNoRegistro(
+  suf: string,
+  secCor: SecaoCor | null,
+  campos: Campo[],
+  valores: Record<string, unknown>,
+): boolean {
+  const alvo = normalizar(suf);
+  const subCor = secCor?.subCor ?? null;
+  if (secCor !== null && subCor !== null) {
+    const linhas = linhasDe(valores[secCor.secao.id]);
+    const bate = linhas.some((l) => {
+      const v = l[subCor.id];
+      return typeof v === 'string' && normalizar(v) === alvo;
+    });
+    if (bate) return true;
+  }
+  return blocoImagemPorCor(campos, suf) !== null;
+}
+
+// Decide a cor FINAL de uma foto. null = tratar como foto de referência (o texto
+// após a referência é "lixo", não uma cor — ex.: "4578sdskmdkm").
+export function corDaFoto(
+  parse: NomeArquivo,
+  secCor: SecaoCor | null,
+  campos: Campo[],
+  valores: Record<string, unknown>,
+): string | null {
+  if (parse.cor !== null) return parse.cor; // marcador "cor" explícito
+  const suf = parse.sufixo;
+  if (suf === null) return null;
+  if (corExistenteNoRegistro(suf, secCor, campos, valores)) return suf;
+  if (ehCorConhecida(suf)) return suf;
+  return null;
 }
 
 export interface RelatorioImport {
@@ -160,14 +242,16 @@ export async function importarNoRegistro(
   const secCor = secaoCor(campos);
 
   for (const file of arquivos) {
-    const { cor } = parseNomeArquivo(file.name);
+    const parse = parseNomeArquivo(file.name);
+    const cor = corDaFoto(parse, secCor, campos, valores);
+    const temOndeColocarCor = cor !== null && (secCor !== null || blocoImagemPorCor(campos, cor) !== null);
     try {
-      if (cor !== null) {
-        const colocou = await colocarCor(registro.id, file, cor, campos, secCor, valores, rel);
-        if (colocou) rel.corOk += 1;
+      if (cor !== null && temOndeColocarCor) {
+        if (await colocarCor(registro.id, file, cor, campos, secCor, valores, rel)) rel.corOk += 1;
       } else {
-        const colocou = await colocarRef(registro.id, file, blocoRef, valores, rel);
-        if (colocou) rel.refOk += 1;
+        // Sem cor detectada (ou sem bloco "Cor"): vai para o bloco de imagens da
+        // referência, para a foto não se perder.
+        if (await colocarRef(registro.id, file, blocoRef, valores, rel)) rel.refOk += 1;
       }
     } catch {
       rel.erros.push(file.name);
@@ -263,7 +347,7 @@ async function colocarCor(
 // Carrega TODOS os registros da coleção, indexando por código de referência.
 async function indexarPorReferencia(colecao: Colecao): Promise<Map<string, Registro[]>> {
   const mapa = new Map<string, Registro[]>();
-  let cursor: number | undefined;
+  let cursor: number | string | undefined;
   for (let i = 0; i < 1000; i += 1) {
     const pagina = await api.listarRegistros(colecao.id, cursor);
     for (const r of pagina) {
@@ -276,7 +360,9 @@ async function indexarPorReferencia(colecao: Colecao): Promise<Map<string, Regis
     if (pagina.length < PAGINA) break;
     const ultimo = pagina[pagina.length - 1];
     if (ultimo === undefined) break;
-    cursor = ultimo.ordem;
+    const proximo = cursorDeRegistro(ultimo);
+    if (proximo === cursor) break; // cursor não avançou: evita loop
+    cursor = proximo;
   }
   return mapa;
 }

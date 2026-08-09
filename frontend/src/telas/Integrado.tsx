@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ImageOff, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
-import { api, ErroApi } from '../api/cliente';
+import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
 import { assinarRealtime } from '../api/realtime';
 import { chaveIntegrado, gravarCache, lerCache } from '../api/cache';
 import { useAuth } from '../contexto/Auth';
@@ -224,7 +224,7 @@ export function Integrado(): JSX.Element {
   // truncando SILENCIOSAMENTE o resto da coleção — o total unido aparecia menor do
   // que o real. Agora tenta de novo antes de desistir (e, se falhar de vez, propaga
   // para o chamador tratar, em vez de mostrar um número errado sem avisar).
-  async function listarPaginaComRetry(colecaoId: string, cursor: number | undefined): Promise<Registro[]> {
+  async function listarPaginaComRetry(colecaoId: string, cursor: number | string | undefined): Promise<Registro[]> {
     let ultimoErro: unknown;
     for (let tentativa = 0; tentativa < 3; tentativa += 1) {
       try {
@@ -238,16 +238,20 @@ export function Integrado(): JSX.Element {
   }
 
   // Carrega TODOS os registros de uma coleção (paginando por cursor até o fim).
+  // Guarda contra loop: se o cursor não avança (ex.: backend sem `ordem`), para —
+  // sem isso, uma coleção com 20+ registros dispararia centenas de requests.
   async function carregarTodosDe(colecaoId: string): Promise<Registro[]> {
     const acc: Registro[] = [];
-    let cursor: number | undefined;
+    let cursor: number | string | undefined;
     for (let i = 0; i < 500; i += 1) {
       const pagina = await listarPaginaComRetry(colecaoId, cursor);
       acc.push(...pagina);
       if (pagina.length < PAGINA) break;
       const ultimo = pagina[pagina.length - 1];
       if (ultimo === undefined) break;
-      cursor = ultimo.ordem;
+      const proximo = cursorDeRegistro(ultimo);
+      if (proximo === cursor) break; // cursor não avançou: evita loop/rate limit
+      cursor = proximo;
     }
     return acc;
   }
