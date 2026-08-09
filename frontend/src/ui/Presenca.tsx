@@ -21,7 +21,7 @@ interface Aviso {
 }
 
 export function Presenca(): JSX.Element | null {
-  const { estado } = useAuth();
+  const { estado, sair } = useAuth();
   const logado = estado.fase === 'logado';
   const meuId = estado.fase === 'logado' ? estado.usuario.id : null;
 
@@ -79,6 +79,11 @@ export function Presenca(): JSX.Element | null {
     // presença é mantida por REST.
     const cancelar = assinarRealtime((msg) => {
       if (!vivoRef.current) return;
+      if (msg.tipo === 'acesso_revogado') {
+        // Admin tirou o acesso: desloga na hora (some da sessão).
+        void sair();
+        return;
+      }
       if (msg.tipo === 'presenca') {
         setOnline(msg.online);
         processarEntradas(msg.entradas);
@@ -100,7 +105,7 @@ export function Presenca(): JSX.Element | null {
     };
     // processarEntradas usa meuId do closure
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logado, meuId]);
+  }, [logado, meuId, sair]);
 
   if (!logado) return null;
 

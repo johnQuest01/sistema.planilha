@@ -5,7 +5,7 @@ import { NOME_COOKIE_SESSAO, opcoesLimpar, opcoesSessao } from '../auth/cookies'
 import { exigeDono, usuarioObrigatorio, contaObrigatoria } from '../auth/exigeDono';
 import { criarSessao, revogarSessao, revogarSessoesDoUsuario } from '../auth/sessoes';
 import { registrarEntrada } from '../repositorios/presenca';
-import { anunciarEntradaWs } from '../ws/presencaHub';
+import { anunciarEntradaWs, expulsarUsuarioWs } from '../ws/presencaHub';
 import { workspaceContaId, workspaceCodigoHash } from '../auth/workspace';
 import {
   criarConviteConta,
@@ -221,8 +221,24 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // FKs sem ON DELETE (colecoes/registros/integracoes.criado_por*) bloqueavam o
+    // DELETE — o usuário "não saía". Anulamos a autoria e aí removemos o login.
     await revogarSessoesDoUsuario(alvo.id);
-    await sql`delete from usuarios where id = ${alvo.id} and conta_id = ${contaId}`;
+    try {
+      await sql.begin(async (tx) => {
+        await tx`update colecoes set criado_por = null where criado_por = ${alvo.id}`;
+        await tx`update registros set criado_por_id = null where criado_por_id = ${alvo.id}`;
+        await tx`update integracoes set criado_por = null where criado_por = ${alvo.id}`;
+        // sessoes / entradas / colecao_acessos já têm ON DELETE CASCADE
+        await tx`delete from usuarios where id = ${alvo.id} and conta_id = ${contaId}`;
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'falha ao remover usuário';
+      return reply.code(500).send({ erro: `não foi possível remover: ${msg}` });
+    }
+
+    // Tira da presença ao vivo (some do "online" e o cliente dele desloga).
+    expulsarUsuarioWs(contaId, alvo.id);
     return reply.send({ ok: true });
   });
 

@@ -183,6 +183,38 @@ export async function anunciarEntradaWs(
   agendarBroadcastPresenca(contaId);
 }
 
+/**
+ * Admin removeu o acesso: avisa o usuário (desloga no client), fecha os sockets
+ * dele e atualiza a lista "online" da conta na hora.
+ */
+export function expulsarUsuarioWs(contaId: string, usuarioId: string): void {
+  const sala = salas.get(contaId);
+  if (sala === undefined || sala.size === 0) {
+    agendarBroadcastPresenca(contaId);
+    return;
+  }
+  const payload = JSON.stringify({ tipo: 'acesso_revogado' });
+  const alvos = [...sala].filter((c) => c.usuarioId === usuarioId);
+  for (const c of alvos) {
+    removerCliente(c);
+    try {
+      if (aberto(c.socket)) c.socket.send(payload);
+    } catch {
+      /* ignore */
+    }
+    // Fecha depois do send para a mensagem chegar antes do close.
+    const sock = c.socket;
+    setTimeout(() => {
+      try {
+        sock.close(4001, 'acesso revogado');
+      } catch {
+        /* ignore */
+      }
+    }, 80);
+  }
+  agendarBroadcastPresenca(contaId);
+}
+
 /** Remove o cliente da sala. Retorna true se ele estava lá (evita broadcast duplo). */
 function removerCliente(cliente: ClienteWs): boolean {
   const sala = salas.get(cliente.contaId);
