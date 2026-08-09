@@ -71,7 +71,9 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
               Cole um texto. Cada <strong>ponto final</strong> (.) — ou item numerado{' '}
               (<code>1 …</code> <code>2 …</code>) — vira um <strong>bloco</strong>. Escreva{' '}
               <code>cor: rosa</code> para um bloco de cor, <code>4785</code> (ou <code>ref: 4785</code>)
-              para a referência e <code>imagem da referência</code> para o bloco de fotos. Vários
+              para a referência e <code>imagem da referência</code> para o bloco de fotos. Qualquer{' '}
+              <code>rótulo: texto</code> (ex.: <code>observação:</code>) vira um bloco com esse título
+              (o texto pode ficar em branco para preencher depois). Vários
               registros: separe com uma linha só com <code>---</code>. As imagens (opcional) entram
               pelo <strong>nome do campo</strong>: <code>imagem.da.referencia.png</code> nas fotos da
               referência; <code>cor.rosa.png</code>, <code>rosa.png</code> ou{' '}

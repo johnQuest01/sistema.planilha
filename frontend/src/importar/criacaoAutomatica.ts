@@ -149,8 +149,9 @@ const RE_COR = /^\s*cor(?:es)?\b\s*[:\-]?\s*(.+)$/i;
 const RE_REF_EXPL = /^\s*ref(?:er[eê]ncia)?\b\.?\s*[:\-]?\s*(\S.*)$/i;
 // Bloco que começa com um código (>= 3 dígitos): "4785", "4785 bory flaxh".
 const RE_REF_CODE = /^\s*\d{3,}[a-z0-9]*(?:\s+.+)?$/i;
-// "rótulo: valor" — SÓ com dois-pontos (hífen picotaria palavras compostas).
-const RE_ROTULO = /^\s*([\p{L}][\p{L}\s]{0,28}?)\s*:\s*(.+?)\s*$/u;
+// "rótulo: valor" — só com dois-pontos (hífen picotaria palavras compostas). O valor
+// pode ser VAZIO: "observação:" vira um bloco chamado "Observação" em branco.
+const RE_ROTULO = /^\s*([\p{L}][\p{L}\s]{0,28}?)\s*:\s*(.*)$/u;
 
 // Nomes que DECLARAM um bloco de imagem da referência (bloco sem valor de texto).
 const NOMES_IMAGEM = new Set([
@@ -158,12 +159,6 @@ const NOMES_IMAGEM = new Set([
   'imagem da referencia', 'imagens da referencia', 'foto da referencia', 'fotos da referencia',
   'imagem de referencia', 'imagens de referencia', 'foto de referencia', 'fotos de referencia',
   'imagem da modelagem', 'fotos da modelagem',
-]);
-
-// Rótulos que significam "dê um título a este bloco": o VALOR vira o NOME do bloco
-// de texto (ex.: "texto titulo: observação" -> bloco "Observação").
-const ROTULOS_TITULO = new Set([
-  'titulo', 'texto titulo', 'titulo do texto', 'titulo do bloco', 'nome', 'nome do bloco', 'bloco',
 ]);
 
 function separarCores(txt: string): string[] {
@@ -189,14 +184,11 @@ export function classificarBloco(bloco: string): BlocoInfo {
   if (NOMES_IMAGEM.has(normalizar(b))) {
     return { classe: 'imagemref', rotulo: 'Imagem da referência', valor: b, cores: [] };
   }
+  // "rótulo: valor" -> bloco NOMEADO pelo rótulo (o valor é o texto do campo e pode
+  // ser vazio: "observação:" nasce como bloco "Observação" em branco pra preencher).
   const mRot = b.match(RE_ROTULO);
-  if (mRot?.[1] !== undefined && mRot[2] !== undefined) {
-    const label = mRot[1].trim();
-    const valor = mRot[2].trim();
-    if (ROTULOS_TITULO.has(normalizar(label))) {
-      return { classe: 'rotulo', rotulo: capitalizar(valor), valor: '', cores: [] };
-    }
-    return { classe: 'rotulo', rotulo: capitalizar(label), valor, cores: [] };
+  if (mRot?.[1] !== undefined && mRot[1].trim() !== '') {
+    return { classe: 'rotulo', rotulo: capitalizar(mRot[1].trim()), valor: (mRot[2] ?? '').trim(), cores: [] };
   }
   return { classe: 'texto', rotulo: null, valor: b, cores: [] };
 }
