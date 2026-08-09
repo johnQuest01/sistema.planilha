@@ -238,6 +238,9 @@ textarea.campo__controle {
 .folha__abaixoTitulo .preview-registro__acoes {
   margin: 0;
 }
+.folha__abaixoTitulo .preview-registro__renomear-box {
+  width: 100%;
+}
 .folha__abaixoTitulo .preview-share-topo {
   margin: 0;
   padding: 0;

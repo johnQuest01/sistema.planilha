@@ -539,11 +539,11 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
   (com a referência pré-preenchida) — todas já aparecem prontas para preencher, sem o
   passo "criar registro". Navegação por planilha (chips) e foco inicial na planilha
   escolhida pelo "Preencher" da prévia.
-- **Barra global da prévia unida:** Compartilhar / Abrir ficam **fixos abaixo do
-  título da Folha** (não por planilha). Compartilhar marca blocos em **todas** as
-  planilhas do grupo e gera **um** link (`POST /api/compartilhamentos/grupo`) ou
-  uma imagem empilhada; a página pública `/r/:codigo` mostra as partes com o selo
-  de cada planilha.
+- **Barra global da prévia unida:** os mesmos 3 botões da Modelagem — **Renomear /
+  Compartilhar / Abrir** — ficam **fixos abaixo do título da Folha** (não por
+  planilha). Renomear aplica o nome em todas as partes com campo de título;
+  Compartilhar marca blocos em **todas** as planilhas e gera **um** link
+  (`POST /api/compartilhamentos/grupo`) ou imagem empilhada; Abrir abre o Preencher.
 
 ### Importação e backup
 

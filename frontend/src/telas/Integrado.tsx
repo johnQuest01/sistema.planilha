@@ -8,12 +8,14 @@ import {
   Image as ImageIcon,
   ImageOff,
   Link as LinkIcon,
+  Pencil,
   PencilLine,
   Plus,
   Search,
   Share2,
   Trash2,
 } from 'lucide-react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
 import { exportarIntegracao, type ProgressoExport } from '../backup/exportarColecao';
 import { assinarRealtime } from '../api/realtime';
@@ -25,7 +27,14 @@ import { Segmentado } from '../ui/Segmentado';
 import { Carregando } from '../ui/Carregando';
 import { FolhaInferior, useFolhaBarraSlot } from '../ui/FolhaInferior';
 import { TopoApp } from './TopoApp';
-import { camposDoRegistro, capaDoRegistro, tituloDoRegistro } from '../preencher/derivarResumo';
+import {
+  alvoTitulo,
+  camposDoRegistro,
+  capaDoRegistro,
+  lerAlvoTitulo,
+  patchAlvoTitulo,
+  tituloDoRegistro,
+} from '../preencher/derivarResumo';
 import { valoresVaziosDe } from '../preencher/valoresVazios';
 import {
   chaveReferencia,
@@ -749,9 +758,9 @@ function CartaoRegistro({
 }
 
 /**
- * Corpo da prévia unida: cartões por planilha + barra GLOBAL (Compartilhar /
- * Abrir) no slot fixo da Folha (portal). Compartilhar marca blocos de TODAS as
- * planilhas e gera UM link (ou imagem) do grupo.
+ * Corpo da prévia unida: cartões por planilha + barra GLOBAL igual à Modelagem
+ * (Renomear / Compartilhar / Abrir) no slot fixo da Folha. Compartilhar e
+ * Renomear atuam no grupo inteiro.
  */
 function PreviaCorpo({
   grupo,
@@ -774,6 +783,15 @@ function PreviaCorpo({
   const [imgShare, setImgShare] = useState<File | null>(null);
   const [gerandoLink, setGerandoLink] = useState(false);
   const [avisoShare, setAvisoShare] = useState<string | null>(null);
+  // Renomear global (mesmo botão da Modelagem): aplica o nome em todas as partes.
+  const [editandoNome, setEditandoNome] = useState(false);
+  const [rascunhoNome, setRascunhoNome] = useState('');
+  const [salvandoNome, setSalvandoNome] = useState(false);
+  const [erroNome, setErroNome] = useState<string | null>(null);
+
+  const podeRenomear = grupo.partes.some(
+    (p) => p.registro !== null && alvoTitulo(camposDaParte(p)) !== undefined,
+  );
 
   useEffect(() => {
     const root = previaRef.current?.closest('.folha__corpo, .rolagem') ?? null;
@@ -800,7 +818,64 @@ function PreviaCorpo({
     parteRefs.current[indice]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function iniciarRenomear(): void {
+    // Usa o título da 1ª parte renomeável (igual Modelagem); ao salvar, replica
+    // nas demais planilhas do grupo que também têm campo de título.
+    for (const p of grupo.partes) {
+      if (p.registro === null) continue;
+      const a = alvoTitulo(camposDaParte(p));
+      if (a === undefined) continue;
+      setRascunhoNome(lerAlvoTitulo(p.registro, a));
+      setErroNome(null);
+      setEditandoNome(true);
+      return;
+    }
+  }
+
+  function cancelarRenomear(): void {
+    setEditandoNome(false);
+    setErroNome(null);
+  }
+
+  async function salvarNomeGrupo(): Promise<void> {
+    if (!editandoNome || salvandoNome) return;
+    const novo = rascunhoNome.trim();
+    setSalvandoNome(true);
+    setErroNome(null);
+    try {
+      for (const p of grupo.partes) {
+        if (p.registro === null) continue;
+        const a = alvoTitulo(camposDaParte(p));
+        if (a === undefined) continue;
+        const atual = lerAlvoTitulo(p.registro, a);
+        if (atual.trim() === novo) continue;
+        const atualizado = await api.editarRegistro(
+          p.registro.id,
+          patchAlvoTitulo(p.registro, a, novo),
+        );
+        aoAtualizarRegistro?.(atualizado);
+      }
+      setEditandoNome(false);
+    } catch (e) {
+      setErroNome(e instanceof ErroApi ? e.message : 'não foi possível salvar o nome');
+    } finally {
+      setSalvandoNome(false);
+    }
+  }
+
+  function aoTeclarNome(e: ReactKeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void salvarNomeGrupo();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelarRenomear();
+    }
+  }
+
   function entrarShare(): void {
+    setEditandoNome(false);
     setSelShare(new Set());
     setImgShare(null);
     setAvisoShare(null);
@@ -977,8 +1052,43 @@ function PreviaCorpo({
 
   const naoVisiveis = grupo.partes.map((_, i) => i).filter((i) => !visiveis.has(i));
 
+  // Mesmos 3 botões da Modelagem: Renomear · Compartilhar · Abrir (fixos abaixo do título).
   const barraFixa =
-    slotBarra === null ? null : modoShare ? (
+    slotBarra === null ? null : editandoNome ? (
+      <div className="preview-registro__renomear-box">
+        <input
+          className="campo__controle preview-registro__nome-input"
+          value={rascunhoNome}
+          autoFocus
+          aria-label="Nome do registro"
+          placeholder="Nome do registro"
+          disabled={salvandoNome}
+          onChange={(e) => setRascunhoNome(e.target.value)}
+          onKeyDown={aoTeclarNome}
+        />
+        <div className="preview-registro__renomear-acoes">
+          <button
+            type="button"
+            className="lista-item__salvar"
+            disabled={salvandoNome}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void salvarNomeGrupo()}
+          >
+            {salvandoNome ? 'Salvando…' : 'Salvar'}
+          </button>
+          <button
+            type="button"
+            className="lista-item__cancelar"
+            disabled={salvandoNome}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={cancelarRenomear}
+          >
+            Cancelar
+          </button>
+        </div>
+        {erroNome !== null && <p className="aviso-erro">{erroNome}</p>}
+      </div>
+    ) : modoShare ? (
       <>
         <div className="preview-share-topo">
           <div className="preview-share-topo__info">
@@ -1044,6 +1154,12 @@ function PreviaCorpo({
       </>
     ) : (
       <div className="preview-registro__acoes">
+        {podeRenomear && (
+          <Botao variante="padrao" onClick={iniciarRenomear}>
+            <Pencil size={16} aria-hidden />
+            <span className="preview-registro__btn-txt">Renomear</span>
+          </Botao>
+        )}
         <Botao variante="padrao" onClick={entrarShare} aria-label="Compartilhar registro unido">
           <Share2 size={16} aria-hidden />
           <span className="preview-registro__btn-txt">Compartilhar</span>
