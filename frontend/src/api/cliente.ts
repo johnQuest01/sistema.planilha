@@ -119,6 +119,19 @@ function corpoJson(dados: unknown): RequestInit {
   return { method: 'POST', body: JSON.stringify(dados) };
 }
 
+// Compat com o backend ANTIGO (ainda no ar até o deploy): ele rejeita `null` (que
+// o app usa para "limpar" um campo). Remove as chaves com valor null, para as
+// demais edições salvarem mesmo assim. Com o backend novo, null é aceito e este
+// caminho nem é usado (não há 400).
+function semChavesNulas(valores: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(valores)) if (v !== null) out[k] = v;
+  return out;
+}
+function temChaveNula(valores: Record<string, unknown>): boolean {
+  return Object.values(valores).some((v) => v === null);
+}
+
 export const api = {
   // --- config / auth ---
   config: () => pedir<{ r2PublicBase: string; wsBase?: string }>('/api/config'),
@@ -204,16 +217,38 @@ export const api = {
     ),
   // `campos` opcional: quando enviado (duplicar/novo-a-partir-de outro registro),
   // o novo registro nasce com CORPO próprio (estrutura independente da coleção).
-  criarRegistro: (colecaoId: string, valores: Record<string, unknown> = {}, campos?: Campo[]) =>
-    pedir<Registro>(
-      `/api/colecoes/${colecaoId}/registros`,
-      corpoJson(campos === undefined ? { valores } : { valores, campos }),
-    ),
-  editarRegistro: (id: string, valores: Record<string, unknown>) =>
-    pedir<Registro>(`/api/registros/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ valores }),
-    }),
+  criarRegistro: async (
+    colecaoId: string,
+    valores: Record<string, unknown> = {},
+    campos?: Campo[],
+  ): Promise<Registro> => {
+    const corpo = (v: Record<string, unknown>): RequestInit =>
+      corpoJson(campos === undefined ? { valores: v } : { valores: v, campos });
+    try {
+      return await pedir<Registro>(`/api/colecoes/${colecaoId}/registros`, corpo(valores));
+    } catch (e) {
+      if (e instanceof ErroApi && e.status === 400 && temChaveNula(valores)) {
+        return pedir<Registro>(`/api/colecoes/${colecaoId}/registros`, corpo(semChavesNulas(valores)));
+      }
+      throw e;
+    }
+  },
+  editarRegistro: async (id: string, valores: Record<string, unknown>): Promise<Registro> => {
+    try {
+      return await pedir<Registro>(`/api/registros/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ valores }),
+      });
+    } catch (e) {
+      if (e instanceof ErroApi && e.status === 400 && temChaveNula(valores)) {
+        return pedir<Registro>(`/api/registros/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ valores: semChavesNulas(valores) }),
+        });
+      }
+      throw e;
+    }
+  },
   // Substitui o corpo (blocos) de UM registro, tornando-o independente da coleção.
   salvarCorpoRegistro: (id: string, campos: Campo[]) =>
     pedir<Registro>(`/api/registros/${id}/corpo`, {
