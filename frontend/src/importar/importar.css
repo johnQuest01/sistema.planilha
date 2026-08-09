@@ -5,14 +5,23 @@
 }
 
 .importar-zip__ajuda {
-  font-size: 0.85rem;
-  color: var(--giz);
+  font-size: 0.9rem;
+  /* A folha tem fundo claro (--papel); antes era var(--giz) ~branco = invisível. */
+  color: var(--tinta-2);
   line-height: 1.5;
 }
 
 .importar-zip__ajuda code {
   font-family: var(--mono);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(23, 32, 28, 0.08);
+  color: var(--tinta);
   padding: 0.05rem 0.3rem;
   border-radius: 4px;
+}
+
+/* Placeholder legível nesta folha (o exemplo é instrução para ler, não some no fundo). */
+.importar-zip .campo__controle::placeholder,
+.importar-zip textarea.campo__controle::placeholder {
+  color: var(--tinta-2);
+  opacity: 1;
 }
