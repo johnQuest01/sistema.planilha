@@ -9,8 +9,9 @@
 import type { JSZipObject } from 'jszip';
 import { api } from '../api/cliente';
 import { enviarFoto } from '../imagens/enviar';
+import { criarBlocoImagens } from './importarFotos';
 
-const MAX_FOTOS = 10; // teto do backend por bloco de imagem
+const MAX_FOTOS = 30; // desejado (backend novo); cai para 10 no backend antigo
 
 export interface NotaImportada {
   texto: string;
@@ -142,11 +143,9 @@ export async function importarPlanilhaDeZip(
   aoProgresso?.({ fase: 'criando', feito: 0, total: notas.length });
   const col = await api.criarColecao(nome);
   const blocoTexto = await api.criarCampo(col.id, { nome: 'Texto', tipo: 'paragrafo' });
-  const blocoImagens = await api.criarCampo(col.id, {
-    nome: 'Imagens',
-    tipo: 'imagem',
-    config: { maxFotos: MAX_FOTOS },
-  });
+  // Teto alto (backend novo) com fallback para 10 (backend antigo) — evita "validação".
+  const blocoImagens = await criarBlocoImagens(col.id, 'Imagens', MAX_FOTOS);
+  const maxFotos = blocoImagens.config.maxFotos ?? 10;
 
   // Cria em ordem INVERSA: como a lista é por `ordem` desc (mais novo no topo), criar
   // a última nota primeiro faz a PRIMEIRA nota escrita terminar no topo — preservando
@@ -158,7 +157,7 @@ export async function importarPlanilhaDeZip(
     if (nota === undefined) continue;
     const registro = await api.criarRegistro(col.id);
     const keys: string[] = [];
-    for (const img of nota.imagens.slice(0, MAX_FOTOS)) {
+    for (const img of nota.imagens.slice(0, maxFotos)) {
       try {
         keys.push(await enviarFoto(registro.id, img));
       } catch {

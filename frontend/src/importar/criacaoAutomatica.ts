@@ -13,7 +13,7 @@ import type { Registro } from '../../../shared/tipos';
 import { api } from '../api/cliente';
 import { enviarFoto } from '../imagens/enviar';
 import { partirEmNotas } from './importarTexto';
-import { refDoNome } from './importarFotos';
+import { criarBlocoImagens, refDoNome } from './importarFotos';
 
 const MAX_FOTOS = 30;
 
@@ -89,11 +89,9 @@ export async function criarPlanilhaAutomatica(
   aoProgresso?.({ fase: 'criando', feito: 0, total: notas.length });
   const col = await api.criarColecao(nome);
   const blocoTexto = await api.criarCampo(col.id, { nome: 'Texto', tipo: 'paragrafo' });
-  const blocoImagens = await api.criarCampo(col.id, {
-    nome: 'Imagens',
-    tipo: 'imagem',
-    config: { maxFotos: MAX_FOTOS },
-  });
+  // Teto alto (backend novo) com fallback para 10 (backend antigo) — evita "validação".
+  const blocoImagens = await criarBlocoImagens(col.id, 'Imagens', MAX_FOTOS);
+  const maxFotos = blocoImagens.config.maxFotos ?? 10;
 
   // Cria em ordem INVERSA para a 1ª nota escrita ficar no topo (lista = ordem desc).
   const registros: Registro[] = new Array<Registro>(notas.length);
@@ -137,7 +135,7 @@ export async function criarPlanilhaAutomatica(
 
     const keys: string[] = [];
     for (const a of doReg) {
-      if (keys.length >= MAX_FOTOS) {
+      if (keys.length >= maxFotos) {
         excedente += 1;
         feito += 1;
         aoProgresso?.({ fase: 'imagens', feito, total });

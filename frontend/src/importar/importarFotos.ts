@@ -12,11 +12,25 @@
 //   * O texto após a referência só é tratado como cor se for uma cor conhecida OU já
 //     existir no registro; senão (ex.: "4578sdskmdkm") é foto de referência.
 //   * Sem bloco "Cor", a foto vai para o bloco de imagens da referência (não se perde).
-import { api, cursorDeRegistro } from '../api/cliente';
+import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
 import { enviarFoto } from '../imagens/enviar';
 import type { Campo, Colecao, Registro, SubCampo } from '../../../shared/tipos';
 import { camposDoRegistro } from '../preencher/derivarResumo';
 import { chaveReferencia, codigoInicial } from '../integracao/merge';
+
+// Cria um bloco de imagem tentando um teto alto (backend novo aceita até 30) e
+// caindo para 10 quando o backend ainda é o antigo (cujo máximo era 10) — sem isso,
+// o import falhava com "validação" (400) enquanto o backend não sobe.
+export async function criarBlocoImagens(colecaoId: string, nome: string, max = 30): Promise<Campo> {
+  try {
+    return await api.criarCampo(colecaoId, { nome, tipo: 'imagem', config: { maxFotos: max } });
+  } catch (e) {
+    if (max > 10 && e instanceof ErroApi && e.status === 400) {
+      return api.criarCampo(colecaoId, { nome, tipo: 'imagem', config: { maxFotos: 10 } });
+    }
+    throw e;
+  }
+}
 
 const PAGINA = 20;
 
