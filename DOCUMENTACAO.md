@@ -58,17 +58,19 @@ sistema.planilha-main/
 │     └─ scripts/      # limparR2 (GC de órfãos no bucket)
 ├─ frontend/           # SPA React + Vite (PWA)
 │  └─ src/
-│     ├─ App.tsx       # rotas (react-router-dom)
-│     ├─ api/          # cliente REST, realtime (ws), cache (localStorage)
+│     ├─ App.tsx       # rotas (react-router-dom) + guarda de auth
+│     ├─ main.tsx      # bootstrap React (createRoot, StrictMode)
+│     ├─ api/          # cliente REST, realtime (ws), cache SWR, runtime (wsBase), prefetch
 │     ├─ contexto/     # Auth (contexto React)
-│     ├─ telas/        # Inicio, Colecao, Preencher, Integrado, Integracoes, ...
-│     ├─ preencher/    # Ficha, ListaDensa, Tabela, BuscaReferencia, RegistroPreview...
-│     ├─ imagens/      # derivadas, enviar, urls, Visor, Grade, Miniatura
-│     ├─ importar/     # criacaoAutomatica, importarFotos, importarTexto, importarBackup
+│     ├─ telas/        # Inicio, Colecao, Criar, Preencher, Integrado, Integracoes, Config, Lixeira, Entrar, TopoApp, FormBloco
+│     ├─ preencher/    # Ficha, ListaDensa, Tabela, BuscaReferencia, RegistroPreview, CampoValor, SecaoEditor, CorpoRegistroEditor, derivarResumo, valoresVazios, compartilhar
+│     ├─ imagens/      # derivadas, enviar, urls, Grade, Visor, FotoZoomavel (Miniatura fica em preencher/)
+│     ├─ importar/     # criacaoAutomatica, importarFotos, importarTexto, importarBackup + botões
 │     ├─ backup/       # exportarColecao (backup de planilha e de integração)
-│     ├─ integracao/   # FichaIntegrada, merge, PreviewIntegrado
-│     ├─ ui/           # componentes base (Botao, Campo, FolhaInferior, ...)
-│     └─ estilos/      # base.css e tokens de design (CSS variables)
+│     ├─ integracao/   # merge, FichaIntegrada, ParteEditor, PreviewIntegrado
+│     ├─ ui/           # Botao, Campo, Segmentado, Chip, IconeTipo, FolhaInferior, Carregando, Presenca, InstalarApp, BotaoLixeiraFlutuante, useVoltar, useMedia, travaScroll
+│     ├─ estilos/      # tokens.css (design tokens) + base.css (reset + app shell)
+│     └─ publico/      # RegistroPublico (link público /r/:token, só leitura)
 ├─ shared/
 │  └─ tipos.ts         # tipos TypeScript compartilhados (Campo, Colecao, Registro, ...)
 ├─ Dockerfile          # imagem do backend (Fly)
@@ -128,10 +130,18 @@ npm run build               # build backend (tsc) + frontend (vite)
   (workflow_dispatch) ou `flyctl deploy --remote-only`.
 - **Frontend (Vercel)**: deploy automático a cada push na `main`. `vercel.json` faz o
   rewrite de `/api/:path*` e `/health` para `https://mostruario-api.fly.dev`.
-- **Migrations** rodam sozinhas no boot do container (idempotentes; ver §6).
+- **Migrations** rodam sozinhas no boot do container (idempotentes; ver §6). O
+  `server.ts` ainda chama `garantirSchemaPronto()` no boot e **não sobe** se faltar
+  schema crítico (checa `colecoes.senha_hash` + tabela `colecao_acessos`).
 - Fly roda **1 máquina só** (min_machines_running=1, sem auto-stop): a presença em
   tempo real é mantida **em memória por máquina**; com 2+ máquinas o WebSocket
   quebraria (split-brain). Health check em `GET /health`.
+- Existe também um blueprint alternativo `render.yaml` (deploy no Render, mesmo
+  build/start) — não é o deploy ativo, mas serve de referência.
+- Backup do R2: workflow `.github/workflows/backup-r2.yml` roda `scripts/backup-r2.mjs`
+  todo dia (cron 06:00 UTC), copiando incrementalmente o bucket de mídia para um bucket
+  de backup (nunca apaga). Usa envs próprias: `R2_BACKUP_BUCKET`, `R2_SRC_ACCESS_KEY_ID`,
+  `R2_SRC_SECRET_ACCESS_KEY`, `R2_DST_ACCESS_KEY_ID`, `R2_DST_SECRET_ACCESS_KEY`.
 
 ---
 
@@ -142,7 +152,7 @@ Lidas em `backend/src/config.ts` (e `r2/r2.ts` para as R2). Não-secretas ficam 
 
 | Variável | Obrigatória | Descrição |
 |---|---|---|
-| `DATABASE_URL` | sim | conexão Postgres (Neon) usada pelo app (pool). |
+| `DATABASE_URL` | sim | conexão Postgres (Neon) **POOLED** (host com `-pooler`) usada pelo app. |
 | `DATABASE_URL_DIRECT` | migrations | usada pelo runner de migrations (DIRECT, sem PgBouncer); cai para `DATABASE_URL` se ausente. |
 | `PORT` | não (3333) | porta do servidor. |
 | `NODE_ENV` | — | `production` em prod (exige `COOKIE_SECRET`). |
@@ -245,7 +255,11 @@ interface ConfigCampo {
   `sessoes`) e filas de manutenção (`lixo_r2`) ficam FORA da RLS de conta — a auth
   media o acesso e as rotas filtram por `conta_id` explicitamente.
 
-### Tabelas (estado final após as 18 migrations)
+### Tabelas (estado final após as migrations 001–018)
+
+> São **19 arquivos** de migration: `001`–`018`, com **dois** arquivos de prefixo `015`
+> (`015_compartilhamentos.sql` e `015_integracoes.sql`). O runner ordena por nome, então
+> `compartilhamentos` roda antes de `integracoes`.
 
 | Tabela | Colunas principais | Observações |
 |---|---|---|
@@ -255,7 +269,7 @@ interface ConfigCampo {
 | `colecoes` | id, conta_id, nome, criado_por(→usuarios), senha_hash, arquivada, criado_em, atualizado_em | Planilha. `senha_hash` = senha da planilha (Oficina). |
 | `campos` | id, colecao_id, nome, tipo, ordem, config(jsonb), criado_em | Blocos compartilhados da planilha (o schema). |
 | `registros` | id, colecao_id, valores(jsonb), campos(jsonb, nullable), criado_por(text), criado_por_id(→usuarios), ordem(double), criado_em, atualizado_em | `campos` = corpo próprio (null = herda da coleção). `ordem` = ordem manual (maior no topo). |
-| `convites` | token(PK), colecao_id, papel(`preencher`\|`ler`), expira_em, revogado_em | Link de preenchimento legado (token). |
+| `convites` | token(PK), colecao_id, papel(`preencher`\|`ler`), expira_em, revogado_em | Reservada para a "Fase 6" (link de preenchimento com role separada). **Sem rotas ativas** hoje — o compartilhamento atual é só o link público read-only. |
 | `compartilhamentos` | codigo(PK), conta_id, registro_id, blocos(jsonb \| "*"), expira_em, revogado_em, criado_por, criado_em | Link público CURTO por registro (código é o segredo). SELECT público liberado; escrita só do dono. |
 | `integracoes` | id, conta_id, nome, colecao_ids(jsonb ordenado), ativo, arquivada, criado_por, criado_em, atualizado_em | Une planilhas por referência. Só configuração/visão. |
 | `lixeira_registros` | id, conta_id, colecao_id, colecao_nome, registro_id, valores(jsonb), campos(jsonb), fotos_referencia(jsonb), criado_por/_id, criado_em, atualizado_em, apagado_em, apagado_por_id/_nome | Soft-delete de registro (snapshot completo, inclui corpo próprio). |
@@ -309,7 +323,10 @@ interface ConfigCampo {
 - **Sessão**: cookie assinado carrega `sessoes.id` (opaco, aleatório). Dá para expirar
   e revogar (logout/troca de senha). `auth/sessoes.ts`, `auth/cookies.ts`.
 - **Papéis**: `dono` (pode apagar tudo, gerir senhas/usuários, arquivar) e `membro`
-  (cria/preenche). `auth/exigeDono.ts` protege rotas do dono.
+  (cria/preenche). Atenção ao nome: o preHandler `auth/exigeDono.ts` na verdade só
+  **exige uma sessão válida** (preenche `req.contaId`/`req.usuario`); a checagem de
+  papel `dono` / dono-do-workspace é feita **rota a rota** (ex.: arquivar, gerir
+  senhas/usuários, apagar planilha).
 - **RLS por conta**: todo acesso "dono" passa por `comConta(contaId, fn)` (ver §6).
 - **Senha por planilha (Oficina)**: `colecoes.senha_hash` + `colecao_acessos`. E-mails
   em `PLANILHA_ACESSO_LIVRE_EMAILS` não precisam desbloquear.
@@ -406,8 +423,10 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
 - `DELETE /api/registros/:id` (vai pra lixeira)
 
 **Link público**
-- `POST /api/registros/:registroId/link` `{campos: string[]}` → `{codigo}`
-- `GET /api/publico/r/:token` → `{campos, valores, r2PublicBase}` (sem login)
+- `POST /api/registros/:registroId/link` `{campos: string[]}` → `{codigo}` (código curto)
+- `DELETE /api/registros/:registroId/link/:codigo` — revoga um link específico
+- `GET /api/publico/r/:codigo` → `{campos, valores, r2PublicBase}` (sem login; aceita o
+  **código curto** novo OU um **token assinado legado** — HMAC, se contiver `.`)
 
 **Integrações**
 - `GET /api/integracoes` / `GET /api/integracoes/:id`
@@ -458,9 +477,18 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
 
 - **`Preencher.tsx`** — orquestra a planilha: barra/busca fixas e a **lista rolável**
   (app shell: `.pagina--app`/`.faixa--app`/`.rolagem` → só a lista rola).
-- **`Ficha.tsx`** — editor de UM registro (autosave por bloco). Botão "Título" por
-  bloco (marca `config.ehTitulo`). "Novo registro" herda a estrutura do registro mais
-  recente.
+- **`Ficha.tsx`** — editor de UM registro (autosave por bloco: debounce ~400ms + flush
+  garantido ao fechar). Botão "Título" por bloco (marca `config.ehTitulo`). "Novo
+  registro" herda a estrutura do registro mais recente.
+- **`CampoValor.tsx`** — o input certo por tipo (texto/parágrafo/número+sufixo/
+  data/datahora com "Hoje/Agora"/booleano/seleção). **`CorpoRegistroEditor.tsx`** —
+  edita os blocos de UM registro (torna-o corpo próprio; PUT `/corpo`). **`FormBloco.tsx`**
+  (em `telas/`) — formulário de um bloco, reusado por `Criar` e pelos editores de corpo.
+- **`telas/Criar.tsx`** — editor dos **blocos compartilhados da coleção** (adicionar/
+  editar/reordenar/apagar campos) + prévia. Diferente do `CorpoRegistroEditor` (que
+  mexe só num registro).
+- **Alavanca de edição** (`edicao-trava`): trava/destrava a edição por conta (salva no
+  servidor, sincroniza ao vivo pelo evento `trava` do WebSocket).
 - **`ListaDensa.tsx`** (mobile) e **`Tabela.tsx`** (desktop) — listas virtualizadas
   (`@tanstack/react-virtual`) que rolam dentro do container.
 - **`BuscaReferencia.tsx`** — busca por referência; resultados rolam por dentro.
@@ -518,10 +546,16 @@ sessão (cookie). Fonte de verdade do lado do cliente: `frontend/src/api/cliente
 
 ### Estilo
 
-- Tokens de design em CSS variables (`--papel`, `--tinta`, `--linha`, `--e2..--e4`
-  de espaçamento etc.) em `estilos/base.css`. Layout com Flexbox; **app shell** de
-  scroll contido (`.pagina--app` fixa a altura, `.faixa--app` é coluna, só `.rolagem`
-  recebe scroll) usado na Home, na planilha e na integrada.
+- **Design tokens** em `estilos/tokens.css` (importado por `base.css`): superfícies
+  (`--tapete`, `--papel`, `--cartao`), tinta (`--tinta`, `--tinta-2/3`), acentos
+  (`--giz`, `--fita` = laranja de ação, `--perigo`), espaçamento `--e1..--e6`
+  (4/8/12/16/24/32 px), alvo de toque `--toque` (44px), fontes `--fonte`/`--mono`.
+- CSS puro (sem framework), **um `.css` por feature** (importado pelo componente).
+- **App shell** de scroll contido (em `base.css`): `.pagina--app` fixa a altura,
+  `.faixa--app` é coluna, só `.rolagem` recebe scroll — usado na Home, na planilha e na
+  integrada (cabeçalho/busca fixos; só a lista/registros rola).
+- Mobile × desktop é decidido em JS por `useMedia('(max-width: 768px)')` (lista densa ×
+  tabela), além de media queries no CSS.
 
 ---
 
