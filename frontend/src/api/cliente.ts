@@ -1,6 +1,7 @@
 import type {
   Campo,
   Colecao,
+  ContaAcessivel,
   ConfigCampo,
   Integracao,
   ItemLixeira,
@@ -10,7 +11,13 @@ import type {
   UsuarioResumo,
 } from '../../../shared/tipos';
 
-export type { Usuario, UsuarioResumo, ItemLixeira, Integracao } from '../../../shared/tipos';
+export type {
+  Usuario,
+  UsuarioResumo,
+  ContaAcessivel,
+  ItemLixeira,
+  Integracao,
+} from '../../../shared/tipos';
 
 // Resumo devolvido por GET /api/colecoes (sem campos). O detalhe (com campos) vem
 // por GET /api/colecoes/:id como Colecao.
@@ -136,8 +143,11 @@ export const api = {
   // --- config / auth ---
   config: () => pedir<{ r2PublicBase: string; wsBase?: string }>('/api/config'),
   eu: () => pedir<Usuario>('/api/auth/eu'),
-  entrar: (email: string, senha: string) =>
-    pedir<Usuario>('/api/auth/entrar', corpoJson({ email, senha })),
+  entrar: (email: string, senha: string, token?: string) =>
+    pedir<Usuario>(
+      '/api/auth/entrar',
+      corpoJson(token !== undefined && token.trim() !== '' ? { email, senha, token } : { email, senha }),
+    ),
   registrar: (dados: {
     nome: string;
     email: string;
@@ -147,6 +157,35 @@ export const api = {
     nomeConta?: string;
   }) => pedir<Usuario>('/api/auth/registrar', corpoJson(dados)),
   sair: () => pedir<{ ok: boolean }>('/api/auth/sair', { method: 'POST' }),
+  listarContas: () => pedir<ContaAcessivel[]>('/api/auth/contas'),
+  trocarConta: (contaId: string) =>
+    pedir<Usuario>('/api/auth/trocar-conta', corpoJson({ contaId })),
+  pedirAcesso: (token: string) =>
+    pedir<{
+      status: 'pendente' | 'ativo';
+      contaId: string;
+      contaNome: string;
+      jaAtivo: boolean;
+    }>('/api/auth/pedir-acesso', corpoJson({ token })),
+  listarPedidosAcesso: () =>
+    pedir<
+      {
+        usuarioId: string;
+        nome?: string;
+        email?: string;
+        status: string;
+        criadoEm: string;
+        tokenOrigem: string | null;
+      }[]
+    >('/api/auth/pedidos-acesso'),
+  aprovarPedidoAcesso: (usuarioId: string) =>
+    pedir<{ ok: boolean }>(`/api/auth/pedidos-acesso/${usuarioId}/aprovar`, {
+      method: 'POST',
+    }),
+  recusarPedidoAcesso: (usuarioId: string) =>
+    pedir<{ ok: boolean }>(`/api/auth/pedidos-acesso/${usuarioId}/recusar`, {
+      method: 'POST',
+    }),
   definirCodigoConvite: (codigo: string) =>
     pedir<{ ok: boolean }>('/api/auth/codigo-convite', {
       method: 'PATCH',

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, type Usuario } from '../api/cliente';
+import { api, type ContaAcessivel, type Usuario } from '../api/cliente';
 import { limparCache } from '../api/cache';
 import { definirWsBase } from '../api/runtime';
 import { definirBaseR2 } from '../imagens/urls';
@@ -28,20 +28,46 @@ export type DadosRegistro = {
 
 interface ContextoAuth {
   estado: Estado;
-  entrar: (email: string, senha: string) => Promise<void>;
+  contas: ContaAcessivel[];
+  avisoPedido: string | null;
+  limparAvisoPedido: () => void;
+  entrar: (email: string, senha: string, token?: string) => Promise<void>;
   registrar: (dados: DadosRegistro) => Promise<void>;
+  trocarConta: (contaId: string) => Promise<void>;
+  recarregarContas: () => Promise<void>;
   sair: () => Promise<void>;
 }
 
 const Ctx = createContext<ContextoAuth | null>(null);
 
+function avisoDoPedido(u: Usuario): string | null {
+  const p = u.pedido;
+  if (p == null) return null;
+  if (p.status === 'pendente') {
+    return `Pedido enviado para “${p.contaNome}”. Aguarde o admin aprovar o acesso.`;
+  }
+  if (p.status === 'ativo') {
+    return `Acesso à conta “${p.contaNome}” liberado.`;
+  }
+  return null;
+}
+
 export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element {
   const [estado, setEstado] = useState<Estado>({ fase: 'carregando' });
+  const [contas, setContas] = useState<ContaAcessivel[]>([]);
+  const [avisoPedido, setAvisoPedido] = useState<string | null>(null);
+
+  const recarregarContas = useCallback(async () => {
+    try {
+      const lista = await api.listarContas();
+      setContas(lista);
+    } catch {
+      setContas([]);
+    }
+  }, []);
 
   useEffect(() => {
     let vivo = true;
-    // Config (base do R2) e sessão de verdade em paralelo — antes era sequencial
-    // e somava a latência do Render (cold start) duas vezes no boot.
     void (async () => {
       const [cfg, sessao] = await Promise.allSettled([api.config(), api.eu()]);
       if (!vivo) return;
@@ -51,8 +77,11 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
       }
       if (sessao.status === 'fulfilled') {
         setEstado({ fase: 'logado', usuario: sessao.value });
+        void api.listarContas().then((lista) => {
+          if (vivo) setContas(lista);
+        });
       } else {
-        void sessao; // 401 ou rede → tela de entrar
+        void sessao;
         setEstado({ fase: 'deslogado' });
       }
     })();
@@ -61,25 +90,69 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
     };
   }, []);
 
-  const entrar = useCallback(async (email: string, senha: string) => {
-    const usuario = await api.entrar(email, senha);
-    setEstado({ fase: 'logado', usuario });
-  }, []);
+  const entrar = useCallback(
+    async (email: string, senha: string, token?: string) => {
+      const usuario = await api.entrar(email, senha, token);
+      setEstado({ fase: 'logado', usuario });
+      setAvisoPedido(avisoDoPedido(usuario));
+      limparCache();
+      await recarregarContas();
+    },
+    [recarregarContas],
+  );
 
-  const registrar = useCallback(async (dados: DadosRegistro) => {
-    const usuario = await api.registrar(dados);
+  const registrar = useCallback(
+    async (dados: DadosRegistro) => {
+      const usuario = await api.registrar(dados);
+      setEstado({ fase: 'logado', usuario });
+      setAvisoPedido(null);
+      limparCache();
+      await recarregarContas();
+    },
+    [recarregarContas],
+  );
+
+  const trocarConta = useCallback(async (contaId: string) => {
+    const usuario = await api.trocarConta(contaId);
+    limparCache();
     setEstado({ fase: 'logado', usuario });
+    setAvisoPedido(null);
+    // Contas não mudam ao trocar; só a sessão.
   }, []);
 
   const sair = useCallback(async () => {
     await api.sair();
-    limparCache(); // não vazar dados em cache para a próxima conta neste navegador
+    limparCache();
+    setContas([]);
+    setAvisoPedido(null);
     setEstado({ fase: 'deslogado' });
   }, []);
 
+  const limparAvisoPedido = useCallback(() => setAvisoPedido(null), []);
+
   const valor = useMemo<ContextoAuth>(
-    () => ({ estado, entrar, registrar, sair }),
-    [estado, entrar, registrar, sair],
+    () => ({
+      estado,
+      contas,
+      avisoPedido,
+      limparAvisoPedido,
+      entrar,
+      registrar,
+      trocarConta,
+      recarregarContas,
+      sair,
+    }),
+    [
+      estado,
+      contas,
+      avisoPedido,
+      limparAvisoPedido,
+      entrar,
+      registrar,
+      trocarConta,
+      recarregarContas,
+      sair,
+    ],
   );
 
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;

@@ -314,6 +314,9 @@ interface ConfigCampo {
 - **021_usuarios_delete_set_null** — FKs de autoria (`colecoes.criado_por`,
   `registros.criado_por_id`, `integracoes.criado_por`) passam a `ON DELETE SET NULL`
   para o admin poder remover membro sem apagar planilhas/registros.
+- **022_conta_membros** — vínculo N:N (`pendente`/`ativo`/`revogado`): usuário com
+  conta própria pode pedir acesso à conta de um admin via token no login; sessão
+  aponta para a conta ativa.
 
 > Nota: há dois arquivos com prefixo `015` (`015_integracoes.sql` e
 > `015_compartilhamentos.sql`); o runner aplica por ordem alfabética, então

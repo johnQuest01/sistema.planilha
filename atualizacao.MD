@@ -1,71 +1,57 @@
-# Atualização — multi-conta (workspaces isolados)
+# Atualização — multi-conta + acesso por token no login
 
-Texto original do pedido no fim. Abaixo, organizado para executar e releitura.
+Texto original dos pedidos no fim. Abaixo, organizado para executar e releitura.
 
 ---
 
 ## Objetivo
 
-Cada pessoa pode ter **sua própria conta (workspace)** com dados, senhas e
-planilhas **isolados** — sem nunca misturar com outras contas.
-
-A conta atual (Bruno / equipe) **continua funcionando**: quem já está nela
-permanece; o admin gera **tokens** para novos usuários entrarem nela.
+1. Cada pessoa pode ter **sua própria conta (workspace)** com dados isolados.
+2. Quem já tem conta própria pode, **no login**, colar um **token do admin** e
+   **pedir acesso** às planilhas da conta do admin — sem perder a conta própria.
+3. Admin **aprova / recusa** pedidos, **revoga acesso** e **invalida tokens**
+   (quem usou aquele token perde o acesso na hora).
 
 ---
 
-## Dois caminhos no cadastro
+## Dois caminhos no cadastro + token no login
 
-| Caminho | O que acontece |
+| Momento | O que acontece |
 |---|---|
-| **Criar minha conta** | Cria um workspace novo + usuário `dono` (admin dessa conta). Dados 100% separados. |
-| **Tenho um token** | Coloca o token no cadastro → entra como `membro` na conta do admin que gerou o token (vê planilhas/info dessa conta). |
-
-Login continua por e-mail + senha do **usuário** (tabela `usuarios`). Isolamento
-de dados = `conta_id` + RLS (já existia).
+| **Criar minha conta** | Workspace novo + usuário `dono`. |
+| **Cadastro com token** | Entra como `membro` nativo na conta do admin (home = essa conta). |
+| **Login + token** (já tem conta) | Cria pedido `pendente` na conta do admin; home continua a própria. Admin aprova → pode trocar de conta no topo. |
 
 ---
 
-## Papéis na conta
+## Segurança do vínculo
 
-| Papel | Quem | Pode |
-|---|---|---|
-| **`dono` (admin)** | Quem criou a conta, ou o dono já existente | Engrenagem (Config), gerar/revogar tokens, listar/remover usuários, restaurar lixeira, apagar definitivo, senhas de planilha/usuários, arquivar |
-| **`membro`** | Entrou com token | Usar planilhas, preencher, criar o que a conta permitir — **sem** Config, **sem** lixeira (restaurar/apagar definitivo), **sem** remover gente |
-
----
-
-## Tokens de convite (seguro)
-
-1. Admin abre Config → gera token (código curto; o código é o segredo).
-2. Entrega o token (WhatsApp etc.).
-3. Novo usuário: Criar conta → “Tenho token” → cola o token → vira membro daquela conta.
-4. Admin pode revogar tokens; tokens podem ter validade / limite de usos.
-
-**Compatibilidade:** o código de convite antigo da conta Bruno (`codigo_convite_hash`)
-continua válido para entrar na conta atual.
+- Tabela `conta_membros` (mig. `022`): `pendente` | `ativo` | `revogado`.
+- Sessão aponta para a **conta ativa**; convidado nunca é admin da conta alheia.
+- Token padrão: **7 dias**, **1 uso**; revogar token derruba membros ligados a ele + sessões.
+- Após revogar acesso, a pessoa precisa de token válido para **pedir de novo**.
 
 ---
 
-## Checklist de entrega
+## Checklist
 
-- [x] Organizar este arquivo
-- [x] Migration `020` (`convites_conta` + `contas.nome`)
-- [x] API: criar conta / join por token / tokens CRUD / remover usuário
-- [x] Permissões: lixeira e Config só `dono`
-- [x] UI: Entrar (dois caminhos) + Config (tokens + remover) + esconder lixeira de membro
-- [x] Conta atual preservada (sem apagar dados)
+- [x] Migration `022_conta_membros`
+- [x] Login com token + pedir acesso + aprovar/recusar
+- [x] Trocar conta no topo + Config (pedidos)
+- [x] Revogar token invalida acesso; remover convidado não apaga a conta dele
 
 ---
 
 ## Regras
 
 - **NÃO** apagar banco / dados existentes.
-- Contas nunca compartilham `conta_id` — RLS impede vazamento.
-- E-mail de usuário continua **único** no sistema (uma pessoa = um login).
+- Contas nunca compartilham dados — RLS por `conta_id` da sessão.
+- E-mail de usuário continua **único** no sistema.
 
 ---
 
 ## Texto original (preservado)
 
 agora crie um o seguinte, schema migrations para banco de dados, para que outros usuarios possa criar conta e ter seu proprio ambinete seus dados suas senha seu sistema de planilhas, sem que conflite com outras contas de usauarios, e entenda bem ( esta conta precisa continuar dando acesso a usuarios que estão nela, criando a logica segura que admin dono da conta, ao gerar token, dou o token para usuario ele coloca no campo que pede token ao criar conta entra e tem acesso a minha conta com inforamções e tudo da conta, e para quem quer criar conta ira criar conta para ter sua conta separadas suas informações seus dados tudo sem NUNCA conflitar com outras contas, e este sera admin da propria conta, podendo gerar tokens para outros usuarios terem acesso a sua conta planilhas e informações, más so ele tera acessoa engrenagem restaurar lixeira de planilhas apagadas e apagar definitivo, e remover usaurios tirando seu acesso ok ?
+
+ao logar crie area para colocar token para entrar em conta que admin deu token para este usuario mesmo ele tendo conta e seu proprio acesso a seus dados e sua area de planilha e conta, ele podera entrar com token que admin deu para ele ter acesso a conta do admin e seus dados planilhas, crie um sistema hiperseguro que ao usuario colocar token do admin na area de logar para ter acesso ao ambiente da conta do adimin com suas planilhas possa pedir permissão para o admin novamente, adimin podendo revogar o acesso e invalidar token

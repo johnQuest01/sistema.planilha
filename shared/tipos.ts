@@ -116,14 +116,26 @@ export interface Integracao {
   atualizadoEm: string;
 }
 
-// Usuário logado (pessoa). Papel 'dono' = admin da conta; 'membro' preenche e cria.
+// Usuário logado (pessoa). Papel 'dono' = admin da conta ativa; 'membro' preenche.
 export interface Usuario {
   id: string;
   nome: string;
   email: string;
   papel: 'dono' | 'membro';
-  /** Admin da conta (papel dono): senhas, tokens, usuários, lixeira. */
+  /** Admin da conta ativa (papel dono): senhas, tokens, usuários, lixeira. */
   podeGerirSenhas?: boolean;
+  /** Conta da sessão atual. */
+  contaId?: string;
+  /** Conta própria (home) do usuário. */
+  contaHomeId?: string;
+  /** Nome amigável da conta ativa. */
+  contaNome?: string;
+  /** Resultado de login/pedido com token do admin. */
+  pedido?: {
+    status: 'pendente' | 'ativo';
+    contaId: string;
+    contaNome: string;
+  } | null;
 }
 
 /** Linha da lista de usuários no painel do admin da conta. */
@@ -133,4 +145,15 @@ export interface UsuarioResumo {
   email: string;
   papel: 'dono' | 'membro';
   criadoEm: string;
+  /** nativo = home nesta conta; convidado = tem conta própria e pediu acesso. */
+  origem?: 'nativo' | 'convidado';
+}
+
+/** Conta acessível (home ou convidada) para o seletor. */
+export interface ContaAcessivel {
+  id: string;
+  nome: string;
+  papel: 'dono' | 'membro';
+  home: boolean;
+  status: 'ativo' | 'pendente';
 }

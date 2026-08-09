@@ -26,7 +26,14 @@ export async function exigeDono(req: FastifyRequest, reply: FastifyReply): Promi
   }
 
   req.contaId = u.contaId;
-  req.usuario = { id: u.usuarioId, nome: u.nome, email: u.email, papel: u.papel };
+  req.usuario = {
+    id: u.usuarioId,
+    nome: u.nome,
+    email: u.email,
+    papel: u.papel,
+    contaHomeId: u.contaHomeId,
+    contaNome: u.contaNome,
+  };
 }
 
 // Lê a conta já validada pelo preHandler. Evita `!` non-null nos handlers.
@@ -44,6 +51,8 @@ export function usuarioObrigatorio(req: FastifyRequest): {
   nome: string;
   email: string;
   papel: 'dono' | 'membro';
+  contaHomeId?: string;
+  contaNome?: string;
 } {
   const u = req.usuario;
   if (u === undefined) {

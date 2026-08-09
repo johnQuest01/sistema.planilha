@@ -23,27 +23,63 @@ export async function criarSessao(usuarioId: string, contaId: string): Promise<s
 export interface UsuarioSessao {
   usuarioId: string;
   contaId: string;
+  /** Workspace "home" do usuário (onde ele é dono/membro nativo). */
+  contaHomeId: string;
   nome: string;
   email: string;
+  /** Papel NA conta da sessão (convidado em outra conta = sempre membro). */
   papel: 'dono' | 'membro';
+  contaNome: string;
 }
 
 export async function usuarioDaSessao(id: string): Promise<UsuarioSessao | null> {
   const linhas = await sql<
-    { usuario_id: string; conta_id: string; nome: string; email: string; papel: string }[]
+    {
+      usuario_id: string;
+      sessao_conta_id: string;
+      home_conta_id: string;
+      nome: string;
+      email: string;
+      papel_home: string;
+      conta_nome: string | null;
+      membro_ok: boolean;
+    }[]
   >`
-    select u.id as usuario_id, s.conta_id, u.nome, u.email, u.papel
+    select
+      u.id as usuario_id,
+      s.conta_id as sessao_conta_id,
+      u.conta_id as home_conta_id,
+      u.nome,
+      u.email,
+      u.papel as papel_home,
+      c.nome as conta_nome,
+      (
+        s.conta_id = u.conta_id
+        or exists (
+          select 1 from conta_membros m
+          where m.conta_id = s.conta_id
+            and m.usuario_id = u.id
+            and m.status = 'ativo'
+        )
+      ) as membro_ok
     from sessoes s
     join usuarios u on u.id = s.usuario_id
+    join contas c on c.id = s.conta_id
     where s.id = ${id} and s.revogado_em is null and s.expira_em > now()`;
   const l = linhas[0];
-  if (l === undefined) return null;
+  if (l === undefined || !l.membro_ok) return null;
+
+  const naHome = l.sessao_conta_id === l.home_conta_id;
+  const nomeConta = (l.conta_nome ?? '').trim() || (naHome ? 'Minha conta' : 'Conta compartilhada');
   return {
     usuarioId: l.usuario_id,
-    contaId: l.conta_id,
+    contaId: l.sessao_conta_id,
+    contaHomeId: l.home_conta_id,
     nome: l.nome,
     email: l.email,
-    papel: l.papel === 'dono' ? 'dono' : 'membro',
+    // Convidado nunca é admin da conta alheia.
+    papel: naHome && l.papel_home === 'dono' ? 'dono' : 'membro',
+    contaNome: nomeConta,
   };
 }
 
@@ -63,4 +99,16 @@ export async function revogarSessoesDoUsuario(usuarioId: string): Promise<void> 
   await sql`
     update sessoes set revogado_em = now()
     where usuario_id = ${usuarioId} and revogado_em is null`;
+}
+
+/** Derruba sessões de um usuário só numa conta (tirou acesso convidado). */
+export async function revogarSessoesDoUsuarioNaConta(
+  usuarioId: string,
+  contaId: string,
+): Promise<void> {
+  await sql`
+    update sessoes set revogado_em = now()
+    where usuario_id = ${usuarioId}
+      and conta_id = ${contaId}
+      and revogado_em is null`;
 }

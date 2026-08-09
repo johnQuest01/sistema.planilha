@@ -56,11 +56,12 @@ export async function criarConviteConta(
   criadoPor: string,
   opts?: { rotulo?: string; diasValidade?: number; maxUsos?: number },
 ): Promise<ConviteConta> {
-  const expiraEm =
-    opts?.diasValidade !== undefined && opts.diasValidade > 0
-      ? new Date(Date.now() + opts.diasValidade * 86400 * 1000)
-      : null;
-  const maxUsos = opts?.maxUsos !== undefined && opts.maxUsos > 0 ? opts.maxUsos : null;
+  // Padrão seguro: 7 dias, 1 uso (admin pode pedir mais na API).
+  const dias =
+    opts?.diasValidade !== undefined && opts.diasValidade > 0 ? opts.diasValidade : 7;
+  const expiraEm = new Date(Date.now() + dias * 86400 * 1000);
+  const maxUsos =
+    opts?.maxUsos !== undefined && opts.maxUsos > 0 ? opts.maxUsos : 1;
   const rotulo = opts?.rotulo?.trim() ? opts.rotulo.trim().slice(0, 80) : null;
 
   for (let tentativa = 0; tentativa < 6; tentativa++) {
@@ -126,6 +127,24 @@ export async function revogarConviteConta(contaId: string, token: string): Promi
       and revogado_em is null
     returning token`;
   return linhas.length > 0;
+}
+
+/** Só valida (não gasta uso). null = inválido/expirado/esgotado/revogado. */
+export async function olharConviteConta(
+  token: string,
+): Promise<{ contaId: string; token: string } | null> {
+  const limpo = token.trim();
+  if (limpo === '') return null;
+  const linhas = await sql<{ conta_id: string; token: string }[]>`
+    select conta_id, token
+    from convites_conta
+    where token = ${limpo}
+      and revogado_em is null
+      and (expira_em is null or expira_em > now())
+      and (max_usos is null or usos < max_usos)`;
+  const l = linhas[0];
+  if (l === undefined) return null;
+  return { contaId: l.conta_id, token: l.token };
 }
 
 /** Resolve um token válido → conta_id. Incrementa `usos`. null = inválido/expirado/esgotado. */

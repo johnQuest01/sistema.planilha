@@ -30,6 +30,49 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.topo-aviso {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e3);
+  padding: var(--e2) var(--e4);
+  background: rgba(238, 243, 236, 0.12);
+  color: var(--giz);
+  font-size: 13px;
+}
+.topo-app__conta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40vw;
+}
+.topo-app__conta-rotulo {
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.topo-app__conta-select {
+  max-width: 28vw;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(238, 243, 236, 0.35);
+  background: transparent;
+  color: inherit;
+}
+.topo-app__conta-nome {
+  font-size: 12px;
+  opacity: 0.85;
+  max-width: 28vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topo-app__pendente {
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
 
 /* base de corte em miniatura: quadrado com cantos de esquadro */
 .corte {

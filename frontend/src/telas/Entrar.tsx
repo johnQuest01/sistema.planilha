@@ -27,7 +27,7 @@ export function Entrar(): JSX.Element {
     setEnviando(true);
     try {
       if (modo === 'entrar') {
-        await entrar(email.trim(), senha);
+        await entrar(email.trim(), senha, token.trim() || undefined);
       } else if (modoCadastro === 'token') {
         await registrar({
           nome: nome.trim(),
@@ -124,6 +124,23 @@ export function Entrar(): JSX.Element {
             {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
+        {modo === 'entrar' && (
+          <>
+            <Campo
+              rotulo="Token do admin (opcional)"
+              type="text"
+              autoComplete="off"
+              placeholder="MOST-XXXX-XXXX"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+            <p className="entrar__dica">
+              Já tem sua conta? Cole o token que o admin te deu para <strong>pedir acesso</strong>{' '}
+              às planilhas dele — sua conta e seus dados continuam separados. O admin precisa
+              aprovar (e pode revogar depois).
+            </p>
+          </>
+        )}
         {modo === 'registrar' && modoCadastro === 'token' && (
           <Campo
             rotulo="Token de convite"
@@ -138,7 +155,8 @@ export function Entrar(): JSX.Element {
         {modo === 'registrar' && modoCadastro === 'nova' && (
           <p className="entrar__dica">
             Você será o <strong>admin</strong> desta conta: planilhas, dados e tokens só seus —
-            sem misturar com outras contas.
+            sem misturar com outras contas. Depois, no login, pode usar um token de outro admin
+            para pedir acesso à conta dele.
           </p>
         )}
 

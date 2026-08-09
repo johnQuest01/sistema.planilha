@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { KeyRound, Lock, Shuffle, Ticket, Trash2, Users } from 'lucide-react';
+import { KeyRound, Lock, Shuffle, Ticket, Trash2, UserCheck, Users } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo, type UsuarioResumo } from '../api/cliente';
 import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
 import { TopoApp } from './TopoApp';
 import './telas.css';
+
+type PedidoAcesso = {
+  usuarioId: string;
+  nome?: string;
+  email?: string;
+  status: string;
+  criadoEm: string;
+  tokenOrigem: string | null;
+};
 
 // Gera um código no formato MOST-XXXX-XXXX (sem caracteres ambíguos).
 function gerarCodigo(): string {
@@ -67,6 +76,9 @@ export function Config(): JSX.Element {
   const [erroUsuarios, setErroUsuarios] = useState<string | null>(null);
   const [salvandoUsuarioId, setSalvandoUsuarioId] = useState<string | null>(null);
   const [removendoUsuarioId, setRemovendoUsuarioId] = useState<string | null>(null);
+  const [pedidos, setPedidos] = useState<PedidoAcesso[] | null>(null);
+  const [erroPedidos, setErroPedidos] = useState<string | null>(null);
+  const [pedidoBusyId, setPedidoBusyId] = useState<string | null>(null);
 
   const podeGerirSenhas =
     estado.fase === 'logado' && estado.usuario.podeGerirSenhas === true;
@@ -121,6 +133,17 @@ export function Config(): JSX.Element {
           setErroTokens(e instanceof ErroApi ? e.message : 'não foi possível listar tokens');
         }
       });
+    void api
+      .listarPedidosAcesso()
+      .then((lista) => {
+        if (vivo) setPedidos(lista);
+      })
+      .catch((e) => {
+        if (vivo) {
+          setPedidos([]);
+          setErroPedidos(e instanceof ErroApi ? e.message : 'não foi possível listar pedidos');
+        }
+      });
     return () => {
       vivo = false;
     };
@@ -146,6 +169,13 @@ export function Config(): JSX.Element {
   }
 
   async function revogarToken(token: string): Promise<void> {
+    if (
+      !window.confirm(
+        'Revogar este token? Quem entrou ou pediu acesso com ele perde o acesso na hora.',
+      )
+    ) {
+      return;
+    }
     setErroTokens(null);
     try {
       await api.revogarTokenConvite(token);
@@ -154,8 +184,43 @@ export function Config(): JSX.Element {
           t.token === token ? { ...t, revogadoEm: new Date().toISOString() } : t,
         ),
       );
+      // Recarrega usuários/pedidos (podem ter caído).
+      const [listaU, listaP] = await Promise.all([
+        api.listarUsuarios().catch(() => null),
+        api.listarPedidosAcesso().catch(() => null),
+      ]);
+      if (listaU !== null) setUsuarios(listaU);
+      if (listaP !== null) setPedidos(listaP);
     } catch (e) {
       setErroTokens(e instanceof ErroApi ? e.message : 'não foi possível revogar');
+    }
+  }
+
+  async function aprovarPedido(p: PedidoAcesso): Promise<void> {
+    setPedidoBusyId(p.usuarioId);
+    setErroPedidos(null);
+    try {
+      await api.aprovarPedidoAcesso(p.usuarioId);
+      setPedidos((prev) => (prev ?? []).filter((x) => x.usuarioId !== p.usuarioId));
+      const lista = await api.listarUsuarios();
+      setUsuarios(lista);
+    } catch (e) {
+      setErroPedidos(e instanceof ErroApi ? e.message : 'não foi possível aprovar');
+    } finally {
+      setPedidoBusyId(null);
+    }
+  }
+
+  async function recusarPedido(p: PedidoAcesso): Promise<void> {
+    setPedidoBusyId(p.usuarioId);
+    setErroPedidos(null);
+    try {
+      await api.recusarPedidoAcesso(p.usuarioId);
+      setPedidos((prev) => (prev ?? []).filter((x) => x.usuarioId !== p.usuarioId));
+    } catch (e) {
+      setErroPedidos(e instanceof ErroApi ? e.message : 'não foi possível recusar');
+    } finally {
+      setPedidoBusyId(null);
     }
   }
 
@@ -275,9 +340,11 @@ export function Config(): JSX.Element {
             Tokens de acesso
           </h1>
           <p className="config__ajuda">
-            Gere um token e envie para a pessoa. No cadastro ela escolhe{' '}
-            <strong>Tenho um token</strong>, cola o código e entra na <em>sua</em> conta —
-            com as mesmas planilhas e informações. Dados de outras contas nunca se misturam.
+            Gere um token (válido 7 dias, 1 uso) e envie. Quem <strong>ainda não tem conta</strong>{' '}
+            usa no cadastro (“Tenho um token”). Quem <strong>já tem a própria conta</strong> cola o
+            token no <em>login</em> — pede acesso às suas planilhas sem abandonar os dados dela.
+            Você aprova o pedido abaixo; pode revogar o acesso ou invalidar o token a qualquer
+            momento.
           </p>
 
           {tokenNovo !== null && (
@@ -377,6 +444,50 @@ export function Config(): JSX.Element {
 
           {podeGerirSenhas && (
             <>
+              <hr className="config__sep" />
+
+              <h2 className="config__titulo">
+                <UserCheck size={20} />
+                Pedidos de acesso
+              </h2>
+              <p className="config__ajuda">
+                Pessoas com conta própria que colaram seu token no login. Aprove para liberar as
+                planilhas desta conta, ou recuse. Depois de revogar, elas precisam de um token novo
+                (ou o mesmo, se ainda válido) para pedir de novo.
+              </p>
+              {erroPedidos !== null && <p className="aviso-erro">{erroPedidos}</p>}
+              {pedidos !== null && pedidos.length === 0 && (
+                <p className="config__ajuda">Nenhum pedido pendente.</p>
+              )}
+              {pedidos !== null && pedidos.length > 0 && (
+                <ul className="config__usuarios">
+                  {pedidos.map((p) => (
+                    <li key={p.usuarioId} className="config__usuario">
+                      <div className="config__usuario-info">
+                        <strong>{p.nome ?? '—'}</strong>
+                        <span className="config__usuario-papel">{p.email}</span>
+                      </div>
+                      <div className="config__acoes">
+                        <Botao
+                          variante="primario"
+                          disabled={pedidoBusyId === p.usuarioId}
+                          onClick={() => void aprovarPedido(p)}
+                        >
+                          Aprovar
+                        </Botao>
+                        <Botao
+                          variante="fantasma"
+                          disabled={pedidoBusyId === p.usuarioId}
+                          onClick={() => void recusarPedido(p)}
+                        >
+                          Recusar
+                        </Botao>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <hr className="config__sep" />
 
               <h2 className="config__titulo">
@@ -480,8 +591,9 @@ export function Config(): JSX.Element {
                 Usuários da conta
               </h2>
               <p className="config__ajuda">
-                Gere senha de login para entregar à pessoa, ou <strong>remova o acesso</strong>{' '}
-                (ela deixa de ver as planilhas desta conta).
+                Membros nativos (cadastrados nesta conta) e convidados (têm conta própria).{' '}
+                <strong>Remover acesso</strong> tira o convidado sem apagar a conta dele; nativo é
+                removido desta conta.
               </p>
 
               {senhaEntregue !== null && (
@@ -509,41 +621,51 @@ export function Config(): JSX.Element {
                   {usuarios.map((u) => {
                     const draft = senhasDraft[u.id] ?? '';
                     const salvandoEste = salvandoUsuarioId === u.id;
+                    const convidado = u.origem === 'convidado';
                     return (
                       <li key={u.id} className="config__usuario">
                         <div className="config__usuario-info">
                           <strong>{u.nome}</strong>
                           <code>{u.email}</code>
-                          <span className="config__usuario-papel">{u.papel}</span>
+                          <span className="config__usuario-papel">
+                            {u.papel}
+                            {convidado ? ' · convidado' : ''}
+                          </span>
                         </div>
-                        <Campo
-                          rotulo="Nova senha de login"
-                          placeholder="mínimo 8 caracteres"
-                          value={draft}
-                          onChange={(e) =>
-                            setSenhasDraft((prev) => ({ ...prev, [u.id]: e.target.value }))
-                          }
-                        />
-                        <div className="config__acoes">
-                          <Botao
-                            variante="fantasma"
-                            onClick={() =>
-                              setSenhasDraft((prev) => ({
-                                ...prev,
-                                [u.id]: gerarSenhaLogin(),
-                              }))
+                        {!convidado && (
+                          <Campo
+                            rotulo="Nova senha de login"
+                            placeholder="mínimo 8 caracteres"
+                            value={draft}
+                            onChange={(e) =>
+                              setSenhasDraft((prev) => ({ ...prev, [u.id]: e.target.value }))
                             }
-                          >
-                            <Shuffle size={16} />
-                            Gerar
-                          </Botao>
-                          <Botao
-                            variante="primario"
-                            onClick={() => void salvarSenhaUsuario(u)}
-                            disabled={salvandoEste || draft.trim().length < 8}
-                          >
-                            Salvar senha
-                          </Botao>
+                          />
+                        )}
+                        <div className="config__acoes">
+                          {!convidado && (
+                            <>
+                              <Botao
+                                variante="fantasma"
+                                onClick={() =>
+                                  setSenhasDraft((prev) => ({
+                                    ...prev,
+                                    [u.id]: gerarSenhaLogin(),
+                                  }))
+                                }
+                              >
+                                <Shuffle size={16} />
+                                Gerar
+                              </Botao>
+                              <Botao
+                                variante="primario"
+                                onClick={() => void salvarSenhaUsuario(u)}
+                                disabled={salvandoEste || draft.trim().length < 8}
+                              >
+                                Salvar senha
+                              </Botao>
+                            </>
+                          )}
                           {meuId !== u.id && (
                             <Botao
                               variante="fantasma"
