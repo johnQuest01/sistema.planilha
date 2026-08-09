@@ -41,6 +41,8 @@ export function BuscaReferencia({ colecao, aoAbrir }: Props): JSX.Element {
           if (!vivo) return;
           setResultados(rs);
           setBuscando(false);
+          // "Já vem aberto": achou exatamente 1 registro -> abre a prévia grande direto.
+          if (rs.length === 1 && rs[0] !== undefined) aoAbrir(rs[0]);
         })
         .catch((e: unknown) => {
           if (!vivo) return;
@@ -54,7 +56,7 @@ export function BuscaReferencia({ colecao, aoAbrir }: Props): JSX.Element {
       vivo = false;
       clearTimeout(timer);
     };
-  }, [q, colecao.id]);
+  }, [q, colecao.id, aoAbrir]);
 
   return (
     <div className="busca-ref">

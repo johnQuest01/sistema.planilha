@@ -350,7 +350,10 @@ export function Integrado(): JSX.Element {
       let vivo = true;
       void montarGrupos(consulta)
         .then((gs) => {
-          if (vivo) setResultados(gs);
+          if (!vivo) return;
+          setResultados(gs);
+          // "Já vem aberto": achou exatamente 1 -> abre a prévia completa direto.
+          if (gs.length === 1 && gs[0] !== undefined) setPrevia(gs[0]);
         })
         .finally(() => {
           if (vivo) setBuscando(false);
