@@ -156,6 +156,8 @@ export function Integrado(): JSX.Element {
   const [criandoNovo, setCriandoNovo] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [progExport, setProgExport] = useState<ProgressoExport | null>(null);
+  // Ao abrir a edição pelo "Preencher" da prévia, rola direto até esta planilha.
+  const [focoEditor, setFocoEditor] = useState<number | undefined>(undefined);
 
   // Botão VOLTAR (nativo/gesto) fecha a prévia ou o editor unido em vez de sair da
   // planilha unificada. Um booleano só: a troca prévia→editar não mexe no histórico.
@@ -618,6 +620,7 @@ export function Integrado(): JSX.Element {
             <Botao
               variante="primario"
               onClick={() => {
+                setFocoEditor(undefined);
                 setEditando(previa);
                 setPrevia(null);
               }}
@@ -637,6 +640,11 @@ export function Integrado(): JSX.Element {
               const i = previa.partes.findIndex((p) => p.colecao.id === r.colecaoId);
               if (i >= 0) atualizarParte(i, r);
             }}
+            aoPreencher={(foco) => {
+              setFocoEditor(foco);
+              setEditando(previa);
+              setPrevia(null);
+            }}
           />
         </FolhaInferior>
       )}
@@ -646,10 +654,14 @@ export function Integrado(): JSX.Element {
           integracao={integracao}
           chave={editando.chave}
           partes={editando.partes}
-          aoFechar={() => setEditando(null)}
+          aoFechar={() => {
+            setEditando(null);
+            setFocoEditor(undefined);
+          }}
           aoAtualizarParte={atualizarParte}
           aoNovoUnificado={() => void novoUnificado()}
           aoAbrirGrupo={setEditando}
+          focoInicial={focoEditor}
         />
       )}
     </div>
@@ -732,9 +744,12 @@ function CartaoRegistro({
 function PreviaCorpo({
   grupo,
   aoAtualizarRegistro,
+  aoPreencher,
 }: {
   grupo: RegistroIntegrado;
   aoAtualizarRegistro?: (r: Registro) => void;
+  // Abre a edição (Oficina) para preencher; `foco` = índice da planilha escolhida.
+  aoPreencher?: (foco?: number) => void;
 }): JSX.Element {
   // Navegação entre as planilhas do grupo: como a prévia unida fica grande, detecta
   // quais partes estão à vista e mostra, no rodapé rolável, chips só das que NÃO estão,
@@ -742,6 +757,8 @@ function PreviaCorpo({
   const previaRef = useRef<HTMLDivElement>(null);
   const parteRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [visiveis, setVisiveis] = useState<Set<number>>(new Set());
+  // Última planilha para onde o usuário pulou pelos chips — o "Preencher" abre nela.
+  const [alvo, setAlvo] = useState<number | null>(null);
 
   useEffect(() => {
     const root = previaRef.current?.closest('.folha__corpo') ?? null;
@@ -802,19 +819,37 @@ function PreviaCorpo({
         </div>
       ))}
 
-      {grupo.partes.length > 1 && naoVisiveis.length > 0 && (
-        <div className="integ-nav integ-nav--previa" aria-label="Ir para planilha">
-          <span className="integ-nav__rotulo">Ir para</span>
-          {naoVisiveis.map((i) => (
+      {grupo.partes.length > 1 && (naoVisiveis.length > 0 || aoPreencher !== undefined) && (
+        <div className="integ-nav-previa" aria-label="Ir para planilha / preencher">
+          {naoVisiveis.length > 0 && (
+            <div className="integ-nav-previa__planilhas">
+              {naoVisiveis.map((i) => (
+                <button
+                  key={grupo.partes[i]?.colecao.id ?? i}
+                  type="button"
+                  className="integ-nav-previa__chip"
+                  onClick={() => {
+                    irPara(i);
+                    setAlvo(i);
+                  }}
+                >
+                  {grupo.partes[i]?.colecao.nome ?? 'Planilha'}
+                </button>
+              ))}
+            </div>
+          )}
+          {aoPreencher !== undefined && (
             <button
-              key={grupo.partes[i]?.colecao.id ?? i}
               type="button"
-              className="integ-nav__chip"
-              onClick={() => irPara(i)}
+              className="integ-nav-previa__preencher"
+              onClick={() => aoPreencher(alvo ?? undefined)}
             >
-              {grupo.partes[i]?.colecao.nome ?? 'Planilha'}
+              <PencilLine size={18} aria-hidden />
+              {alvo !== null
+                ? `Preencher ${grupo.partes[alvo]?.colecao.nome ?? ''}`.trim()
+                : 'Preencher'}
             </button>
-          ))}
+          )}
         </div>
       )}
     </div>

@@ -272,16 +272,58 @@
 .integ-nav__chip:active {
   background: var(--linha);
 }
-/* Na PRÉVIA a nav fica colada no rodapé da área de rolagem (full-bleed), para pular
-   entre as planilhas do grupo sem sair do topo. */
-.integ-nav--previa {
+/* Na PRÉVIA: SEM barra — só os botões, maiores, flutuando no rodapé rolável. Os chips
+   pulam direto para a planilha; o "Preencher" abre a edição já naquela planilha. Os
+   vãos deixam passar o toque para o conteúdo atrás (pointer-events só nos botões). */
+.integ-nav-previa {
   position: sticky;
-  bottom: 0;
+  bottom: var(--e2);
   z-index: 4;
-  margin: var(--e3) calc(var(--e4) * -1) calc(var(--e4) * -1);
-  padding: var(--e2) var(--e4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--e2);
+  margin-top: var(--e4);
+  pointer-events: none;
+}
+.integ-nav-previa__planilhas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--e2);
+}
+.integ-nav-previa__chip {
+  pointer-events: auto;
+  padding: 11px 20px;
+  border: 1px solid var(--linha-2);
+  border-radius: 999px;
   background: var(--papel);
-  border-top: 1px solid var(--linha);
+  color: var(--tinta);
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: var(--sombra);
+}
+.integ-nav-previa__chip:active {
+  transform: translateY(1px);
+  background: var(--papel-2);
+}
+.integ-nav-previa__preencher {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: 13px 26px;
+  border: none;
+  border-radius: 999px;
+  background: var(--fita);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: var(--sombra);
+}
+.integ-nav-previa__preencher:active {
+  transform: translateY(1px);
+  background: var(--fita-forte);
 }
 
 /* Prévia unida: cada parte vira um cartão no padrão do registro da Modelagem

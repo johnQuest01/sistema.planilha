@@ -52,6 +52,8 @@ interface Props {
   aoNovoUnificado: () => void;
   /** Substitui o grupo aberto por outro (usado após duplicar). */
   aoAbrirGrupo: (grupo: RegistroIntegrado) => void;
+  /** Ao abrir vindo do "Preencher" da prévia, rola direto até esta planilha (índice). */
+  focoInicial?: number;
 }
 
 // Editor UNIFICADO: os blocos de todas as planilhas do grupo, no mesmo corpo, na
@@ -69,6 +71,7 @@ export function FichaIntegrada({
   aoAtualizarParte,
   aoNovoUnificado,
   aoAbrirGrupo,
+  focoInicial,
 }: Props): JSX.Element {
   const refs = useRef<(ParteEditorHandle | null)[]>([]);
   const [salvandoCount, setSalvandoCount] = useState(0);
@@ -109,6 +112,15 @@ export function FichaIntegrada({
   function irPara(indice: number): void {
     parteRefs.current[indice]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+
+  // Ao abrir pelo "Preencher" da prévia (com uma planilha escolhida), rola direto até
+  // ela para preencher sem procurar. Espera um tique para as partes montarem.
+  useEffect(() => {
+    if (focoInicial === undefined) return;
+    const t = setTimeout(() => irPara(focoInicial), 140);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focoInicial]);
 
   function marcarSalvando(delta: number): void {
     setSalvandoCount((n) => Math.max(0, n + delta));
