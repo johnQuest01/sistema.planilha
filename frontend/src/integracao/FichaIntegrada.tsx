@@ -29,6 +29,19 @@ function tituloUnificado(chave: string, partes: ParteIntegrada[]): string {
   return chave === '' ? 'Novo registro unificado' : 'Sem referência';
 }
 
+// Referência REAL para preencher/mostrar ao criar a parte faltante. NUNCA usa a chave
+// interna (`sep:`/`solto:`), que aparecia como "ref. sep:<uuid>:<uuid>"; nesse caso,
+// deriva a referência do registro que já existe no grupo.
+function refParaPreencher(chave: string, partes: ParteIntegrada[]): string {
+  if (chave !== '' && !chave.startsWith('sep:') && !chave.startsWith('solto:')) return chave;
+  for (const p of partes) {
+    if (p.registro === null) continue;
+    const t = tituloDoRegistro(camposDaParte(p), p.registro).trim();
+    if (t !== '' && t !== 'Sem nome') return t.split(' | ')[0]?.trim() ?? '';
+  }
+  return '';
+}
+
 interface Props {
   integracao: Integracao;
   chave: string;
@@ -93,9 +106,10 @@ export function FichaIntegrada({
     setCriandoIdx(indice);
     setErro(null);
     try {
+      const refCriar = refParaPreencher(chave, partes);
       const valoresIniciais: Record<string, unknown> =
-        chave !== '' && alvo !== undefined && alvo.subcampoId === undefined
-          ? { [alvo.campoId]: chave }
+        refCriar !== '' && alvo !== undefined && alvo.subcampoId === undefined
+          ? { [alvo.campoId]: refCriar }
           : {};
       const novo = await api.criarRegistro(parte.colecao.id, valoresIniciais);
       aoAtualizarParte(indice, novo);
@@ -186,6 +200,7 @@ export function FichaIntegrada({
   const salvando = salvandoCount > 0;
   const ocupado = derivando !== null;
   const titulo = tituloUnificado(chave, partes);
+  const refCriar = refParaPreencher(chave, partes);
 
   return (
     <FolhaInferior
@@ -217,7 +232,7 @@ export function FichaIntegrada({
         {erro !== null && <p className="aviso-erro">{erro}</p>}
 
         {partes.map((parte, indice) => (
-          <div key={parte.colecao.id}>
+          <div key={parte.colecao.id} className="integ-parte">
             <div
               className={`integ-parte-rotulo${parte.registro === null ? ' integ-parte-rotulo--ausente' : ''}`}
             >
@@ -263,9 +278,9 @@ export function FichaIntegrada({
                   <PlusCircle size={16} />
                   {criandoIdx === indice
                     ? 'Criando…'
-                    : chave === ''
+                    : refCriar === ''
                       ? 'Criar registro aqui'
-                      : `Criar registro (ref. ${chave})`}
+                      : `Criar registro (ref. ${refCriar})`}
                 </Botao>
               </div>
             ) : (

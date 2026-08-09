@@ -207,11 +207,20 @@
   background: var(--fita, #7bd88f);
 }
 
+/* Cada planilha do grupo (integração): espaçamento uniforme entre rótulo, botão
+   "Editar blocos" e os blocos. Antes o wrapper não tinha gap e os títulos colavam
+   nos blocos/botões de cima (visual "amador"). Usa o mesmo --e4 das planilhas normais. */
+.integ-parte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+}
+
 .integ-parte-rotulo {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  margin: 1.1rem 0 0.2rem;
+  margin: 0;
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
