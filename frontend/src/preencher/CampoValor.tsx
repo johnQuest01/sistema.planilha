@@ -90,7 +90,7 @@ export function CampoValor({
             type="number"
             inputMode="decimal"
             value={typeof valor === 'number' ? valor : ''}
-            onChange={(e) => aoMudar(e.target.value === '' ? undefined : Number(e.target.value))}
+            onChange={(e) => aoMudar(e.target.value === '' ? null : Number(e.target.value))}
             {...comum}
           />
           {campo.config.sufixo !== undefined && campo.config.sufixo !== '' && (
@@ -105,7 +105,7 @@ export function CampoValor({
             className="campo__controle"
             type="date"
             value={comoTexto(valor)}
-            onChange={(e) => aoMudar(e.target.value === '' ? undefined : e.target.value)}
+            onChange={(e) => aoMudar(e.target.value === '' ? null : e.target.value)}
             {...comum}
           />
           {!desabilitado && (
@@ -122,7 +122,7 @@ export function CampoValor({
             className="campo__controle"
             type="datetime-local"
             value={comoTexto(valor)}
-            onChange={(e) => aoMudar(e.target.value === '' ? undefined : e.target.value)}
+            onChange={(e) => aoMudar(e.target.value === '' ? null : e.target.value)}
             {...comum}
           />
           {!desabilitado && (
@@ -151,7 +151,7 @@ export function CampoValor({
         <select
           className="campo__controle"
           value={comoTexto(valor)}
-          onChange={(e) => aoMudar(e.target.value === '' ? undefined : e.target.value)}
+          onChange={(e) => aoMudar(e.target.value === '' ? null : e.target.value)}
           disabled={desabilitado}
           onBlur={aoSairFoco}
         >

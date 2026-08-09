@@ -34,9 +34,10 @@ function schemaPorTipo(tipo: TipoCampo, config: ConfigCampo): z.ZodTypeAny {
     }
     case 'secao': {
       // O valor é uma lista de linhas; cada linha é um objeto {subcampoId: valor}.
+      // `.nullish()` aceita null (célula limpa) além de ausente.
       const subs = config.subcampos ?? [];
       const linha: z.ZodRawShape = {};
-      for (const s of subs) linha[s.id] = schemaPorTipo(s.tipo, s.config).optional();
+      for (const s of subs) linha[s.id] = schemaPorTipo(s.tipo, s.config).nullish();
       return z.array(z.object(linha).strict()).max(500);
     }
     default:
@@ -49,12 +50,15 @@ export function schemaDoCampo(c: Campo): z.ZodTypeAny {
 }
 
 // Monta o schema dos `valores` a partir dos campos da coleção. `.strict()` derruba
-// qualquer chave que não seja id de campo daquela coleção. Todos opcionais: registro
-// sem um valor (ou sem foto) é válido, e o PATCH é merge (ver seção 5).
+// qualquer chave que não seja id de campo daquela coleção. `.nullish()` = todos
+// opcionais (registro sem um valor é válido) E aceita `null`, que é como o cliente
+// sinaliza "limpar este campo" — sem o null, limpar número/data/seleção era
+// descartado pelo JSON e o valor antigo voltava (ver editarRegistro). O PATCH é
+// merge; gravar `null` faz o campo aparecer vazio na leitura.
 export function schemaDeValores(campos: Campo[]): z.ZodObject<z.ZodRawShape, 'strict'> {
   const shape: z.ZodRawShape = {};
   for (const c of campos) {
-    shape[c.id] = schemaDoCampo(c).optional();
+    shape[c.id] = schemaDoCampo(c).nullish();
   }
   return z.object(shape).strict();
 }

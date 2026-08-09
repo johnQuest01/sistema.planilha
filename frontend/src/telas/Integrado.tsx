@@ -104,7 +104,9 @@ function tituloDoGrupo(grupo: RegistroIntegrado): string {
   }
   if (refs.length === 0) {
     if (grupo.chave === '') return 'Novo registro';
-    if (grupo.chave.startsWith('solto:')) return 'Sem referência';
+    // Chaves internas (`solto:`/`sep:` = id de coleção:registro) nunca viram título:
+    // antes escapava como "Ref. sep:<uuid>:<uuid>" (os "caracteres estranhos").
+    if (grupo.chave.startsWith('solto:') || grupo.chave.startsWith('sep:')) return 'Sem referência';
     return `Ref. ${grupo.chave}`;
   }
   return refs.join(' | ');
@@ -222,7 +224,7 @@ export function Integrado(): JSX.Element {
   // truncando SILENCIOSAMENTE o resto da coleção — o total unido aparecia menor do
   // que o real. Agora tenta de novo antes de desistir (e, se falhar de vez, propaga
   // para o chamador tratar, em vez de mostrar um número errado sem avisar).
-  async function listarPaginaComRetry(colecaoId: string, cursor: string | undefined): Promise<Registro[]> {
+  async function listarPaginaComRetry(colecaoId: string, cursor: number | undefined): Promise<Registro[]> {
     let ultimoErro: unknown;
     for (let tentativa = 0; tentativa < 3; tentativa += 1) {
       try {
@@ -238,14 +240,14 @@ export function Integrado(): JSX.Element {
   // Carrega TODOS os registros de uma coleção (paginando por cursor até o fim).
   async function carregarTodosDe(colecaoId: string): Promise<Registro[]> {
     const acc: Registro[] = [];
-    let cursor: string | undefined;
+    let cursor: number | undefined;
     for (let i = 0; i < 500; i += 1) {
       const pagina = await listarPaginaComRetry(colecaoId, cursor);
       acc.push(...pagina);
       if (pagina.length < PAGINA) break;
       const ultimo = pagina[pagina.length - 1];
       if (ultimo === undefined) break;
-      cursor = ultimo.criadoEm;
+      cursor = ultimo.ordem;
     }
     return acc;
   }
@@ -616,8 +618,10 @@ function ListaGrupos({
     <>
       <p className="integ-dica">{titulo}</p>
       <div className="lista integ-lista-registros">
-        {grupos.map((g) => (
-          <CartaoRegistro key={g.chave} grupo={g} aoAbrir={() => aoAbrir(g)} />
+        {grupos.map((g, i) => (
+          // O "zip" pode emitir grupos com a mesma chave (mesma ref, planilhas com
+          // vários registros); o índice evita key React duplicada (cards embaralhando).
+          <CartaoRegistro key={`${g.chave}:${i}`} grupo={g} aoAbrir={() => aoAbrir(g)} />
         ))}
       </div>
     </>

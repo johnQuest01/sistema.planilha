@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Layers, Plus, Power, Trash2 } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronUp, Layers, Plus, Power, Trash2 } from 'lucide-react';
 import { api, ErroApi, type ColecaoResumo, type Integracao } from '../api/cliente';
 import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
@@ -19,6 +19,7 @@ export function Integracoes(): JSX.Element {
   const [criando, setCriando] = useState(false);
   const [alternandoId, setAlternandoId] = useState<string | null>(null);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
+  const [reordenandoId, setReordenandoId] = useState<string | null>(null);
 
   const nomePorId = useMemo(() => {
     const m = new Map<string, string>();
@@ -101,6 +102,30 @@ export function Integracoes(): JSX.Element {
     }
   }
 
+  // Troca a posição de uma planilha dentro da integração. A ordem do array
+  // colecaoIds é a ordem em que os blocos aparecem (a 1ª fica no topo).
+  async function moverColecao(integ: Integracao, idx: number, dir: -1 | 1): Promise<void> {
+    if (reordenandoId !== null) return;
+    const alvo = idx + dir;
+    if (alvo < 0 || alvo >= integ.colecaoIds.length) return;
+    const ids = [...integ.colecaoIds];
+    const a = ids[idx];
+    const b = ids[alvo];
+    if (a === undefined || b === undefined) return;
+    ids[idx] = b;
+    ids[alvo] = a;
+    setReordenandoId(integ.id);
+    setErro(null);
+    try {
+      const atualizada = await api.editarIntegracao(integ.id, { colecaoIds: ids });
+      setIntegracoes((atual) => (atual ?? []).map((i) => (i.id === integ.id ? atualizada : i)));
+    } catch (err) {
+      setErro(err instanceof ErroApi ? err.message : 'não foi possível reordenar as planilhas');
+    } finally {
+      setReordenandoId(null);
+    }
+  }
+
   if (colecoes === null || integracoes === null) return <Carregando />;
 
   return (
@@ -172,12 +197,35 @@ export function Integracoes(): JSX.Element {
                     {i.ativo ? 'ativa' : 'desligada'}
                   </span>
                 </div>
-                <div className="integ-cartao__colecoes">
+                <div className="integ-reordena">
                   {i.colecaoIds.map((id, idx) => (
-                    <span key={id} className="integ-cartao__col">
-                      {idx > 0 && <ArrowRight size={13} aria-hidden />}
-                      {nomePorId.get(id) ?? 'planilha removida'}
-                    </span>
+                    <div key={id} className="integ-reordena__item">
+                      <span className="integ-reordena__setas">
+                        <button
+                          type="button"
+                          className="btn btn--icone integ-reordena__seta"
+                          aria-label={`Mover ${nomePorId.get(id) ?? 'planilha'} para cima`}
+                          title="Mover para cima"
+                          disabled={idx === 0 || reordenandoId === i.id}
+                          onClick={() => void moverColecao(i, idx, -1)}
+                        >
+                          <ChevronUp size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--icone integ-reordena__seta"
+                          aria-label={`Mover ${nomePorId.get(id) ?? 'planilha'} para baixo`}
+                          title="Mover para baixo"
+                          disabled={idx === i.colecaoIds.length - 1 || reordenandoId === i.id}
+                          onClick={() => void moverColecao(i, idx, 1)}
+                        >
+                          <ChevronDown size={15} />
+                        </button>
+                      </span>
+                      <span className="integ-reordena__nome">
+                        {idx + 1}. {nomePorId.get(id) ?? 'planilha removida'}
+                      </span>
+                    </div>
                   ))}
                 </div>
                 <div className="integ-cartao__acoes">

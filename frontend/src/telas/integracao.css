@@ -131,6 +131,40 @@
   gap: 0.35rem;
 }
 
+/* Reordenar as planilhas de uma integração (deixar uma em cima e outra embaixo). */
+.integ-reordena {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.integ-reordena__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--giz);
+}
+
+.integ-reordena__setas {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.integ-reordena__seta {
+  padding: 0.15rem;
+  line-height: 0;
+}
+
+.integ-reordena__seta:disabled {
+  opacity: 0.3;
+}
+
+.integ-reordena__nome {
+  font-weight: 500;
+}
+
 .integ-cartao__acoes {
   display: flex;
   flex-wrap: wrap;

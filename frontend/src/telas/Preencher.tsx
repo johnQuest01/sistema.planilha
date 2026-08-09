@@ -17,6 +17,7 @@ import { valoresVaziosDe } from '../preencher/valoresVazios';
 import { FolhaInferior } from '../ui/FolhaInferior';
 import { useFecharAoVoltar } from '../ui/useVoltar';
 import { FormBloco, type DadosBloco } from './FormBloco';
+import { BotaoImportarFotos } from '../importar/BotaoImportarFotos';
 import '../preencher/preencher.css';
 
 const PAGINA = 20;
@@ -163,7 +164,7 @@ export function Preencher({
     try {
       const ultimo = atual[atual.length - 1];
       if (ultimo === undefined) return;
-      const mais = await api.listarRegistros(colecao.id, ultimo.criadoEm);
+      const mais = await api.listarRegistros(colecao.id, ultimo.ordem);
       setRegistros((prev) => (prev === null ? mais : [...prev, ...mais]));
       const acabou = mais.length < PAGINA;
       setFim(acabou);
@@ -223,6 +224,24 @@ export function Preencher({
     setRegistros((atual) => (atual === null ? atual : atual.filter((x) => x.id !== id)));
     setAberta(null);
     setPrevia(null);
+  }, []);
+
+  // Sobe/desce um registro na ordem de exibição. Aplica a nova ordem dos dois
+  // registros trocados e reordena a lista por `ordem` (maior no topo).
+  const aoMover = useCallback(async (id: string, direcao: 'cima' | 'baixo'): Promise<void> => {
+    try {
+      const trocados = await api.moverRegistro(id, direcao);
+      if (trocados.length === 0) return; // já está na ponta
+      setRegistros((prev) => {
+        if (prev === null) return prev;
+        const porId = new Map(trocados.map((r) => [r.id, r]));
+        return prev
+          .map((x) => porId.get(x.id) ?? x)
+          .sort((a, b) => b.ordem - a.ordem);
+      });
+    } catch (e) {
+      setErro(e instanceof ErroApi ? e.message : 'não foi possível mover o registro');
+    }
   }, []);
 
   const abrirPrevia = useCallback((r: Registro): void => {
@@ -304,8 +323,14 @@ export function Preencher({
           return [r, ...atual];
         });
       } else {
-        // atualizado: substitui se já estiver carregado; senão ignora (mantém a ordem/paginação).
-        setRegistros((atual) => (atual === null ? atual : atual.map((x) => (x.id === r.id ? r : x))));
+        // atualizado: substitui se já estiver carregado; senão ignora (mantém a
+        // ordem/paginação). Reordena por `ordem` para refletir um "mover" feito
+        // em outra aba/aparelho (em edições normais a ordem não muda: é estável).
+        setRegistros((atual) =>
+          atual === null
+            ? atual
+            : atual.map((x) => (x.id === r.id ? r : x)).sort((a, b) => b.ordem - a.ordem),
+        );
         setAberta((a) => (a !== null && a.id === r.id ? r : a));
         setPrevia((p) => (p !== null && p.id === r.id ? r : p));
       }
@@ -368,6 +393,10 @@ export function Preencher({
           <ListPlus size={18} />
           Adicionar campo
         </Botao>
+        <BotaoImportarFotos
+          colecao={colecao}
+          aoConcluir={(atualizados) => atualizados.forEach(aoAtualizar)}
+        />
         <button
           type="button"
           className={`trava-edicao${edicaoLiberada ? ' trava-edicao--liberada' : ''}`}
@@ -448,6 +477,7 @@ export function Preencher({
           solto={solto}
           aoAbrir={abrirPrevia}
           aoAtualizar={aoAtualizar}
+          aoMover={aoMover}
           rodape={rodapeVerMais}
           aoAproximarFim={carregarMais}
         />
@@ -458,6 +488,7 @@ export function Preencher({
           aoAtualizar={aoAtualizar}
           aoAbrirFicha={abrirPrevia}
           aoApagar={aoApagar}
+          aoMover={aoMover}
           rodape={rodapeVerMais}
         />
       )}

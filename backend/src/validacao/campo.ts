@@ -8,8 +8,8 @@ const subConfigSchema = z
     sufixo: z.string().trim().max(16).optional(),
     obrigatorio: z.boolean().optional(),
     autoAgora: z.boolean().optional(),
-    // maxFotos: só para subcampo de imagem. Mesmo teto do bloco de imagem (1..10).
-    maxFotos: z.number().int().min(1).max(10).optional(),
+    // maxFotos: só para subcampo de imagem. Mesmo teto do bloco de imagem (1..30).
+    maxFotos: z.number().int().min(1).max(30).optional(),
   })
   .strict();
 
@@ -43,9 +43,9 @@ const configSchema = z
     opcoes: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
     sufixo: z.string().trim().max(16).optional(),
     obrigatorio: z.boolean().optional(),
-    // Teto de 10 não é estético: cada foto é uma key no jsonb, um objeto no R2 e um
-    // PUT contra o rate limit do convite (ver seção 4.2). Só para tipo 'imagem'.
-    maxFotos: z.number().int().min(1).max(10).optional(),
+    // Cada foto é uma key no jsonb, um objeto no R2 e um PUT presign. O teto (30)
+    // segura o custo/latência mas cabe um mostruário com muitas variações. Só 'imagem'.
+    maxFotos: z.number().int().min(1).max(30).optional(),
     // data/datahora: já vem com o momento atual ao criar registro.
     autoAgora: z.boolean().optional(),
     // secao: os quadradinhos que se repetem por linha (1..50).

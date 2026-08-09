@@ -116,6 +116,7 @@ export function registroVirtual(partes: ParteIntegrada[]): Registro {
     campos,
     criadoPor: null,
     criadoPorId: null,
+    ordem: 0,
     criadoEm,
     atualizadoEm,
   };

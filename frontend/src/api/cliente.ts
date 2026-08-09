@@ -189,8 +189,9 @@ export const api = {
   apagarCampo: (id: string) => pedir<void>(`/api/campos/${id}`, { method: 'DELETE' }),
 
   // --- registros ---
-  listarRegistros: (colecaoId: string, before?: string) => {
-    const q = before === undefined ? '' : `?before=${encodeURIComponent(before)}`;
+  // `before` é o cursor de ordem (número) do último item da página anterior.
+  listarRegistros: (colecaoId: string, before?: number) => {
+    const q = before === undefined ? '' : `?before=${encodeURIComponent(String(before))}`;
     return pedir<Registro[]>(`/api/colecoes/${colecaoId}/registros${q}`);
   },
   buscarRegistros: (colecaoId: string, termo: string) =>
@@ -215,6 +216,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ campos }),
     }),
+  // Sobe/desce o registro na ordem de exibição. Devolve os dois registros trocados
+  // (vazio quando já está na ponta).
+  moverRegistro: (id: string, direcao: 'cima' | 'baixo') =>
+    pedir<Registro[]>(`/api/registros/${id}/mover`, corpoJson({ direcao })),
   apagarRegistro: (id: string) =>
     pedir<void>(`/api/registros/${id}`, { method: 'DELETE' }),
 

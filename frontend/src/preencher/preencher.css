@@ -443,6 +443,36 @@
   background: rgba(217, 138, 61, 0.12);
 }
 
+/* ---- setas de reordenar (subir/descer) ---- */
+.lista-item__mover {
+  flex: none;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tabela-mover {
+  display: inline-flex;
+  gap: 2px;
+}
+.mover-seta {
+  color: var(--giz);
+  padding: 2px;
+  min-height: auto;
+}
+.mover-seta:disabled {
+  opacity: 0.3;
+}
+.mover-seta:hover:not(:disabled) {
+  color: var(--fita-forte);
+}
+
+.importar-resumo {
+  font-size: 0.82rem;
+  color: var(--giz);
+  align-self: center;
+}
+
 /* ---- ficha (dentro da folha inferior) ---- */
 .ficha {
   display: flex;

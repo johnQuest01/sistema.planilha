@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { api } from '../api/cliente';
+import { api, ErroApi } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
 import { CampoValor } from '../preencher/CampoValor';
 import { SecaoEditor, linhasDe } from '../preencher/SecaoEditor';
@@ -9,6 +9,9 @@ import { camposDoRegistro, keysDoCampo } from '../preencher/derivarResumo';
 export interface ParteEditorHandle {
   flush: () => Promise<void>;
   valores: () => Record<string, unknown>;
+  /** Reseta o estado local com os valores vindos do servidor (ex.: após podar
+   *  ao salvar blocos), evitando que o próximo autosave devolva valores velhos. */
+  sincronizar: (valores: Record<string, unknown>) => void;
 }
 
 interface Props {
@@ -16,6 +19,8 @@ interface Props {
   registro: Registro;
   aoAtualizar: (r: Registro) => void;
   aoSalvando: (salvando: boolean) => void;
+  /** Avisa o pai quando um autosave falha (para mostrar/limpar o aviso). */
+  aoErro?: (msg: string | null) => void;
 }
 
 const DEBOUNCE_MS = 400;
@@ -25,7 +30,7 @@ const DEBOUNCE_MS = 400;
 // então imagem/seção/valores funcionam igual. O pai chama `flush()` para "salvar
 // tudo de uma vez" ou ao fechar.
 export const ParteEditor = forwardRef<ParteEditorHandle, Props>(function ParteEditor(
-  { colecao, registro, aoAtualizar, aoSalvando },
+  { colecao, registro, aoAtualizar, aoSalvando, aoErro },
   ref,
 ): JSX.Element {
   const [valores, setValores] = useState<Record<string, unknown>>(registro.valores);
@@ -34,10 +39,12 @@ export const ParteEditor = forwardRef<ParteEditorHandle, Props>(function ParteEd
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aoAtualizarRef = useRef(aoAtualizar);
   const aoSalvandoRef = useRef(aoSalvando);
+  const aoErroRef = useRef(aoErro);
 
   useEffect(() => {
     aoAtualizarRef.current = aoAtualizar;
     aoSalvandoRef.current = aoSalvando;
+    aoErroRef.current = aoErro;
   });
 
   useEffect(() => {
@@ -62,14 +69,35 @@ export const ParteEditor = forwardRef<ParteEditorHandle, Props>(function ParteEd
     try {
       const atualizado = await api.editarRegistro(registro.id, parcial);
       aoAtualizarRef.current({ ...atualizado, valores: valoresRef.current });
-    } catch {
+      aoErroRef.current?.(null);
+    } catch (e) {
+      // Recoloca na fila para tentar de novo E avisa o pai (antes sumia calado).
       for (const id of ids) sujosRef.current.add(id);
+      aoErroRef.current?.(
+        e instanceof ErroApi
+          ? `Não foi possível salvar ${colecao.nome}: ${e.message}`
+          : `Não foi possível salvar ${colecao.nome} (falha de conexão). Vamos tentar de novo.`,
+      );
     } finally {
       aoSalvandoRef.current(false);
     }
-  }, [registro.id]);
+  }, [registro.id, colecao.nome]);
 
-  useImperativeHandle(ref, () => ({ flush, valores: () => valoresRef.current }), [flush]);
+  const sincronizar = useCallback((novos: Record<string, unknown>): void => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setValores(novos);
+    valoresRef.current = novos;
+    sujosRef.current.clear();
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({ flush, valores: () => valoresRef.current, sincronizar }),
+    [flush, sincronizar],
+  );
 
   // Flush garantido ao desmontar (fechar a folha, trocar de registro).
   useEffect(() => {

@@ -4,10 +4,30 @@ import { api, ErroApi } from '../api/cliente';
 import type { Campo, Integracao, Registro } from '../../../shared/tipos';
 import { FolhaInferior } from '../ui/FolhaInferior';
 import { Botao } from '../ui/Botao';
-import { alvoTitulo, camposDoRegistro } from '../preencher/derivarResumo';
+import { alvoTitulo, camposDoRegistro, tituloDoRegistro } from '../preencher/derivarResumo';
 import { CorpoRegistroEditor } from '../preencher/CorpoRegistroEditor';
 import { ParteEditor, type ParteEditorHandle } from './ParteEditor';
 import { camposDaParte, chaveReferencia, type ParteIntegrada, type RegistroIntegrado } from './merge';
+
+// Título do registro unido a partir das referências reais das partes (sem repetir).
+// Nunca mostra a chave interna (`sep:`/`solto:`), que virava "Ref. sep:<uuid>".
+function tituloUnificado(chave: string, partes: ParteIntegrada[]): string {
+  const refs: string[] = [];
+  const vistos = new Set<string>();
+  for (const p of partes) {
+    if (p.registro === null) continue;
+    const t = tituloDoRegistro(camposDaParte(p), p.registro).trim();
+    if (t === '' || t === 'Sem nome') continue;
+    for (const bruta of t.split(' | ')) {
+      const ref = bruta.trim();
+      if (ref === '' || vistos.has(ref.toLowerCase())) continue;
+      vistos.add(ref.toLowerCase());
+      refs.push(ref);
+    }
+  }
+  if (refs.length > 0) return refs.join(' | ');
+  return chave === '' ? 'Novo registro unificado' : 'Sem referência';
+}
 
 interface Props {
   integracao: Integracao;
@@ -147,6 +167,10 @@ export function FichaIntegrada({
     try {
       await refs.current[indice]?.flush();
       const atualizado = await api.salvarCorpoRegistro(parte.registro.id, novos);
+      // Re-sincroniza o editor da parte com os valores JÁ podados pelo servidor;
+      // sem isto, o próximo autosave reenviava valores velhos e a edição de
+      // blocos "voltava" (bug de não salvar em integradas).
+      refs.current[indice]?.sincronizar(atualizado.valores);
       aoAtualizarParte(indice, atualizado);
     } catch (e) {
       setErro(
@@ -161,7 +185,7 @@ export function FichaIntegrada({
 
   const salvando = salvandoCount > 0;
   const ocupado = derivando !== null;
-  const titulo = chave === '' ? 'Novo registro unificado' : `Ref. ${chave}`;
+  const titulo = tituloUnificado(chave, partes);
 
   return (
     <FolhaInferior
@@ -253,6 +277,7 @@ export function FichaIntegrada({
                 registro={parte.registro}
                 aoAtualizar={(r) => aoAtualizarParte(indice, r)}
                 aoSalvando={(s) => marcarSalvando(s ? 1 : -1)}
+                aoErro={setErro}
               />
             )}
           </div>

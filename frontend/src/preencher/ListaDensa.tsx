@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { ImageOff } from 'lucide-react';
+import { ChevronDown, ChevronUp, ImageOff } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Colecao, Registro } from '../../../shared/tipos';
 import {
@@ -22,6 +22,8 @@ interface Props {
   solto: boolean;
   aoAbrir: (r: Registro) => void;
   aoAtualizar: (r: Registro) => void;
+  /** Sobe/desce o registro na ordem de exibição. */
+  aoMover?: (id: string, direcao: 'cima' | 'baixo') => void;
   rodape?: ReactNode;
   /** Chamado quando a rolagem se aproxima do fim — carrega a próxima página sozinho. */
   aoAproximarFim?: () => void;
@@ -37,12 +39,14 @@ interface ItemProps {
   salvando: boolean;
   erro: string | null;
   prioritaria: boolean;
+  ehPrimeiro: boolean;
   aoAbrir: (r: Registro) => void;
   iniciarEdicao: (r: Registro) => void;
   setRascunho: (v: string) => void;
   aoTeclarNome: (e: ReactKeyboardEvent<HTMLInputElement>, r: Registro) => void;
   salvarNome: (r: Registro) => void;
   cancelarEdicao: () => void;
+  aoMover?: (id: string, direcao: 'cima' | 'baixo') => void;
 }
 
 /** Gap entre cards (padding-bottom do slot virtual). */
@@ -65,12 +69,14 @@ const ItemLista = memo(function ItemLista({
   salvando,
   erro,
   prioritaria,
+  ehPrimeiro,
   aoAbrir,
   iniciarEdicao,
   setRascunho,
   aoTeclarNome,
   salvarNome,
   cancelarEdicao,
+  aoMover,
 }: ItemProps): JSX.Element {
   // Cada registro pode ter corpo próprio: título/resumo/capa saem do corpo dele.
   const campos = camposDoRegistro(colecao, r);
@@ -149,6 +155,29 @@ const ItemLista = memo(function ItemLista({
           Renomear
         </button>
       )}
+      {aoMover !== undefined && !editando && (
+        <span className="lista-item__mover">
+          <button
+            type="button"
+            className="btn btn--icone mover-seta"
+            aria-label={`Subir ${titulo}`}
+            title="Subir"
+            disabled={ehPrimeiro}
+            onClick={() => aoMover(r.id, 'cima')}
+          >
+            <ChevronUp size={16} />
+          </button>
+          <button
+            type="button"
+            className="btn btn--icone mover-seta"
+            aria-label={`Descer ${titulo}`}
+            title="Descer"
+            onClick={() => aoMover(r.id, 'baixo')}
+          >
+            <ChevronDown size={16} />
+          </button>
+        </span>
+      )}
     </div>
   );
 });
@@ -159,6 +188,7 @@ export function ListaDensa({
   solto,
   aoAbrir,
   aoAtualizar,
+  aoMover,
   rodape,
   aoAproximarFim,
 }: Props): JSX.Element {
@@ -298,12 +328,14 @@ export function ListaDensa({
                 salvando={salvando}
                 erro={editandoId === r.id ? erro : null}
                 prioritaria={item.index < 8}
+                ehPrimeiro={item.index === 0}
                 aoAbrir={aoAbrir}
                 iniciarEdicao={iniciarEdicao}
                 setRascunho={setRascunho}
                 aoTeclarNome={aoTeclarNome}
                 salvarNome={(reg) => void salvarNome(reg)}
                 cancelarEdicao={cancelarEdicao}
+                aoMover={aoMover}
               />
             </div>
           );

@@ -7,6 +7,8 @@ import { useAuth } from '../contexto/Auth';
 import { Botao } from '../ui/Botao';
 import { Campo } from '../ui/Campo';
 import { Carregando } from '../ui/Carregando';
+import { BotaoImportarZip } from '../importar/BotaoImportarZip';
+import { BotaoCriacaoAutomatica } from '../importar/BotaoCriacaoAutomatica';
 import { TopoApp } from './TopoApp';
 import './telas.css';
 
@@ -246,6 +248,8 @@ export function Inicio(): JSX.Element {
                 Criar planilha do zero
               </Botao>
               {erro !== null && <p className="aviso-erro">{erro}</p>}
+              <BotaoCriacaoAutomatica aoImportado={(id) => navegar(`/c/${id}`)} />
+              <BotaoImportarZip aoImportado={(id) => navegar(`/c/${id}`)} />
               <button type="button" className="link-texto" onClick={() => void carregarExemplo()}>
                 ou carregar um exemplo
               </button>
@@ -270,6 +274,8 @@ export function Inicio(): JSX.Element {
                   Criar
                 </Botao>
               </form>
+              <BotaoCriacaoAutomatica aoImportado={(id) => navegar(`/c/${id}`)} />
+              <BotaoImportarZip aoImportado={(id) => navegar(`/c/${id}`)} />
             </div>
             {erro !== null && <p className="aviso-erro">{erro}</p>}
             {integracoesVisiveis.length > 0 && (

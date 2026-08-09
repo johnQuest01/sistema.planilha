@@ -12,6 +12,7 @@ interface LinhaRegistro {
   campos: Campo[] | null;
   criado_por: string | null;
   criado_por_id: string | null;
+  ordem: number;
   criado_em: Date;
   atualizado_em: Date;
 }
@@ -44,6 +45,7 @@ function mapRegistro(r: LinhaRegistro): Registro {
     campos: Array.isArray(r.campos) ? r.campos : null,
     criadoPor: r.criado_por,
     criadoPorId: r.criado_por_id,
+    ordem: r.ordem,
     criadoEm: r.criado_em.toISOString(),
     atualizadoEm: r.atualizado_em.toISOString(),
   };
@@ -77,7 +79,7 @@ async function camposDaColecao(tx: Tx, colecaoId: string): Promise<Campo[]> {
 
 async function lerRegistro(tx: Tx, id: string): Promise<LinhaRegistro | null> {
   const linhas = await tx<LinhaRegistro[]>`
-    select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
+    select id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em
     from registros where id = ${id}`;
   return linhas[0] ?? null;
 }
@@ -158,6 +160,22 @@ export async function lerRegistroComCampos(
   return { registro: mapRegistro(linha), campos, colecaoId: linha.colecao_id };
 }
 
+// Mantém só as chaves que são ids de campos VIGENTES. Descarta resquícios de
+// blocos que já não existem (comum após reestruturar o corpo de um registro,
+// principalmente na Oficina). Sem isso, o schema `.strict()` rejeitava o PATCH/
+// INSERT inteiro por causa de uma única chave órfã e a alteração se perdia.
+function soCamposConhecidos(
+  valores: Record<string, unknown>,
+  campos: Campo[],
+): Record<string, unknown> {
+  const ids = new Set(campos.map((c) => c.id));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(valores)) {
+    if (ids.has(k)) out[k] = v;
+  }
+  return out;
+}
+
 // Keys de imagem guardadas em `valores` para um campo. Robusto a valor ausente/torto.
 function keysDeImagem(valores: Record<string, unknown>, campoId: string): string[] {
   const v = valores[campoId];
@@ -170,7 +188,7 @@ function keysDeImagem(valores: Record<string, unknown>, campoId: string): string
 export async function listarRegistros(
   tx: Tx,
   colecaoId: string,
-  before: string | undefined,
+  before: number | undefined,
 ): Promise<Registro[] | null> {
   // Otimização de latência: o banco costuma ficar longe do servidor, então cada
   // ida custa caro. Consultamos os registros DIRETO; se vier pelo menos 1, a
@@ -180,13 +198,13 @@ export async function listarRegistros(
   const linhas =
     before === undefined
       ? await tx<LinhaRegistro[]>`
-          select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
+          select id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em
           from registros where colecao_id = ${colecaoId}
-          order by criado_em desc limit ${LIMITE}`
+          order by ordem desc limit ${LIMITE}`
       : await tx<LinhaRegistro[]>`
-          select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
-          from registros where colecao_id = ${colecaoId} and criado_em < ${before}
-          order by criado_em desc limit ${LIMITE}`;
+          select id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em
+          from registros where colecao_id = ${colecaoId} and ordem < ${before}
+          order by ordem desc limit ${LIMITE}`;
 
   if (linhas.length > 0) return linhas.map(mapRegistro);
   if (!(await colecaoExiste(tx, colecaoId))) return null;
@@ -221,11 +239,11 @@ export async function buscarRegistros(
   const filtroAnd = condicoes.reduce((acc, c) => tx`${acc} and ${c}`);
 
   const linhas = await tx<LinhaRegistro[]>`
-    select id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em
+    select id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em
     from registros
     where colecao_id = ${colecaoId}
       and ${filtroAnd}
-    order by criado_em desc
+    order by ordem desc
     limit ${LIMITE_BUSCA}`;
 
   return linhas.map(mapRegistro);
@@ -244,13 +262,13 @@ export async function criarRegistro(
 
   const usaProprio = camposProprios !== undefined && camposProprios.length > 0;
   const campos = usaProprio ? camposProprios : await camposDaColecao(tx, colecaoId);
-  const valores = schemaDeValores(campos).parse(valoresBrutos);
+  const valores = schemaDeValores(campos).parse(soCamposConhecidos(valoresBrutos, campos));
   const corpo = usaProprio ? tx.json(campos as never) : null;
 
   const linhas = await tx<LinhaRegistro[]>`
     insert into registros (colecao_id, valores, campos, criado_por, criado_por_id)
     values (${colecaoId}, ${tx.json(valores)}, ${corpo}, ${ator.nome}, ${ator.id})
-    returning id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em`;
+    returning id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) throw new Error('insert de registro não retornou linha');
   return mapRegistro(linha);
@@ -282,7 +300,7 @@ export async function editarCorpoRegistro(
         valores = ${tx.json(valoresDepois as never)},
         atualizado_em = now()
     where id = ${id}
-    returning id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em`;
+    returning id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) return null;
 
@@ -301,8 +319,10 @@ export async function editarRegistro(
   if (atual === null) return null;
 
   // Valida contra o corpo VIGENTE do registro (próprio, se houver; senão o da coleção).
+  // Ignora chaves de blocos que já não existem, para uma alteração válida não ser
+  // perdida por causa de um resquício de estrutura antiga.
   const campos = await camposEfetivos(tx, atual);
-  const patch = schemaDeValores(campos).parse(patchBrutos);
+  const patch = schemaDeValores(campos).parse(soCamposConhecidos(patchBrutos, campos));
   const antes = atual.valores ?? {};
 
   // Toda key de imagem que o patch tira do array vira órfã no R2 (ver 6.4). Grava-se
@@ -319,12 +339,47 @@ export async function editarRegistro(
   const linhas = await tx<LinhaRegistro[]>`
     update registros set valores = valores || ${tx.json(patch)}, atualizado_em = now()
     where id = ${id}
-    returning id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em`;
+    returning id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em`;
   const linha = linhas[0];
   if (linha === undefined) return null;
 
   await marcarLixo(tx, removidas, 'patch-removeu-foto');
   return mapRegistro(linha);
+}
+
+// Sobe/desce um registro trocando a `ordem` com o vizinho imediato (na mesma
+// coleção). "cima" = mais perto do topo = ordem MAIOR (a lista é ordem desc).
+// Retorna os DOIS registros trocados (para refletir na tela e no realtime), []
+// quando já está na ponta (nada a fazer) ou null quando o registro não existe.
+export async function moverRegistro(
+  tx: Tx,
+  id: string,
+  direcao: 'cima' | 'baixo',
+): Promise<Registro[] | null> {
+  const atual = await lerRegistro(tx, id);
+  if (atual === null) return null;
+
+  const vizinhos =
+    direcao === 'cima'
+      ? await tx<LinhaRegistro[]>`
+          select id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em
+          from registros where colecao_id = ${atual.colecao_id} and ordem > ${atual.ordem}
+          order by ordem asc limit 1`
+      : await tx<LinhaRegistro[]>`
+          select id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em
+          from registros where colecao_id = ${atual.colecao_id} and ordem < ${atual.ordem}
+          order by ordem desc limit 1`;
+  const vizinho = vizinhos[0];
+  if (vizinho === undefined) return []; // já está na ponta
+
+  // Troca as ordens dos dois (o atualizado_em não muda: reordenar não é editar).
+  await tx`update registros set ordem = ${vizinho.ordem} where id = ${atual.id}`;
+  await tx`update registros set ordem = ${atual.ordem} where id = ${vizinho.id}`;
+
+  return [
+    mapRegistro({ ...atual, ordem: vizinho.ordem }),
+    mapRegistro({ ...vizinho, ordem: atual.ordem }),
+  ];
 }
 
 // Soft-delete: vai pra lixeira (snapshot + fotos preservadas no R2).

@@ -66,6 +66,7 @@ interface LinhaRegistro {
   campos?: unknown;
   criado_por: string | null;
   criado_por_id: string | null;
+  ordem?: number;
   criado_em: Date;
   atualizado_em: Date;
 }
@@ -417,7 +418,7 @@ export async function restaurarDaLixeira(
         ${item.registro_id}, ${item.colecao_id}, ${tx.json((item.valores ?? {}) as never)},
         ${corpo}, ${item.criado_por}, ${item.criado_por_id}, ${item.criado_em}, now()
       )
-      returning id, colecao_id, valores, campos, criado_por, criado_por_id, criado_em, atualizado_em`;
+      returning id, colecao_id, valores, campos, ordem, criado_por, criado_por_id, criado_em, atualizado_em`;
 
     const reg = inseridos[0];
     if (reg === undefined) throw new Error('restore não retornou registro');
@@ -433,6 +434,7 @@ export async function restaurarDaLixeira(
         campos: Array.isArray(reg.campos) ? (reg.campos as Registro['campos']) : null,
         criadoPor: reg.criado_por,
         criadoPorId: reg.criado_por_id,
+        ordem: reg.ordem ?? 0,
         criadoEm: reg.criado_em.toISOString(),
         atualizadoEm: reg.atualizado_em.toISOString(),
       },

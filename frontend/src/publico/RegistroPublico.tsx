@@ -35,6 +35,7 @@ export function RegistroPublico(): JSX.Element {
           valores: r.valores,
           criadoPor: null,
           criadoPorId: null,
+          ordem: 0,
           criadoEm: '',
           atualizadoEm: '',
         };

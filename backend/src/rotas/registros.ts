@@ -11,6 +11,7 @@ import {
   editarCorpoRegistro,
   editarRegistro,
   listarRegistros,
+  moverRegistro,
   obterColecaoIdDoRegistro,
 } from '../repositorios/registros';
 import { corpoRegistroSchema as camposProprioSchema } from '../validacao/campo';
@@ -29,8 +30,14 @@ const corpoRegistroSchema = z
 // Substituição do corpo de UM registro (torna-o independente da coleção).
 const corpoProprioSchema = z.object({ campos: camposProprioSchema }).strict();
 
-const listaQuerySchema = z.object({ before: z.string().datetime().optional() }).strict();
+// `before` agora é o cursor de `ordem` (número), não mais a data de criação.
+// `.catch(undefined)` deixa um cursor inválido (ex.: uma data do app em cache
+// antigo, durante o deploy) cair na 1ª página em vez de dar 400.
+const listaQuerySchema = z
+  .object({ before: z.coerce.number().finite().optional().catch(undefined) })
+  .strict();
 const buscaQuerySchema = z.object({ q: z.string().min(1).max(200) }).strict();
+const moverSchema = z.object({ direcao: z.enum(['cima', 'baixo']) }).strict();
 
 async function barrarSeBloqueado(
   contaId: string,
@@ -152,6 +159,30 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       if (registro === null) return reply.code(404).send({ erro: 'registro não encontrado' });
       broadcastRegistro(contaId, { acao: 'atualizado', colecaoId, registro });
       return reply.send(registro);
+    },
+  );
+
+  // Sobe/desce o registro na ordem de exibição (troca com o vizinho).
+  app.post<{ Params: { id: string } }>(
+    '/api/registros/:id/mover',
+    { preHandler: [exigeDono, validaIdParam] },
+    async (req, reply) => {
+      const { direcao } = moverSchema.parse(req.body);
+      const contaId = contaObrigatoria(req);
+      const u = usuarioObrigatorio(req);
+      const colecaoId = await comConta(contaId, (tx) =>
+        obterColecaoIdDoRegistro(tx, req.params.id),
+      );
+      if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
+      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
+        return;
+      }
+      const trocados = await comConta(contaId, (tx) => moverRegistro(tx, req.params.id, direcao));
+      if (trocados === null) return reply.code(404).send({ erro: 'registro não encontrado' });
+      for (const r of trocados) {
+        broadcastRegistro(contaId, { acao: 'atualizado', colecaoId, registro: r });
+      }
+      return reply.send(trocados);
     },
   );
 

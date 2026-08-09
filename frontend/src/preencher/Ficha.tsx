@@ -12,6 +12,7 @@ import { Grade } from '../imagens/Grade';
 import { camposDoRegistro, keysDoCampo, tituloDoRegistro } from './derivarResumo';
 import { valoresVaziosDe } from './valoresVazios';
 import { CorpoRegistroEditor } from './CorpoRegistroEditor';
+import { BotaoImportarFotos } from '../importar/BotaoImportarFotos';
 import './preencher.css';
 
 const fmtPreenchido = new Intl.DateTimeFormat('pt-BR', {
@@ -50,6 +51,7 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
   const [editandoBlocos, setEditandoBlocos] = useState(false);
   const [salvandoCorpo, setSalvandoCorpo] = useState(false);
   const [erroCorpo, setErroCorpo] = useState<string | null>(null);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   const fichaRef = useRef<HTMLDivElement>(null);
 
   // Corpo VIGENTE deste registro (o próprio, se independente; senão o da coleção).
@@ -65,6 +67,7 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
     setConfirmando(false);
     setEditandoBlocos(false);
     setErroCorpo(null);
+    setErroSalvar(null);
   }, [registro.id]);
 
   // Enter (e a seta "próximo" do teclado do iPhone) avança para o próximo campo, para
@@ -116,9 +119,16 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
       // acabou de digitar. O estado local é a fonte da verdade; refletimos no pai com
       // os valores locais mais recentes (que já incluem o que foi digitado em voo).
       aoAtualizarRef.current({ ...atualizado, valores: valoresRef.current });
-    } catch {
-      // devolve os ids à fila pra tentar de novo no próximo flush
+      setErroSalvar(null);
+    } catch (e) {
+      // devolve os ids à fila pra tentar de novo no próximo flush E avisa (antes
+      // o erro sumia e o usuário achava que tinha salvado).
       for (const id of ids) sujosRef.current.add(id);
+      setErroSalvar(
+        e instanceof ErroApi
+          ? `Não foi possível salvar: ${e.message}`
+          : 'Não foi possível salvar (falha de conexão). Vamos tentar de novo.',
+      );
     }
   }, [registro.id]);
 
@@ -186,6 +196,16 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
     }
   }
 
+  // Reflete o registro depois de importar fotos (valores já atualizados no servidor).
+  function aoImportarFotos(atualizados: Registro[]): void {
+    const r = atualizados[0];
+    if (r === undefined) return;
+    valoresRef.current = r.valores;
+    setValores(r.valores);
+    sujosRef.current.clear();
+    aoAtualizarRef.current(r);
+  }
+
   const registroLocal: Registro = { ...registro, valores };
 
   return (
@@ -218,7 +238,15 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
             <SlidersHorizontal size={16} />
             {editandoBlocos ? 'Concluir blocos' : 'Editar blocos'}
           </Botao>
+          <BotaoImportarFotos
+            colecao={colecao}
+            registro={registroLocal}
+            aoAntes={flush}
+            aoConcluir={aoImportarFotos}
+          />
         </div>
+
+        {erroSalvar !== null && <p className="aviso-erro">{erroSalvar}</p>}
 
         {editandoBlocos && (
           <div className="ficha__bloco">

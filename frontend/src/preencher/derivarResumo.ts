@@ -71,9 +71,10 @@ function nomeNormalizado(nome: string): string {
 // Só a "área de referência" define o título. Não usamos mais o nome do bloco
 // "título"/"nome" nem caímos no 1º parágrafo/texto: o título do registro é
 // exclusivamente o que estiver escrito nos blocos de referência.
+// O `(^|[^a-z])` garante que a palavra comece de fato em "ref" — antes um bloco
+// "Preferência" (normaliza p/ "preferencia") era confundido com "referência".
 function nomeEhReferencia(nome: string): boolean {
-  const n = nomeNormalizado(nome);
-  return n.includes('referencia') || n.includes('ref.');
+  return /(?:^|[^a-z])(?:referencia|ref\.)/.test(nomeNormalizado(nome));
 }
 
 // Tipos de bloco cujo valor pode compor o título (texto puro/legível).
@@ -124,32 +125,52 @@ export function tituloDoRegistro(campos: Campo[], registro: Registro): string {
 }
 
 // ---- alvo editável do "Renomear" ----
-// Pode ser um bloco de topo (texto/parágrafo) OU o subcampo "Referência" de uma
-// seção (edita a 1ª linha). undefined = sem alvo (não mostra o botão renomear).
+// Pode ser um bloco de topo (texto/parágrafo/número/seleção) OU o subcampo
+// "Referência" de uma seção (edita a 1ª linha). undefined = sem alvo (não mostra
+// o botão renomear). Guarda o `tipo` para ler/gravar o valor no formato certo —
+// nas Oficinas a referência costuma ser NÚMERO, e sem isto o renomear sumia.
 export interface AlvoTitulo {
   campoId: string;
   subcampoId?: string;
+  tipo: TipoCampo;
 }
 
+// Tipos de bloco/subcampo cuja referência dá para renomear (texto legível ou número).
+const TIPOS_RENOMEAR: TipoCampo[] = ['texto', 'paragrafo', 'numero', 'selecao'];
+
 export function alvoTitulo(campos: Campo[]): AlvoTitulo | undefined {
-  const topo = campos.find(
-    (c) => (c.tipo === 'texto' || c.tipo === 'paragrafo') && nomeEhReferencia(c.nome),
-  );
-  if (topo !== undefined) return { campoId: topo.id };
+  const topo = campos.find((c) => TIPOS_RENOMEAR.includes(c.tipo) && nomeEhReferencia(c.nome));
+  if (topo !== undefined) return { campoId: topo.id, tipo: topo.tipo };
   for (const c of campos) {
     if (c.tipo !== 'secao') continue;
     const sub = (c.config.subcampos ?? []).find(
-      (s) => s.tipo === 'texto' && nomeEhReferencia(s.nome),
+      (s) => TIPOS_RENOMEAR.includes(s.tipo) && nomeEhReferencia(s.nome),
     );
-    if (sub !== undefined) return { campoId: c.id, subcampoId: sub.id };
+    if (sub !== undefined) return { campoId: c.id, subcampoId: sub.id, tipo: sub.tipo };
   }
   return undefined;
 }
 
+// Converte o texto digitado no renomear para o formato do campo alvo. Número vazio
+// vira null (limpa); número inválido volta como string para o servidor recusar e
+// o usuário ver o aviso, em vez de gravar lixo.
+function valorParaAlvo(tipo: TipoCampo, texto: string): unknown {
+  const t = texto.trim();
+  if (tipo === 'numero') {
+    if (t === '') return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : t;
+  }
+  return t;
+}
+
 export function lerAlvoTitulo(registro: Registro, alvo: AlvoTitulo): string {
-  if (alvo.subcampoId === undefined) return textoDe(registro.valores[alvo.campoId]);
-  const linha0 = linhasDeSecao(registro, alvo.campoId)[0];
-  return linha0 === undefined ? '' : textoDe(linha0[alvo.subcampoId]);
+  const bruto =
+    alvo.subcampoId === undefined
+      ? registro.valores[alvo.campoId]
+      : linhasDeSecao(registro, alvo.campoId)[0]?.[alvo.subcampoId];
+  if (alvo.tipo === 'numero') return typeof bruto === 'number' ? String(bruto) : '';
+  return textoDe(bruto);
 }
 
 // Monta o PATCH mínimo para gravar o novo título. Para subcampo, reescreve a
@@ -160,13 +181,14 @@ export function patchAlvoTitulo(
   alvo: AlvoTitulo,
   texto: string,
 ): Record<string, unknown> {
-  if (alvo.subcampoId === undefined) return { [alvo.campoId]: texto };
+  const valor = valorParaAlvo(alvo.tipo, texto);
+  if (alvo.subcampoId === undefined) return { [alvo.campoId]: valor };
   const brutas = registro.valores[alvo.campoId];
   const linhas = Array.isArray(brutas) ? [...(brutas as unknown[])] : [];
   const base = typeof linhas[0] === 'object' && linhas[0] !== null
     ? { ...(linhas[0] as Record<string, unknown>) }
     : {};
-  base[alvo.subcampoId] = texto;
+  base[alvo.subcampoId] = valor;
   linhas[0] = base;
   return { [alvo.campoId]: linhas };
 }
@@ -199,7 +221,7 @@ function nomeSugereFotoRef(nome: string): boolean {
     .replace(/\p{M}/gu, '')
     .toLowerCase();
   return (
-    n.includes('referencia') ||
+    /(?:^|[^a-z])referencia/.test(n) ||
     n.includes('modelagem') ||
     n.includes('imagem') ||
     n.includes('foto')

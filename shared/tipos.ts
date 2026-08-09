@@ -34,7 +34,7 @@ export interface ConfigCampo {
   opcoes?: string[];      // selecao
   sufixo?: string;        // numero — "kg", "R$", "g/m²"
   obrigatorio?: boolean;
-  maxFotos?: number;      // só para tipo 'imagem'. 1..10, default 1.
+  maxFotos?: number;      // só para tipo 'imagem'. 1..30, default 1.
   autoAgora?: boolean;    // data/datahora: já vem com a data/hora atual ao criar registro
   subcampos?: SubCampo[]; // secao: os "quadradinhos" que se repetem por linha
   titulo?: string;        // opcional: cabeçalho exibido ACIMA do bloco (qualquer tipo)
@@ -62,6 +62,8 @@ export interface Registro {
   campos?: Campo[] | null;
   criadoPor: string | null;           // nome de quem criou (exibição)
   criadoPorId: string | null;         // id de quem criou (permissão de apagar)
+  /** Ordem manual de exibição (maior = mais no topo). Reordenável pelo usuário. */
+  ordem: number;
   criadoEm: string;
   atualizadoEm: string;
 }

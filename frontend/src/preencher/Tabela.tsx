@@ -1,7 +1,7 @@
 import { memo, useCallback, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ImageOff, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, ImageOff, Trash2 } from 'lucide-react';
 import { api, ErroApi } from '../api/cliente';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
@@ -24,6 +24,8 @@ interface Props {
   aoAtualizar: (r: Registro) => void;
   aoAbrirFicha: (r: Registro) => void;
   aoApagar?: (id: string) => void;
+  /** Sobe/desce o registro na ordem de exibição. */
+  aoMover?: (id: string, direcao: 'cima' | 'baixo') => void;
   rodape?: ReactNode;
 }
 
@@ -45,10 +47,12 @@ interface LinhaProps {
   salvandoTitulo: boolean;
   erroTitulo: string | null;
   prioritaria: boolean;
+  ehPrimeiro: boolean;
   podeApagar: boolean;
   confirmandoApagar: boolean;
   apagando: boolean;
   aoAbrirFicha: (r: Registro) => void;
+  aoMover?: (id: string, direcao: 'cima' | 'baixo') => void;
   iniciar: (r: Registro, c: Campo) => void;
   setRascunho: (v: unknown) => void;
   comitar: () => void;
@@ -73,10 +77,12 @@ const LinhaTabela = memo(function LinhaTabela({
   salvandoTitulo,
   erroTitulo,
   prioritaria,
+  ehPrimeiro,
   podeApagar,
   confirmandoApagar,
   apagando,
   aoAbrirFicha,
+  aoMover,
   iniciar,
   setRascunho,
   comitar,
@@ -153,6 +159,29 @@ const LinhaTabela = memo(function LinhaTabela({
           </div>
         ) : (
           <div className="tabela-titulo-bloco">
+            {aoMover !== undefined && (
+              <span className="tabela-mover">
+                <button
+                  type="button"
+                  className="btn btn--icone mover-seta"
+                  aria-label={`Subir ${titulo}`}
+                  title="Subir"
+                  disabled={ehPrimeiro}
+                  onClick={() => aoMover(r.id, 'cima')}
+                >
+                  <ChevronUp size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--icone mover-seta"
+                  aria-label={`Descer ${titulo}`}
+                  title="Descer"
+                  onClick={() => aoMover(r.id, 'baixo')}
+                >
+                  <ChevronDown size={16} />
+                </button>
+              </span>
+            )}
             <button type="button" className="tabela-titulo" onClick={() => aoAbrirFicha(r)}>
               {titulo}
             </button>
@@ -253,6 +282,7 @@ export function Tabela({
   aoAtualizar,
   aoAbrirFicha,
   aoApagar,
+  aoMover,
   rodape,
 }: Props): JSX.Element {
   const { estado } = useAuth();
@@ -264,6 +294,7 @@ export function Tabela({
   const [erroTitulo, setErroTitulo] = useState<string | null>(null);
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
   const [apagandoId, setApagandoId] = useState<string | null>(null);
+  const [erroCelula, setErroCelula] = useState<string | null>(null);
   const temImagem = colecao.campos.some((c) => c.tipo === 'imagem');
   const scrollRef = useRef<HTMLDivElement>(null);
   // Qualquer usuário logado pode enviar registros para a lixeira (soft-delete).
@@ -284,11 +315,23 @@ export function Tabela({
       ? virtualizer.getTotalSize() - (itens[itens.length - 1]?.end ?? 0)
       : 0;
 
-  const iniciar = useCallback((r: Registro, c: Campo): void => {
-    setRenomeandoId(null);
-    setEdicao({ rid: r.id, cid: c.id });
-    setRascunho(r.valores[c.id]);
-  }, []);
+  const iniciar = useCallback(
+    (r: Registro, c: Campo): void => {
+      // Registro com corpo PRÓPRIO pode não ter esta coluna da coleção. Editar
+      // aqui gravaria num id que o registro não tem (no-op silencioso) — melhor
+      // abrir a ficha, que mostra o corpo certo do registro.
+      const corpo = camposDoRegistro(colecao, r);
+      if (!corpo.some((cc) => cc.id === c.id)) {
+        aoAbrirFicha(r);
+        return;
+      }
+      setRenomeandoId(null);
+      setErroCelula(null);
+      setEdicao({ rid: r.id, cid: c.id });
+      setRascunho(r.valores[c.id]);
+    },
+    [colecao, aoAbrirFicha],
+  );
 
   const comitarValor = useCallback(async (): Promise<void> => {
     if (edicao === null) return;
@@ -298,8 +341,9 @@ export function Tabela({
     try {
       const atualizado = await api.editarRegistro(rid, { [cid]: valor });
       aoAtualizar(atualizado);
-    } catch {
-      /* silencioso */
+      setErroCelula(null);
+    } catch (e) {
+      setErroCelula(e instanceof ErroApi ? e.message : 'não foi possível salvar a alteração');
     }
   }, [edicao, rascunho, aoAtualizar]);
 
@@ -388,6 +432,7 @@ export function Tabela({
 
   return (
     <div className="tabela-envolto" ref={scrollRef}>
+      {erroCelula !== null && <p className="aviso-erro">{erroCelula}</p>}
       <table className="tabela">
         <thead>
           <tr>
@@ -421,10 +466,12 @@ export function Tabela({
                 salvandoTitulo={salvandoTitulo}
                 erroTitulo={renomeandoId === r.id ? erroTitulo : null}
                 prioritaria={item.index < 8}
+                ehPrimeiro={item.index === 0}
                 podeApagar={podeApagar}
                 confirmandoApagar={confirmandoId === r.id}
                 apagando={apagandoId === r.id}
                 aoAbrirFicha={aoAbrirFicha}
+                aoMover={aoMover}
                 iniciar={iniciar}
                 setRascunho={setRascunho}
                 comitar={() => void comitarValor()}

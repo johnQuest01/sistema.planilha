@@ -1,0 +1,18 @@
+.importar-zip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.importar-zip__ajuda {
+  font-size: 0.85rem;
+  color: var(--giz);
+  line-height: 1.5;
+}
+
+.importar-zip__ajuda code {
+  font-family: var(--mono);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}

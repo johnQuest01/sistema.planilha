@@ -29,17 +29,17 @@ interface ImagemItem {
   rotulo: string;
 }
 
-// Carrega TODOS os registros paginando por cursor (criado_em) até o fim.
+// Carrega TODOS os registros paginando por cursor (ordem) até o fim.
 async function carregarTodos(colecaoId: string): Promise<Registro[]> {
   const acc: Registro[] = [];
-  let cursor: string | undefined;
+  let cursor: number | undefined;
   for (let i = 0; i < 1000; i += 1) {
     const pagina = await api.listarRegistros(colecaoId, cursor);
     acc.push(...pagina);
     if (pagina.length < PAGINA) break;
     const ultimo = pagina[pagina.length - 1];
     if (ultimo === undefined) break;
-    cursor = ultimo.criadoEm;
+    cursor = ultimo.ordem;
   }
   return acc;
 }
