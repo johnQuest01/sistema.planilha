@@ -105,8 +105,13 @@ export function parseNomeArquivo(nome: string): NomeArquivo {
     return { referencia: ref, cor: null, sufixo: resto === '' ? null : resto };
   }
 
-  // Sem dígitos no início e sem "cor": nome descritivo (sem cor).
+  // Sem dígitos no início e sem "cor": se o nome INTEIRO é uma cor conhecida
+  // (ex.: "vermelho.png", "rosa.jpeg"), trata como COR — é o que o usuário espera
+  // ao renomear a foto só com a cor. Senão, é um nome descritivo (sem cor).
   const antes = tokens.join(' ').trim();
+  if (antes !== '' && ehCorConhecida(antes)) {
+    return { referencia: null, cor: antes, sufixo: null };
+  }
   return { referencia: antes === '' ? null : antes, cor: null, sufixo: null };
 }
 

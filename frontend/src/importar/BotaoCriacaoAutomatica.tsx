@@ -67,12 +67,13 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
         <FolhaInferior titulo="Criação automático" onFechar={fechar}>
           <div className="importar-zip">
             <p className="importar-zip__ajuda">
-              Cole um texto (de qualquer lugar). Cada bloco separado por uma linha{' '}
-              <code>---</code> (ou por linha em branco) vira um <strong>registro</strong>, na
-              ordem escrita. As imagens do celular (opcional) vão para o bloco{' '}
-              <strong>Imagens</strong>: se o nome começar com a referência (ex.:{' '}
-              <code>4578foto.jpg</code>) ou for citado no texto, entra no registro certo; senão,
-              fica embaixo.
+              Cole um texto (de qualquer lugar). Cada <strong>ponto final</strong> (.) vira um{' '}
+              <strong>bloco</strong> do registro; escreva <code>cor: rosa</code> para um bloco de
+              cor e <code>4785</code> (ou <code>ref: 4785</code>) para a referência. Para criar{' '}
+              <strong>mais de um</strong> registro, separe-os com uma linha só com <code>---</code>.
+              As imagens (opcional) entram pelo nome: <code>4785.png</code> vai para as fotos da
+              referência; <code>cor.rosa.png</code>, <code>rosa.png</code> ou{' '}
+              <code>4785.cor.rosa.png</code> entram no bloco de cor <strong>rosa</strong>.
             </p>
 
             <Campo
@@ -88,7 +89,7 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
               multilinha
               rows={10}
               rotulo="Cole o texto aqui"
-              placeholder={'Registro 1...\n---\nRegistro 2...'}
+              placeholder={'4785 bory. cor: rosa. tecido: algodão. manga curta.\n---\n4786 curto. cor: azul.'}
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
               disabled={ocupado}
