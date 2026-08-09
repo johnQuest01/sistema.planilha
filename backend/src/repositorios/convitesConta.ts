@@ -5,6 +5,10 @@ import { sql } from '../db/client';
 const ALFABETO = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const TAM = 8;
 
+function normalizarToken(token: string): string {
+  return token.trim().toUpperCase();
+}
+
 function gerarToken(): string {
   const bytes = crypto.randomBytes(TAM);
   let s = '';
@@ -65,7 +69,7 @@ export async function criarConviteConta(
   const rotulo = opts?.rotulo?.trim() ? opts.rotulo.trim().slice(0, 80) : null;
 
   for (let tentativa = 0; tentativa < 6; tentativa++) {
-    const token = gerarToken();
+    const token = normalizarToken(gerarToken());
     try {
       const linhas = await sql<
         {
@@ -129,32 +133,67 @@ export async function revogarConviteConta(contaId: string, token: string): Promi
   return linhas.length > 0;
 }
 
-/** Só valida (não gasta uso). null = inválido/expirado/esgotado/revogado. */
+export type ConviteEncontrado = {
+  token: string;
+  contaId: string;
+  usos: number;
+  maxUsos: number | null;
+  expiraEm: Date | null;
+  revogadoEm: Date | null;
+  /** Ainda pode gastar 1 uso (não revogado, não expirado, usos < máx). */
+  disponivel: boolean;
+};
+
+/** Achado por código (maiúsculo), mesmo se já esgotado — para quem já pediu/foi aprovado. */
+export async function acharConviteConta(token: string): Promise<ConviteEncontrado | null> {
+  const limpo = normalizarToken(token);
+  if (limpo === '') return null;
+  const linhas = await sql<
+    {
+      token: string;
+      conta_id: string;
+      usos: number;
+      max_usos: number | null;
+      expira_em: Date | null;
+      revogado_em: Date | null;
+    }[]
+  >`
+    select token, conta_id, usos, max_usos, expira_em, revogado_em
+    from convites_conta
+    where upper(token) = ${limpo}`;
+  const l = linhas[0];
+  if (l === undefined) return null;
+  const revogado = l.revogado_em !== null;
+  const expirado = l.expira_em !== null && l.expira_em.getTime() <= Date.now();
+  const esgotado = l.max_usos !== null && l.usos >= l.max_usos;
+  return {
+    token: l.token,
+    contaId: l.conta_id,
+    usos: l.usos,
+    maxUsos: l.max_usos,
+    expiraEm: l.expira_em,
+    revogadoEm: l.revogado_em,
+    disponivel: !revogado && !expirado && !esgotado,
+  };
+}
+
+/** Só valida para NOVO uso (não gasta). null = inválido/expirado/esgotado/revogado. */
 export async function olharConviteConta(
   token: string,
 ): Promise<{ contaId: string; token: string } | null> {
-  const limpo = token.trim();
-  if (limpo === '') return null;
-  const linhas = await sql<{ conta_id: string; token: string }[]>`
-    select conta_id, token
-    from convites_conta
-    where token = ${limpo}
-      and revogado_em is null
-      and (expira_em is null or expira_em > now())
-      and (max_usos is null or usos < max_usos)`;
-  const l = linhas[0];
-  if (l === undefined) return null;
-  return { contaId: l.conta_id, token: l.token };
+  const c = await acharConviteConta(token);
+  if (c === null || !c.disponivel) return null;
+  return { contaId: c.contaId, token: c.token };
 }
 
 /** Resolve um token válido → conta_id. Incrementa `usos`. null = inválido/expirado/esgotado. */
 export async function consumirConviteConta(token: string): Promise<string | null> {
-  const limpo = token.trim();
+  const limpo = normalizarToken(token);
   if (limpo === '') return null;
   const linhas = await sql<{ conta_id: string }[]>`
     update convites_conta
     set usos = usos + 1
-    where token = ${limpo}
+    where upper(token) = ${limpo}
       and revogado_em is null
       and (expira_em is null or expira_em > now())
       and (max_usos is null or usos < max_usos)

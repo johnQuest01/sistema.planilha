@@ -149,10 +149,13 @@ export const api = {
       corpoJson(token !== undefined && token.trim() !== '' ? { email, senha, token } : { email, senha }),
     ),
   olharToken: (token: string) =>
-    pedir<{ valido: boolean; contaNome: string | null }>(
-      '/api/auth/olhar-token',
-      corpoJson({ token }),
-    ),
+    pedir<{
+      valido: boolean;
+      disponivel?: boolean;
+      esgotado?: boolean;
+      revogado?: boolean;
+      contaNome: string | null;
+    }>('/api/auth/olhar-token', corpoJson({ token })),
   prePedido: (email: string, token: string) =>
     pedir<{
       ok: boolean;

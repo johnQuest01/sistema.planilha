@@ -11,8 +11,8 @@ type ModoCadastro = 'nova' | 'token';
 type PreviaToken =
   | { fase: 'idle' }
   | { fase: 'checando' }
-  | { fase: 'ok'; contaNome: string }
-  | { fase: 'invalido' };
+  | { fase: 'ok'; contaNome: string; esgotado: boolean }
+  | { fase: 'invalido'; msg: string };
 
 type PreviaPedido =
   | { fase: 'idle' }
@@ -60,10 +60,24 @@ export function Entrar(): JSX.Element {
         .olharToken(t)
         .then((r) => {
           if (!vivo) return;
+          if (r.revogado === true) {
+            setPreviaToken({
+              fase: 'invalido',
+              msg: 'Token revogado pelo admin — peça um novo',
+            });
+            return;
+          }
           if (r.valido && r.contaNome !== null) {
-            setPreviaToken({ fase: 'ok', contaNome: r.contaNome });
+            setPreviaToken({
+              fase: 'ok',
+              contaNome: r.contaNome,
+              esgotado: r.esgotado === true,
+            });
           } else {
-            setPreviaToken({ fase: 'invalido' });
+            setPreviaToken({
+              fase: 'invalido',
+              msg: 'Token inválido ou expirado',
+            });
           }
         })
         .catch(() => {
@@ -243,13 +257,19 @@ export function Entrar(): JSX.Element {
             {previaToken.fase === 'checando' && (
               <p className="entrar__dica">Verificando token…</p>
             )}
-            {previaToken.fase === 'ok' && (
+            {previaToken.fase === 'ok' && !previaToken.esgotado && (
               <p className="entrar__ok">
                 Token válido — conta <strong>{previaToken.contaNome}</strong>
               </p>
             )}
+            {previaToken.fase === 'ok' && previaToken.esgotado && (
+              <p className="entrar__ok">
+                Token da conta <strong>{previaToken.contaNome}</strong> já foi usado no pedido —
+                digite a senha e entre (não precisa de token novo se o admin já aprovou).
+              </p>
+            )}
             {previaToken.fase === 'invalido' && (
-              <p className="aviso-erro">Token inválido, expirado ou já usado</p>
+              <p className="aviso-erro">{previaToken.msg}</p>
             )}
             {previaPedido.fase === 'enviando' && (
               <p className="entrar__dica">Enviando pedido ao admin…</p>

@@ -21,7 +21,7 @@ import {
   criarConviteConta,
   consumirConviteConta,
   listarConvitesConta,
-  olharConviteConta,
+  acharConviteConta,
   revogarConviteConta,
 } from '../repositorios/convitesConta';
 import {
@@ -70,7 +70,11 @@ const prePedidoSchema = z
   })
   .strict();
 
-/** Resolve token → pedido de acesso. Avisa o admin via WS se ficou pendente. */
+/**
+ * Resolve token → pedido de acesso.
+ * Se o pré-pedido já gastou o uso (1/1), quem já está pendente/ativo ainda entra —
+ * não exige token "disponível" de novo.
+ */
 async function aplicarTokenAcesso(
   usuario: { id: string; nome: string; email: string; conta_id: string },
   tokenLimpo: string,
@@ -82,8 +86,10 @@ async function aplicarTokenAcesso(
     }
   | { ok: false; erro: string; code: number }
 > {
-  const visto = await olharConviteConta(tokenLimpo);
-  if (visto === null) {
+  const convite = await acharConviteConta(tokenLimpo);
+
+  if (convite === null) {
+    // Código permanente legado (Bruno).
     const codigoHash = await workspaceCodigoHash();
     if (codigoHash === null || !(await conferirSenha(codigoHash, tokenLimpo))) {
       return { ok: false, erro: 'token inválido, expirado ou já usado', code: 403 };
@@ -109,20 +115,52 @@ async function aplicarTokenAcesso(
     };
   }
 
-  if (visto.contaId === usuario.conta_id) {
+  if (convite.revogadoEm !== null) {
+    return { ok: false, erro: 'token revogado pelo admin', code: 403 };
+  }
+  if (convite.contaId === usuario.conta_id) {
     return { ok: false, erro: 'este token é da sua própria conta', code: 400 };
   }
-  const st = await statusMembro(visto.contaId, usuario.id);
-  if (st === null || st === 'revogado') {
-    const gasto = await consumirConviteConta(tokenLimpo);
-    if (gasto === null) {
-      return { ok: false, erro: 'token inválido, expirado ou já usado', code: 403 };
-    }
+
+  const st = await statusMembro(convite.contaId, usuario.id);
+  const cn = await nomeDaConta(convite.contaId);
+
+  // Já pediu ou já foi aprovado: não precisa gastar o token de novo.
+  if (st === 'ativo') {
+    return {
+      ok: true,
+      pedido: { status: 'ativo', contaId: convite.contaId, contaNome: cn },
+      jaAtivo: true,
+    };
   }
-  const r = await pedirAcessoConta(visto.contaId, usuario.id, visto.token);
-  const cn = await nomeDaConta(visto.contaId);
+  if (st === 'pendente') {
+    anunciarPedidoAcessoWs(convite.contaId, {
+      usuarioId: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+    });
+    return {
+      ok: true,
+      pedido: { status: 'pendente', contaId: convite.contaId, contaNome: cn },
+      jaAtivo: false,
+    };
+  }
+
+  // Primeiro pedido (ou após revogação): exige token ainda disponível.
+  if (!convite.disponivel) {
+    return {
+      ok: false,
+      erro: 'token inválido, expirado ou já usado — peça um token novo ao admin',
+      code: 403,
+    };
+  }
+  const gasto = await consumirConviteConta(tokenLimpo);
+  if (gasto === null) {
+    return { ok: false, erro: 'token inválido, expirado ou já usado', code: 403 };
+  }
+  const r = await pedirAcessoConta(convite.contaId, usuario.id, convite.token);
   if (r.status === 'pendente') {
-    anunciarPedidoAcessoWs(visto.contaId, {
+    anunciarPedidoAcessoWs(convite.contaId, {
       usuarioId: usuario.id,
       nome: usuario.nome,
       email: usuario.email,
@@ -132,7 +170,7 @@ async function aplicarTokenAcesso(
     ok: true,
     pedido: {
       status: r.status === 'ativo' ? 'ativo' : 'pendente',
-      contaId: visto.contaId,
+      contaId: convite.contaId,
       contaNome: cn,
     },
     jaAtivo: r.jaAtivo,
@@ -342,16 +380,44 @@ export async function rotasAuth(app: FastifyInstance): Promise<void> {
   /** Só olha o token (não gasta uso) — login inteligente mostra o nome da conta. */
   app.post('/api/auth/olhar-token', limiteOlhar, async (req, reply) => {
     const { token } = olharTokenSchema.parse(req.body);
-    const visto = await olharConviteConta(token);
-    if (visto !== null) {
-      return reply.send({ valido: true, contaNome: await nomeDaConta(visto.contaId) });
+    const convite = await acharConviteConta(token);
+    if (convite !== null) {
+      if (convite.revogadoEm !== null) {
+        return reply.send({
+          valido: false,
+          disponivel: false,
+          esgotado: false,
+          revogado: true,
+          contaNome: await nomeDaConta(convite.contaId),
+        });
+      }
+      return reply.send({
+        // Conhecido = ok para UI (mesmo se o pré-pedido já gastou o uso).
+        valido: true,
+        disponivel: convite.disponivel,
+        esgotado: !convite.disponivel,
+        revogado: false,
+        contaNome: await nomeDaConta(convite.contaId),
+      });
     }
     const codigoHash = await workspaceCodigoHash();
     if (codigoHash !== null && (await conferirSenha(codigoHash, token))) {
       const cid = await workspaceContaId();
-      return reply.send({ valido: true, contaNome: await nomeDaConta(cid) });
+      return reply.send({
+        valido: true,
+        disponivel: true,
+        esgotado: false,
+        revogado: false,
+        contaNome: await nomeDaConta(cid),
+      });
     }
-    return reply.send({ valido: false, contaNome: null });
+    return reply.send({
+      valido: false,
+      disponivel: false,
+      esgotado: false,
+      revogado: false,
+      contaNome: null,
+    });
   });
 
   /**
