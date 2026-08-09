@@ -374,10 +374,18 @@
   box-shadow: none;
   background: transparent;
 }
-.integ-previa-parte .preview-registro__cabecalho {
-  padding-left: 0;
-  padding-right: 0;
+/* Na prévia UNIDA há vários registros empilhados (um por planilha). O cabeçalho
+   FIXO/full-bleed do preview simples (margem negativa) fazia o título do registro
+   (ex.: 4805) subir por cima do nome da planilha e ser CORTADO pelo overflow do
+   cartão. Aqui o cabeçalho volta ao fluxo normal, dentro do cartão da parte.
+   (3 classes: vence a regra sticky de preencher.css sem depender da ordem de import.) */
+.folha__corpo .integ-previa-parte .preview-registro__cabecalho {
+  position: static;
+  margin: 0;
+  padding: var(--e3) 0 0;
   background: transparent;
+  border-bottom: none;
+  box-shadow: none;
 }
 .integ-previa-parte--ausente {
   box-shadow: none;

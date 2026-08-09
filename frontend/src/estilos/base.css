@@ -127,9 +127,17 @@ p {
 /* --- App shell: viewport fixo; SÓ a área de lista rola. Aplicado apenas nas telas
    que pedem (Home e planilha) via .pagina--app, para não afetar as demais telas. --- */
 .pagina--app {
+  /* PRESO ao viewport: o documento (body) não tem o que rolar, então o navegador não
+     "sobe a tela toda" quando aparece o teclado/preenchimento automático. Só as áreas
+     internas (.rolagem e a folha) rolam. Vale mobile e desktop. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 /* A faixa vira uma coluna que ocupa a altura restante; o cabeçalho fica fixo e só a
    .rolagem (abaixo) recebe o scroll. */

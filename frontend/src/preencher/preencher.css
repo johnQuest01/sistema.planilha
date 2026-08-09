@@ -585,6 +585,20 @@
   overscroll-behavior: contain;
   padding-bottom: var(--e3);
 }
+/* Topo FIXO nos resultados da busca: o cabeçalho (título + Renomear/Compartilhar/
+   Abrir/Lixeira) de cada resultado gruda no topo da rolagem, como na prévia — os
+   botões não somem ao rolar o resultado. Responsivo (vale mobile e desktop). */
+.busca-ref__resultados .preview-registro {
+  overflow: visible;
+}
+.busca-ref__resultados .preview-registro__cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--papel);
+  border-bottom: 1px solid var(--linha);
+  box-shadow: 0 3px 8px rgba(23, 32, 28, 0.05);
+}
 .busca-ref__resultados > .preview-registro:last-child {
   scroll-margin-bottom: var(--e4);
 }
