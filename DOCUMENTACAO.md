@@ -311,6 +311,9 @@ interface ConfigCampo {
 - **019_compartilhamentos_partes** — `compartilhamentos.partes` + `titulo` (link unido).
 - **020_contas_multi_tenant** — `contas.nome` + tabela `convites_conta` (tokens por
   conta; cadastro cria workspace próprio ou entra com token).
+- **021_usuarios_delete_set_null** — FKs de autoria (`colecoes.criado_por`,
+  `registros.criado_por_id`, `integracoes.criado_por`) passam a `ON DELETE SET NULL`
+  para o admin poder remover membro sem apagar planilhas/registros.
 
 > Nota: há dois arquivos com prefixo `015` (`015_integracoes.sql` e
 > `015_compartilhamentos.sql`); o runner aplica por ordem alfabética, então
