@@ -718,17 +718,23 @@ export async function importarNaColecao(
       continue;
     }
     const alvos = indice.get(codigoInicial(referencia)) ?? [];
-    const registro = alvos[0];
-    if (registro === undefined) {
+    if (alvos.length === 0) {
       rel.semRegistro.push(file.name);
       continue;
     }
-    const grupo = porRegistro.get(registro.id);
-    if (grupo === undefined) porRegistro.set(registro.id, { registro, arquivos: [file] });
-    else grupo.arquivos.push(file);
+    // Replica a foto para TODOS os registros que têm essa referência. Ex.: a "3092"
+    // aparece como 2ª linha em vários registros da Modelagem — cada um recebe sua
+    // própria cópia, na linha certa (secaoReferenciaComLinha casa o código). Antes só
+    // o primeiro era preenchido.
+    for (const registro of alvos) {
+      const grupo = porRegistro.get(registro.id);
+      if (grupo === undefined) porRegistro.set(registro.id, { registro, arquivos: [file] });
+      else grupo.arquivos.push(file);
+    }
   }
 
-  const total = arquivos.length;
+  // O total conta cada cópia (um mesmo arquivo replicado em N registros = N).
+  const total = [...porRegistro.values()].reduce((n, g) => n + g.arquivos.length, 0) + rel.semRegistro.length;
   let feito = rel.semRegistro.length;
   aoProgresso?.({ feito, total });
 
