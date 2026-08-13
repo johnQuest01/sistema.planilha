@@ -156,10 +156,11 @@ export function BotaoConversaoHome({ colecoes, aoConcluir }: Props): JSX.Element
     <>
       <Botao
         variante="padrao"
+        className="btn--compacto"
         onClick={() => setAberto(true)}
         title="Converter fotos: referências + 1 foto por referência (como na planilha)"
       >
-        <Sparkles size={18} />
+        <Sparkles size={15} />
         Converter fotos
       </Botao>
 

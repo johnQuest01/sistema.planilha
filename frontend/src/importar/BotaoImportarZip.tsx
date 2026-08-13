@@ -97,8 +97,8 @@ export function BotaoImportarZip({ aoImportado, aoImportadoIntegracao }: Props):
 
   return (
     <>
-      <Botao variante="padrao" onClick={() => setAberto(true)}>
-        <FileUp size={18} /> Importar de arquivo
+      <Botao variante="padrao" className="btn--compacto" onClick={() => setAberto(true)}>
+        <FileUp size={15} /> Importar de arquivo
       </Botao>
       {aberto && (
         <FolhaInferior titulo="Importar planilha de um arquivo" onFechar={fechar}>

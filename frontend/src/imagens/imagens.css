@@ -103,26 +103,41 @@
 }
 
 /* ---- Visor em tela cheia (seção 6.2) ---- */
-/* z-index alto: portal no body, acima da folha (60) e do FAB (90) */
+/* z-index alto: portal no body, acima da folha (100), FAB (90) e presença (55).
+   Grid com minmax(0,1fr): foto ALTA não estoura a área e não fica cortada sob o
+   rodapé do app / tiras / safe-area (mobile e desktop). */
 .visor {
   position: fixed;
-  inset: 0;
-  z-index: 200;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  z-index: 1000;
   background: var(--visor-fundo);
-  display: flex;
-  flex-direction: column;
-  /* iOS com status-bar "black-translucent": respeita o recorte inferior (home indicator). */
-  padding-bottom: env(safe-area-inset-bottom);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  overscroll-behavior: none;
+  box-sizing: border-box;
+  /* Safe-area vai no topo/tiras — não no container — senão a foto “vaza” pra baixo. */
+  padding: 0;
 }
 .visor__topo {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--e3);
   /* Empurra o topo (contador, Baixar e X) para baixo da barra de status/notch do iPhone,
      senão ficam escondidos embaixo do sistema e o X não recebe o toque. */
-  padding: max(var(--e3), env(safe-area-inset-top)) max(var(--e4), env(safe-area-inset-right))
-    var(--e3) max(var(--e4), env(safe-area-inset-left));
+  padding: max(var(--e3), env(safe-area-inset-top, 0px)) max(var(--e4), env(safe-area-inset-right, 0px))
+    var(--e3) max(var(--e4), env(safe-area-inset-left, 0px));
   color: var(--giz);
+  min-width: 0;
 }
 .visor__contador {
   flex: 1;
@@ -167,10 +182,14 @@
 }
 
 .trilho {
-  flex: 1;
   min-height: 0;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
   display: flex;
+  align-items: stretch;
   overflow-x: auto;
+  overflow-y: hidden;
   scroll-snap-type: x mandatory;
   overscroll-behavior: contain; /* não vaza pro scroll da página nem dispara pull-to-refresh */
   scrollbar-width: none;
@@ -186,16 +205,18 @@
 }
 
 .quadro {
-  /* Bloco-contêiner para o .quadro-zoom absoluto: dá altura DEFINIDA à foto no iOS,
-     onde a cadeia de alturas em flex + height:100% não resolvia (foto minúscula). */
+  /* Bloco-contêiner para o .quadro-zoom absoluto: altura = trilho (já limitada pelo grid). */
   position: relative;
   flex: 0 0 100%;
-  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
   scroll-snap-align: center;
   scroll-snap-stop: always;
   min-width: 0;
   min-height: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .quadro-zoom {
@@ -204,6 +225,8 @@
   inset: 8px 16px;
   min-width: 0;
   min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -212,6 +235,7 @@
   cursor: zoom-in;
   user-select: none;
   -webkit-user-select: none;
+  box-sizing: border-box;
 }
 .quadro-zoom--ativo {
   cursor: grab;
@@ -224,8 +248,12 @@
   /* Preenche a caixa (definida) do .quadro-zoom, dando referência de 100% às imagens. */
   width: 100%;
   height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   display: grid;
   place-items: center;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
   transform-origin: center center;
   will-change: transform;
   line-height: 0;
@@ -238,6 +266,7 @@
   width: auto;
   height: auto;
   object-fit: contain;
+  object-position: center;
   pointer-events: none;
   -webkit-user-drag: none;
   transition: opacity 0.15s ease;
@@ -256,14 +285,22 @@
   display: flex;
   gap: 6px;
   padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   overflow-x: auto;
   justify-content: center;
   scrollbar-width: none;
+  background: var(--visor-fundo);
+}
+/* Sem tiras (1 foto): ainda reserva o home-indicator para a foto não ir sob o rodapé. */
+.visor__base-segura {
+  flex: none;
+  height: env(safe-area-inset-bottom, 0px);
+  background: var(--visor-fundo);
 }
 @supports (padding: max(0px)) {
   .tiras {
-    padding-left: max(12px, env(safe-area-inset-left));
-    padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
   }
 }
 .tiras::-webkit-scrollbar {

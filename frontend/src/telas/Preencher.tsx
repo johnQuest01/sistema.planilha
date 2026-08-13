@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, ListPlus, Lock, Plus, Rows2, Rows3, Unlock } from 'lucide-react';
-import { api, cursorDeRegistro, ErroApi } from '../api/cliente';
+import { api, cursorDeRegistro, definirCacheEdicaoTrava, ErroApi } from '../api/cliente';
 import { assinarRealtime } from '../api/realtime';
 import type { Campo, Colecao, Registro } from '../../../shared/tipos';
 import { useAuth } from '../contexto/Auth';
@@ -300,6 +300,7 @@ export function Preencher({
       });
     const cancelar = assinarRealtime((msg) => {
       if (msg.tipo === 'trava' && vivo) {
+        definirCacheEdicaoTrava(msg.liberada);
         setEdicaoLiberada(msg.liberada);
         if (!msg.liberada) setAberta(null);
       }

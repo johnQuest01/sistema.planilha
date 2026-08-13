@@ -125,6 +125,20 @@ p {
   }
 }
 
+/* Enquanto o visor de fotos está aberto: esconde chrome fixo do app (presença,
+   lixeira flutuante, instalar) para não cobrir a foto nem parecer “footer por cima”. */
+html.visor-aberto .presenca-online,
+html.visor-aberto .presenca-avisos,
+html.visor-aberto .lixeira-fab,
+html.visor-aberto .instalar,
+body.visor-aberto .presenca-online,
+body.visor-aberto .presenca-avisos,
+body.visor-aberto .lixeira-fab,
+body.visor-aberto .instalar {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* --- App shell: viewport fixo; SÓ a área de lista rola. Aplicado apenas nas telas
    que pedem (Home e planilha) via .pagina--app, para não afetar as demais telas. --- */
 .pagina--app {

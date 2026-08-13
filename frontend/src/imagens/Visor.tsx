@@ -78,9 +78,47 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
     const origem = document.activeElement as HTMLElement | null;
     dialogoRef.current?.focus();
     const liberarScroll = travarScroll();
+    document.documentElement.classList.add('visor-aberto');
+    document.body.classList.add('visor-aberto');
     return () => {
       liberarScroll();
+      document.documentElement.classList.remove('visor-aberto');
+      document.body.classList.remove('visor-aberto');
       origem?.focus?.();
+    };
+  }, []);
+
+  // Mobile (e desktop com UI do browser): alinha o overlay ao visualViewport para a
+  // foto não ficar cortada sob a barra inferior / home indicator / chrome do app.
+  useEffect(() => {
+    const el = dialogoRef.current;
+    const vv = window.visualViewport;
+    if (el === null || vv === null) return;
+
+    const sync = (): void => {
+      const v = window.visualViewport;
+      if (v === null) return;
+      el.style.top = `${v.offsetTop}px`;
+      el.style.left = `${v.offsetLeft}px`;
+      el.style.width = `${v.width}px`;
+      el.style.height = `${v.height}px`;
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+    };
+    sync();
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+      el.style.top = '';
+      el.style.left = '';
+      el.style.width = '';
+      el.style.height = '';
+      el.style.right = '';
+      el.style.bottom = '';
     };
   }, []);
 
@@ -194,7 +232,7 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
         })}
       </div>
 
-      {keys.length > 1 && (
+      {keys.length > 1 ? (
         <div className="tiras">
           {keys.map((k, i) => (
             <button
@@ -209,6 +247,8 @@ export function Visor({ keys, indiceInicial, aoFechar }: Props): JSX.Element {
             />
           ))}
         </div>
+      ) : (
+        <div className="visor__base-segura" aria-hidden />
       )}
     </div>
   );

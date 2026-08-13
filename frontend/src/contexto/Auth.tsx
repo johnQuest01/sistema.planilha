@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api, type ContaAcessivel, type Usuario } from '../api/cliente';
+import { api, limparCacheEdicaoTrava, type ContaAcessivel, type Usuario } from '../api/cliente';
 import { limparCache } from '../api/cache';
 import { desligarRealtime } from '../api/realtime';
 import { definirWsBase } from '../api/runtime';
@@ -97,6 +97,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
       setEstado({ fase: 'logado', usuario });
       setAvisoPedido(avisoDoPedido(usuario));
       limparCache();
+      limparCacheEdicaoTrava();
       await recarregarContas();
     },
     [recarregarContas],
@@ -108,6 +109,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
       setEstado({ fase: 'logado', usuario });
       setAvisoPedido(null);
       limparCache();
+      limparCacheEdicaoTrava();
       // Home mostra um cartão rápido de como criar planilhas (criação automática).
       try {
         sessionStorage.setItem('mostruario_ajuda_inicio', '1');
@@ -122,6 +124,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
   const trocarConta = useCallback(async (contaId: string) => {
     const usuario = await api.trocarConta(contaId);
     limparCache();
+    limparCacheEdicaoTrava();
     // contaId no estado faz Presenca/Inicio/WS remontarem ao vivo.
     setEstado({ fase: 'logado', usuario });
     setAvisoPedido(null);
@@ -131,6 +134,7 @@ export function ProvedorAuth({ children }: { children: ReactNode }): JSX.Element
     desligarRealtime();
     await api.sair();
     limparCache();
+    limparCacheEdicaoTrava();
     setContas([]);
     setAvisoPedido(null);
     setEstado({ fase: 'deslogado' });

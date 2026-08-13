@@ -108,13 +108,25 @@ export async function listarColecoes(
   const dono = ehDonoWorkspace(acesso.email);
   // Dono/whitelist não precisam consultar colecao_acessos.
   const livre = usuarioComAcessoLivre({ email: acesso.email, papel: acesso.papel });
+
+  // Um SELECT em lote no lugar do N+1 por planilha protegida.
+  const protegidasIds = livre
+    ? []
+    : linhas.filter((l) => l.senha_hash !== null && (dono || !l.arquivada)).map((l) => l.id);
+  const desbloqueadas = new Set<string>();
+  if (protegidasIds.length > 0) {
+    const acessos = await tx<{ colecao_id: string }[]>`
+      select colecao_id from colecao_acessos
+      where usuario_id = ${acesso.usuarioId}
+        and colecao_id = any(${protegidasIds})`;
+    for (const a of acessos) desbloqueadas.add(a.colecao_id);
+  }
+
   const resultado: ColecaoResumo[] = [];
   for (const linha of linhas) {
     if (linha.arquivada && !dono) continue;
     const jaDesbloqueou =
-      livre || linha.senha_hash === null
-        ? false
-        : await usuarioJaDesbloqueou(tx, linha.id, acesso.usuarioId);
+      livre || linha.senha_hash === null ? false : desbloqueadas.has(linha.id);
     resultado.push(mapColecao(linha, { ...acesso, jaDesbloqueou }));
   }
   return resultado;

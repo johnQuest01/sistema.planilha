@@ -49,6 +49,17 @@ export class ErroApi extends Error {
   }
 }
 
+/** Estado da alavanca de edição — evita GET a cada abertura de planilha. */
+let cacheEdicaoTrava: { liberada: boolean } | null = null;
+
+export function definirCacheEdicaoTrava(liberada: boolean): void {
+  cacheEdicaoTrava = { liberada };
+}
+
+export function limparCacheEdicaoTrava(): void {
+  cacheEdicaoTrava = null;
+}
+
 // Depois disso sem resposta, avisamos a UI que o servidor está "acordando" (cold start
 // do Render/Neon no free tier) para o usuário não achar que a tela travou.
 const LENTO_MS = 4_000;
@@ -407,12 +418,21 @@ export const api = {
     pedir<void>(`/api/lixeira/${id}`, { method: 'DELETE' }),
 
   // --- alavanca de edição (por conta, salva no servidor) ---
-  edicaoTrava: () => pedir<{ liberada: boolean }>('/api/conta/edicao-trava'),
-  salvarEdicaoTrava: (liberada: boolean) =>
-    pedir<{ liberada: boolean }>('/api/conta/edicao-trava', {
+  // Cache em memória: cada abertura de planilha montava Preencher e refazia GET.
+  edicaoTrava: async () => {
+    if (cacheEdicaoTrava !== null) return cacheEdicaoTrava;
+    const r = await pedir<{ liberada: boolean }>('/api/conta/edicao-trava');
+    cacheEdicaoTrava = r;
+    return r;
+  },
+  salvarEdicaoTrava: async (liberada: boolean) => {
+    const r = await pedir<{ liberada: boolean }>('/api/conta/edicao-trava', {
       method: 'PATCH',
       body: JSON.stringify({ liberada }),
-    }),
+    });
+    cacheEdicaoTrava = r;
+    return r;
+  },
 
   // --- presença ao vivo ---
   presenca: () =>

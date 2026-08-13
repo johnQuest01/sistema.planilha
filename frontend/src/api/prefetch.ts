@@ -19,9 +19,9 @@ async function prefetchUma(id: string): Promise<void> {
   }
 }
 
-// Prefetch com concorrência limitada, para não competir com o carregamento inicial
-// nem afogar o servidor. Roda no tempo ocioso do navegador.
-export function prefetchColecoes(ids: string[], limite = 6, concorrencia = 2): void {
+// Prefetch leve: poucas planilhas e 1 de cada vez, depois da Home estabilizar.
+// Antes aquecia 6×2 e disputava banda com presença/auth — a lista parecia lenta.
+export function prefetchColecoes(ids: string[], limite = 3, concorrencia = 1): void {
   const alvo = ids.slice(0, limite);
   if (alvo.length === 0) return;
   let i = 0;
@@ -36,7 +36,13 @@ export function prefetchColecoes(ids: string[], limite = 6, concorrencia = 2): v
   const iniciar = (): void => {
     for (let c = 0; c < concorrencia; c += 1) void trabalhar();
   };
-  const w = window as unknown as { requestIdleCallback?: (cb: () => void) => void };
-  if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(iniciar);
-  else setTimeout(iniciar, 300);
+  const w = window as unknown as {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void;
+  };
+  // Espera a Home pintar e o idle do browser; timeout evita nunca aquecer.
+  if (typeof w.requestIdleCallback === 'function') {
+    w.requestIdleCallback(iniciar, { timeout: 2500 });
+  } else {
+    setTimeout(iniciar, 800);
+  }
 }

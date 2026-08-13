@@ -32,7 +32,20 @@ export interface UsuarioSessao {
   contaNome: string;
 }
 
+// Cache curto: exigeDono roda em TODO request autenticado; o join multi-conta
+// no Neon soma RTT. TTL baixo + invalidação nas revogações mantém segurança.
+const CACHE_SESSAO_MS = 15_000;
+const cacheSessao = new Map<string, { em: number; valor: UsuarioSessao | null }>();
+
+function invalidarCacheSessao(id?: string): void {
+  if (id !== undefined) cacheSessao.delete(id);
+  else cacheSessao.clear();
+}
+
 export async function usuarioDaSessao(id: string): Promise<UsuarioSessao | null> {
+  const hit = cacheSessao.get(id);
+  if (hit !== undefined && Date.now() - hit.em < CACHE_SESSAO_MS) return hit.valor;
+
   const linhas = await sql<
     {
       usuario_id: string;
@@ -75,7 +88,10 @@ export async function usuarioDaSessao(id: string): Promise<UsuarioSessao | null>
     join contas c on c.id = s.conta_id
     where s.id = ${id} and s.revogado_em is null and s.expira_em > now()`;
   const l = linhas[0];
-  if (l === undefined || !l.membro_ok) return null;
+  if (l === undefined || !l.membro_ok) {
+    cacheSessao.set(id, { em: Date.now(), valor: null });
+    return null;
+  }
 
   const naHome = l.sessao_conta_id === l.home_conta_id;
   const nomeConta = (l.conta_nome ?? '').trim() || (naHome ? 'Minha conta' : 'Conta compartilhada');
@@ -86,7 +102,7 @@ export async function usuarioDaSessao(id: string): Promise<UsuarioSessao | null>
     : l.papel_membro === 'dono'
       ? 'dono'
       : 'membro';
-  return {
+  const valor: UsuarioSessao = {
     usuarioId: l.usuario_id,
     contaId: l.sessao_conta_id,
     contaHomeId: l.home_conta_id,
@@ -95,14 +111,18 @@ export async function usuarioDaSessao(id: string): Promise<UsuarioSessao | null>
     papel,
     contaNome: nomeConta,
   };
+  cacheSessao.set(id, { em: Date.now(), valor });
+  return valor;
 }
 
 export async function revogarSessao(id: string): Promise<void> {
+  invalidarCacheSessao(id);
   await sql`update sessoes set revogado_em = now() where id = ${id} and revogado_em is null`;
 }
 
 // Usada ao trocar a senha: derruba todas as sessões vivas da conta.
 export async function revogarSessoesDaConta(contaId: string): Promise<void> {
+  invalidarCacheSessao();
   await sql`
     update sessoes set revogado_em = now()
     where conta_id = ${contaId} and revogado_em is null`;
@@ -110,6 +130,7 @@ export async function revogarSessoesDaConta(contaId: string): Promise<void> {
 
 /** Derruba só as sessões de um usuário (ex.: admin trocou a senha dele). */
 export async function revogarSessoesDoUsuario(usuarioId: string): Promise<void> {
+  invalidarCacheSessao();
   await sql`
     update sessoes set revogado_em = now()
     where usuario_id = ${usuarioId} and revogado_em is null`;
@@ -120,6 +141,7 @@ export async function revogarSessoesDoUsuarioNaConta(
   usuarioId: string,
   contaId: string,
 ): Promise<void> {
+  invalidarCacheSessao();
   await sql`
     update sessoes set revogado_em = now()
     where usuario_id = ${usuarioId}

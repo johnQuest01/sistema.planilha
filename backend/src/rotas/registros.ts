@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { comConta } from '../db/comConta';
+import { comConta, type Tx } from '../db/comConta';
 import { exigeDono, contaObrigatoria, usuarioObrigatorio } from '../auth/exigeDono';
-import { verificarAcessoColecao } from '../auth/acessoColecao';
+import { verificarAcessoColecao, type UsuarioAcesso } from '../auth/acessoColecao';
 import { validaIdParam } from '../validacao/params';
 import {
   apagarRegistro,
@@ -39,24 +39,80 @@ const listaQuerySchema = z
 const buscaQuerySchema = z.object({ q: z.string().min(1).max(200) }).strict();
 const moverSchema = z.object({ direcao: z.enum(['cima', 'baixo']) }).strict();
 
-async function barrarSeBloqueado(
+type ReplyBloqueio = { code: (n: number) => { send: (b: unknown) => unknown } };
+
+/** Acesso + trabalho na MESMA transação — evita 2× comConta (RTT Neon) por request. */
+async function comAcessoColecao<T>(
   contaId: string,
   colecaoId: string,
-  usuario: { id: string; email: string; papel: 'dono' | 'membro' },
-  reply: { code: (n: number) => { send: (b: unknown) => unknown } },
-): Promise<boolean> {
-  const acesso = await comConta(contaId, (tx) =>
-    verificarAcessoColecao(tx, colecaoId, usuario),
-  );
-  if (acesso === 'nao-encontrado') {
+  usuario: UsuarioAcesso,
+  reply: ReplyBloqueio,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T | undefined> {
+  let barrado: 'nao-encontrado' | 'bloqueado' | null = null;
+  const valor = await comConta(contaId, async (tx) => {
+    const acesso = await verificarAcessoColecao(tx, colecaoId, usuario);
+    if (acesso === 'nao-encontrado') {
+      barrado = 'nao-encontrado';
+      return undefined;
+    }
+    if (acesso === 'bloqueado') {
+      barrado = 'bloqueado';
+      return undefined;
+    }
+    return fn(tx);
+  });
+  if (barrado === 'nao-encontrado') {
     await reply.code(404).send({ erro: 'coleção não encontrada' });
-    return true;
+    return undefined;
   }
-  if (acesso === 'bloqueado') {
+  if (barrado === 'bloqueado') {
     await reply.code(403).send({ erro: 'senha necessária', bloqueada: true });
-    return true;
+    return undefined;
   }
-  return false;
+  return valor;
+}
+
+/** Resolve coleção do registro + acesso + trabalho numa só transação. */
+async function comAcessoRegistro<T>(
+  contaId: string,
+  registroId: string,
+  usuario: UsuarioAcesso,
+  reply: ReplyBloqueio,
+  fn: (tx: Tx, colecaoId: string) => Promise<T>,
+): Promise<{ colecaoId: string; valor: T } | undefined> {
+  let erro: 'registro' | 'nao-encontrado' | 'bloqueado' | null = null;
+  const out = await comConta(contaId, async (tx) => {
+    const colecaoId = await obterColecaoIdDoRegistro(tx, registroId);
+    if (colecaoId === null) {
+      erro = 'registro';
+      return undefined;
+    }
+    const acesso = await verificarAcessoColecao(tx, colecaoId, usuario);
+    if (acesso === 'nao-encontrado') {
+      erro = 'nao-encontrado';
+      return undefined;
+    }
+    if (acesso === 'bloqueado') {
+      erro = 'bloqueado';
+      return undefined;
+    }
+    const valor = await fn(tx, colecaoId);
+    return { colecaoId, valor };
+  });
+  if (erro === 'registro') {
+    await reply.code(404).send({ erro: 'registro não encontrado' });
+    return undefined;
+  }
+  if (erro === 'nao-encontrado') {
+    await reply.code(404).send({ erro: 'coleção não encontrada' });
+    return undefined;
+  }
+  if (erro === 'bloqueado') {
+    await reply.code(403).send({ erro: 'senha necessária', bloqueada: true });
+    return undefined;
+  }
+  return out;
 }
 
 export async function rotasRegistros(app: FastifyInstance): Promise<void> {
@@ -67,10 +123,14 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { q } = buscaQuerySchema.parse(req.query);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email, papel: u.papel }, reply)) {
-        return;
-      }
-      const registros = await comConta(contaId, (tx) => buscarRegistros(tx, req.params.id, q));
+      const registros = await comAcessoColecao(
+        contaId,
+        req.params.id,
+        { id: u.id, email: u.email, papel: u.papel },
+        reply,
+        (tx) => buscarRegistros(tx, req.params.id, q),
+      );
+      if (registros === undefined) return;
       if (registros === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       return reply.send(registros);
     },
@@ -83,12 +143,14 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { before } = listaQuerySchema.parse(req.query);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email, papel: u.papel }, reply)) {
-        return;
-      }
-      const registros = await comConta(contaId, (tx) =>
-        listarRegistros(tx, req.params.id, before),
+      const registros = await comAcessoColecao(
+        contaId,
+        req.params.id,
+        { id: u.id, email: u.email, papel: u.papel },
+        reply,
+        (tx) => listarRegistros(tx, req.params.id, before),
       );
+      if (registros === undefined) return;
       if (registros === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       return reply.send(registros);
     },
@@ -101,12 +163,15 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { valores, campos } = corpoRegistroSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      if (await barrarSeBloqueado(contaId, req.params.id, { id: u.id, email: u.email, papel: u.papel }, reply)) {
-        return;
-      }
-      const registro = await comConta(contaId, (tx) =>
-        criarRegistro(tx, req.params.id, valores, { id: u.id, nome: u.nome, papel: u.papel }, campos as Campo[] | undefined),
+      const registro = await comAcessoColecao(
+        contaId,
+        req.params.id,
+        { id: u.id, email: u.email, papel: u.papel },
+        reply,
+        (tx) =>
+          criarRegistro(tx, req.params.id, valores, { id: u.id, nome: u.nome, papel: u.papel }, campos as Campo[] | undefined),
       );
+      if (registro === undefined) return;
       if (registro === null) return reply.code(404).send({ erro: 'coleção não encontrada' });
       broadcastRegistro(contaId, { acao: 'criado', colecaoId: req.params.id, registro });
       return reply.code(201).send(registro);
@@ -120,19 +185,17 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { valores } = corpoRegistroSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      const colecaoId = await comConta(contaId, (tx) =>
-        obterColecaoIdDoRegistro(tx, req.params.id),
+      const out = await comAcessoRegistro(
+        contaId,
+        req.params.id,
+        { id: u.id, email: u.email, papel: u.papel },
+        reply,
+        (tx) => editarRegistro(tx, req.params.id, valores),
       );
-      if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
-        return;
-      }
-      const registro = await comConta(contaId, (tx) =>
-        editarRegistro(tx, req.params.id, valores),
-      );
-      if (registro === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      broadcastRegistro(contaId, { acao: 'atualizado', colecaoId, registro });
-      return reply.send(registro);
+      if (out === undefined) return;
+      if (out.valor === null) return reply.code(404).send({ erro: 'registro não encontrado' });
+      broadcastRegistro(contaId, { acao: 'atualizado', colecaoId: out.colecaoId, registro: out.valor });
+      return reply.send(out.valor);
     },
   );
 
@@ -146,19 +209,17 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { campos } = corpoProprioSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      const colecaoId = await comConta(contaId, (tx) =>
-        obterColecaoIdDoRegistro(tx, req.params.id),
+      const out = await comAcessoRegistro(
+        contaId,
+        req.params.id,
+        { id: u.id, email: u.email, papel: u.papel },
+        reply,
+        (tx) => editarCorpoRegistro(tx, req.params.id, campos as Campo[]),
       );
-      if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
-        return;
-      }
-      const registro = await comConta(contaId, (tx) =>
-        editarCorpoRegistro(tx, req.params.id, campos as Campo[]),
-      );
-      if (registro === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      broadcastRegistro(contaId, { acao: 'atualizado', colecaoId, registro });
-      return reply.send(registro);
+      if (out === undefined) return;
+      if (out.valor === null) return reply.code(404).send({ erro: 'registro não encontrado' });
+      broadcastRegistro(contaId, { acao: 'atualizado', colecaoId: out.colecaoId, registro: out.valor });
+      return reply.send(out.valor);
     },
   );
 
@@ -170,19 +231,19 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
       const { direcao } = moverSchema.parse(req.body);
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      const colecaoId = await comConta(contaId, (tx) =>
-        obterColecaoIdDoRegistro(tx, req.params.id),
+      const out = await comAcessoRegistro(
+        contaId,
+        req.params.id,
+        { id: u.id, email: u.email, papel: u.papel },
+        reply,
+        (tx) => moverRegistro(tx, req.params.id, direcao),
       );
-      if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
-        return;
+      if (out === undefined) return;
+      if (out.valor === null) return reply.code(404).send({ erro: 'registro não encontrado' });
+      for (const r of out.valor) {
+        broadcastRegistro(contaId, { acao: 'atualizado', colecaoId: out.colecaoId, registro: r });
       }
-      const trocados = await comConta(contaId, (tx) => moverRegistro(tx, req.params.id, direcao));
-      if (trocados === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      for (const r of trocados) {
-        broadcastRegistro(contaId, { acao: 'atualizado', colecaoId, registro: r });
-      }
-      return reply.send(trocados);
+      return reply.send(out.valor);
     },
   );
 
@@ -192,23 +253,21 @@ export async function rotasRegistros(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const contaId = contaObrigatoria(req);
       const u = usuarioObrigatorio(req);
-      const colecaoId = await comConta(contaId, (tx) =>
-        obterColecaoIdDoRegistro(tx, req.params.id),
+      const out = await comAcessoRegistro(
+        contaId,
+        req.params.id,
+        { id: u.id, email: u.email, papel: u.papel },
+        reply,
+        (tx) => apagarRegistro(tx, req.params.id, { id: u.id, nome: u.nome, papel: u.papel }),
       );
-      if (colecaoId === null) return reply.code(404).send({ erro: 'registro não encontrado' });
-      if (await barrarSeBloqueado(contaId, colecaoId, { id: u.id, email: u.email, papel: u.papel }, reply)) {
-        return;
-      }
-      const resultado = await comConta(contaId, (tx) =>
-        apagarRegistro(tx, req.params.id, { id: u.id, nome: u.nome, papel: u.papel }),
-      );
-      if (resultado === 'nao-encontrado') {
+      if (out === undefined) return;
+      if (out.valor === 'nao-encontrado') {
         return reply.code(404).send({ erro: 'registro não encontrado' });
       }
-      if (resultado === 'proibido') {
+      if (out.valor === 'proibido') {
         return reply.code(403).send({ erro: 'só quem criou (ou o dono) pode apagar este registro' });
       }
-      broadcastRegistro(contaId, { acao: 'apagado', colecaoId, registroId: req.params.id });
+      broadcastRegistro(contaId, { acao: 'apagado', colecaoId: out.colecaoId, registroId: req.params.id });
       return reply.code(204).send();
     },
   );

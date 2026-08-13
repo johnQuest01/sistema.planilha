@@ -66,8 +66,8 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
 
   return (
     <>
-      <Botao variante="padrao" onClick={() => setAberto(true)}>
-        <Sparkles size={18} /> Criação automático
+      <Botao variante="padrao" className="btn--compacto" onClick={() => setAberto(true)}>
+        <Sparkles size={15} /> Criação automático
       </Botao>
       {aberto && (
         <FolhaInferior titulo="Criação automático" onFechar={fechar}>

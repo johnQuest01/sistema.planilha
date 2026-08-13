@@ -306,11 +306,13 @@ export function Inicio(): JSX.Element {
                 Criar planilha do zero
               </Botao>
               {erro !== null && <p className="aviso-erro">{erro}</p>}
-              <BotaoCriacaoAutomatica aoImportado={(id) => navegar(`/c/${id}`)} />
-              <BotaoImportarZip
-                aoImportado={(id) => navegar(`/c/${id}`)}
-                aoImportadoIntegracao={(id) => navegar(`/i/${id}`)}
-              />
+              <div className="inicio-acoes__par">
+                <BotaoCriacaoAutomatica aoImportado={(id) => navegar(`/c/${id}`)} />
+                <BotaoImportarZip
+                  aoImportado={(id) => navegar(`/c/${id}`)}
+                  aoImportadoIntegracao={(id) => navegar(`/i/${id}`)}
+                />
+              </div>
               <button type="button" className="link-texto" onClick={() => void carregarExemplo()}>
                 ou carregar um exemplo
               </button>
@@ -339,10 +341,19 @@ export function Inicio(): JSX.Element {
             )}
             <div className="inicio-cabeca">
               <h1 className="inicio-cabeca__titulo">Suas planilhas</h1>
-              <Link to="/integracoes" className="btn">
-                <Layers size={18} /> Integrações
-              </Link>
-              <BotaoConversaoHome colecoes={colecoes} aoConcluir={() => carregarLista()} />
+              <div className="inicio-acoes">
+                <Link to="/integracoes" className="btn btn--compacto">
+                  <Layers size={15} /> Integrações
+                </Link>
+                <BotaoConversaoHome colecoes={colecoes} aoConcluir={() => carregarLista()} />
+                <div className="inicio-acoes__par">
+                  <BotaoCriacaoAutomatica aoImportado={(id) => navegar(`/c/${id}`)} />
+                  <BotaoImportarZip
+                    aoImportado={(id) => navegar(`/c/${id}`)}
+                    aoImportadoIntegracao={(id) => navegar(`/i/${id}`)}
+                  />
+                </div>
+              </div>
               <form className="inicio-criar" onSubmit={criar}>
                 <Campo
                   aria-label="Nome da nova planilha"
@@ -350,16 +361,16 @@ export function Inicio(): JSX.Element {
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
                 />
-                <Botao variante="primario" type="submit" disabled={criando || nome.trim() === ''}>
-                  <Plus size={18} />
+                <Botao
+                  variante="primario"
+                  type="submit"
+                  className="btn--compacto"
+                  disabled={criando || nome.trim() === ''}
+                >
+                  <Plus size={15} />
                   Criar
                 </Botao>
               </form>
-              <BotaoCriacaoAutomatica aoImportado={(id) => navegar(`/c/${id}`)} />
-              <BotaoImportarZip
-                aoImportado={(id) => navegar(`/c/${id}`)}
-                aoImportadoIntegracao={(id) => navegar(`/i/${id}`)}
-              />
             </div>
             {erro !== null && <p className="aviso-erro">{erro}</p>}
             <div className="rolagem">
