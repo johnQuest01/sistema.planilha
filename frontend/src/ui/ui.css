@@ -56,16 +56,16 @@
 .btn--icone:not(:disabled):hover {
   background: rgba(23, 32, 28, 0.06);
 }
-/* Botão compacto (ex.: "Preencher" no topo da prévia) — menor que o padrão. */
+/* Botão compacto — tamanho único da home e da barra de registros. */
 .btn--compacto {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 10px;
   font-size: 13px;
-  gap: 6px;
+  gap: 5px;
 }
 .btn--compacto svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 /* ---- Campo de texto ---- */

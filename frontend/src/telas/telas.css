@@ -233,8 +233,8 @@
 .inicio-vazio__forma .inicio-acoes__par .btn {
   width: 100%;
   min-height: 36px;
-  padding: 0 8px;
-  font-size: 12px;
+  padding: 0 10px;
+  font-size: 13px;
 }
 
 .inicio-cabeca {
@@ -266,6 +266,16 @@
 }
 .inicio-acoes__par .btn {
   min-width: 0;
+}
+.faixa--app .inicio-cabeca > .btn {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  gap: 5px;
+}
+.faixa--app .inicio-cabeca > .btn svg {
+  width: 14px;
+  height: 14px;
 }
 .inicio-criar {
   display: flex;
@@ -318,18 +328,18 @@
   }
   .faixa--app .inicio-acoes .btn {
     width: 100%;
-    min-height: 32px;
-    padding: 0 6px;
-    font-size: 11.5px;
+    min-height: 36px;
+    padding: 0 8px;
+    font-size: 13px;
     font-weight: 600;
-    gap: 4px;
+    gap: 5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .faixa--app .inicio-acoes .btn svg {
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
     flex: none;
   }
   .faixa--app .inicio-criar {
@@ -337,14 +347,14 @@
     gap: 6px;
   }
   .faixa--app .inicio-criar .campo__controle {
-    min-height: 32px;
+    min-height: 36px;
     font-size: 13px;
     padding: 0 10px;
   }
   .faixa--app .inicio-criar .btn {
-    min-height: 32px;
+    min-height: 36px;
     padding: 0 10px;
-    font-size: 12px;
+    font-size: 13px;
   }
   .faixa--app .grade-cartoes {
     grid-template-columns: 1fr;

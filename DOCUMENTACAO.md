@@ -17,6 +17,8 @@
 | R2 público | `https://pub-856c1e1b6dc645308495de9e44b391e0.r2.dev` |
 | Neon | Postgres `sa-east-1` (SP), app usa URL **pooled** (`-pooler`) |
 
+**Estado recente (ago/2026, commit `de91f4c` e ajustes locais de botão):** home compacta no mobile; visor de foto alta sem corte sob o rodapé; GET registros numa só transação; cache curto de sessão; prefetch mais leve. Botões da home e da barra de registros no mesmo tamanho (36px / 13px).
+
 ---
 
 ## Sumário
@@ -521,6 +523,14 @@ await comConta(contaIdDaSessao, async (sql) => { ... });
 
 RLS garante que queries só veem linhas da conta ativa.
 
+**Path quente de registros** (`rotas/registros.ts`): acesso à planilha (senha) +
+lista/busca/CRUD rodam na **mesma** `comConta` (`comAcessoColecao` /
+`comAcessoRegistro`). Antes eram 2 transações por request (checar senha +
+trabalho) — cada uma paga RTT no Neon.
+
+**Lista de planilhas** (`listarColecoes`): um `SELECT` em lote em
+`colecao_acessos` no lugar de N+1 por planilha protegida.
+
 ---
 
 ## 10. API completa (rotas)
@@ -580,7 +590,7 @@ Rate-limit auth tipicamente 10/min (olhar-token 30/min).
 | PATCH | `/api/campos/:id` | |
 | PATCH | `/api/colecoes/:id/campos/ordem` | |
 | DELETE | `/api/campos/:id` | |
-| GET | `/api/colecoes/:id/registros?before=` | Cursor por `ordem` |
+| GET | `/api/colecoes/:id/registros?before=` | Cursor por `ordem`; acesso+lista na **mesma** transação |
 | GET | `/api/colecoes/:id/registros/busca?q=` | |
 | POST | `/api/colecoes/:id/registros` | |
 | PATCH | `/api/registros/:id` | Valores |
@@ -610,6 +620,9 @@ Rate-limit auth tipicamente 10/min (olhar-token 30/min).
 2. Valor = `sessoes.id` opaco (não o UUID da conta).
 3. Senhas: **Argon2**.
 4. `exigeDono` (nome histórico): qualquer usuário autenticado com sessão válida + membro ativo da conta da sessão.
+5. `usuarioDaSessao` tem **cache em memória ~15s** (o join multi-conta rodava em
+   todo request). Invalidação imediata em `revogarSessao` / revogar sessões da
+   conta ou do usuário.
 
 ### Multi-conta
 
@@ -620,6 +633,8 @@ Rate-limit auth tipicamente 10/min (olhar-token 30/min).
 - Papel efetivo: na home = `usuarios.papel`; convidado = `conta_membros.papel`.
 - Admin (`dono`): usuários, tokens, lixeira, senhas de planilha (`podeGerirSenhas`).
 - Remover usuário: FKs `criado_por` SET NULL (mig 021) + kick WS `acesso_revogado`.
+- Revogar token: some da lista em Config (não fica como “token revogado”);
+  membros ligados ao token perdem acesso na hora.
 
 ---
 
@@ -682,8 +697,8 @@ Miniatura por **convenção de nome**: `foto.jpg` → `foto_t.jpg`.
 | Peça | Arquivo | Função |
 |------|---------|--------|
 | Grade | `imagens/Grade.tsx` | Upload, reordenar, remover, abre Visor; respeita `maxFotos` |
-| Visor | `imagens/Visor.tsx` | Portal fullscreen, carrossel, fundo `--visor-fundo` |
-| FotoZoomavel | `imagens/FotoZoomavel.tsx` | Blur-up mini→cheia, pinch/wheel zoom 1–4×, `touch-action: none` |
+| Visor | `imagens/Visor.tsx` | Portal no `body`, grid `auto / 1fr / auto`, alinha ao `visualViewport` (mobile/desktop) para foto **alta** não ir sob o rodapé do app / home indicator |
+| FotoZoomavel | `imagens/FotoZoomavel.tsx` | Blur-up mini→cheia, pinch/wheel zoom 1–4×, `object-fit: contain` na caixa do trilho |
 | Miniatura | `preencher/Miniatura.tsx` | Lazy, fade-in, `urlMini` |
 | urls | `imagens/urls.ts` | `definirBaseR2`, `urlCheia`, `urlMini` |
 
@@ -733,6 +748,9 @@ Funções chave: `parseNomeArquivo`, `importarNaColecao`, `importarNoRegistro`,
 | `BotaoConversaoHome` | Home | Idem + escolher planilha(s) |
 | `BotaoImportarZip` | Home | Backup (`dados.json` / `integracao.json`) ou texto+imagens |
 | `BotaoCriacaoAutomatica` | Home | Texto colado (+ fotos) → planilha nova |
+
+Na Home (mobile): Integrações + Converter fotos na 1ª linha; **Criação automático** e
+**Importar de arquivo** lado a lado (`.inicio-acoes__par`). Mesmo par na tela vazia.
 
 ### Criação automática (`criacaoAutomatica.ts`)
 
@@ -796,6 +814,10 @@ Shell global (dentro de `ProvedorAuth`): `BotaoLixeiraFlutuante`, `Presenca`,
 conversão Home; arquivar (workspace owner); apagar (dono ou criador); ajuda
 pós-cadastro (`sessionStorage mostruario_ajuda_inicio`).
 
+Layout mobile (`.faixa--app` em `telas.css`): título “Suas planilhas” ~16px; barra
+de ações em grade 2 colunas; cards mais baixos (~62px) com nome 14px / meta 11.5px
+em `--tinta` (legível sobre o cartão claro). Botões da barra = `.btn--compacto`.
+
 **Colecao `/c/:id`:** Segmentado Criar | Preencher. Criar = editar blocos do template
 (`FormBloco`). Preencher = lista/tabela + ficha em `FolhaInferior`, busca, import,
 backup, realtime. Se `bloqueada` → senha.
@@ -821,6 +843,9 @@ preview, ficha unificada, chips para pular planilha, Preencher na parte certa, s
 - `ErroApi(status, message)`
 - Métodos cobrem auth, contas, coleções, campos, registros, corpo, mover, upload
   (só presign), integrações, lixeira, trava, presença, público
+- `edicaoTrava()`: cache **em memória** na sessão (não refaz GET a cada abertura de
+  planilha). Limpa em login / logout / troca de conta (`limparCacheEdicaoTrava`).
+  Evento WS `trava` atualiza o cache.
 
 ---
 
@@ -859,11 +884,16 @@ Definida em `frontend/src/estilos/tokens.css`:
 - `touch-action: pan-x pan-y` no documento (bloqueia zoom do browser; fotos têm gestos próprios).
 - `.pagina`, `.faixa`, `.pagina--app` / `.faixa--app` / `.rolagem`: viewport fixo;
   só a lista interna rola (Home e planilha).
+- `html.visor-aberto`: esconde chrome fixo (presença, FAB da lixeira, instalar)
+  para não cobrir a foto.
 - `.etiqueta`, `.mono`, `.visualmente-oculto`.
 
 ### Componentes UI (`ui/ui.css`)
 
 - **Botao**: `primario` (fita), `padrao`, `fantasma`, `perigo`; bloco / ícone.
+- **`.btn--compacto`**: **36px** de altura, fonte **13px**, ícone 14px — tamanho
+  único da Home (ações + Criar) e da barra de registros (`.preencher-barra`),
+  ficha (`.ficha__acoes-topo`) e prévia (`.preview-registro__acoes`).
 - **Campo**: rótulo mono + input/textarea no papel; placeholder `--tinta-2` opacity 1.
 - **FolhaInferior**: bottom sheet (modal); título; slot abaixo do título; corpo rolável; rodapé; variante `alta`.
 - **Segmentado**, **Chip**, **Carregando**, **InstalarApp**.
@@ -879,7 +909,7 @@ Definida em `frontend/src/estilos/tokens.css`:
 | `preencher/preencher.css` | Lista, tabela, ficha, preview, skeletons |
 | `preencher/secao.css` | Linhas da seção |
 | `preencher/valores.css` | Controles de valor |
-| `imagens/imagens.css` | Grade, visor, zoom |
+| `imagens/imagens.css` | Grade; visor em **CSS grid** (`auto minmax(0,1fr) auto`); trilho `min-height: 0`; foto `object-fit: contain`; tiras + `visor__base-segura` (1 foto reserva home-indicator) |
 | `importar/importar.css` | Folhas de import/conversão/estoque |
 | `publico/publico.css` | Página pública |
 | `ui/presenca.css`, `avisoPedido.css`, `botao-lixeira.css` | Extras |
@@ -950,7 +980,8 @@ Só CRUD de `integracoes` (nome, `colecao_ids` ordenado, ativo, arquivada).
 | Peça | Comportamento |
 |------|----------------|
 | `cache.ts` | localStorage `mostruario:cache:v1:`; SWR ~7 dias; limpa no logout / troca de conta |
-| `prefetch.ts` | Home: idle, até 6 coleções, concorrência 2 |
+| `prefetch.ts` | Home: `requestIdleCallback` (timeout 2,5s), **até 3** planilhas, **concorrência 1** — não disputa banda com auth/presença |
+| Trava | cache em memória em `cliente.ts` (ver §15) |
 | PWA | `vite-plugin-pwa`, nome Mostruário, `theme_color` tapete, `autoUpdate`, navigateFallback denylist `/api` `/health` `/ws` |
 | Fontes | CacheFirst Google Fonts (1 ano) |
 | Chunks | `react-vendor`, `ui-vendor` |
@@ -984,7 +1015,7 @@ Só CRUD de `integracoes` (nome, `colecao_ids` ordenado, ativo, arquivada).
 
 - `contas.edicao_liberada` (default false).
 - Broadcast WS `trava`.
-- Frontend respeita alavanca no Preencher.
+- Frontend respeita alavanca no Preencher; GET só no 1º uso da sessão (cache).
 
 ---
 
@@ -1032,6 +1063,10 @@ Só CRUD de `integracoes` (nome, `colecao_ids` ordenado, ativo, arquivada).
 | Corpo próprio | Novo unificado deve copiar corpo recente |
 | maxFotos | Shared 30; UI template às vezes 10 |
 | Vercel `/ws` | Não passa pelo rewrite — cliente usa `wsBase` direto |
+| Foto alta no visor | Sem grid + `min-height: 0` a foto vaza sob o footer; alinhar ao `visualViewport` |
+| Duplo `comConta` em GET registros | Custa 2 RTT Neon; usar `comAcessoColecao` |
+| Prefetch agressivo | 6×2 requests na Home deixam a lista lenta; manter limite 3 / conc. 1 |
+| Fly `auto_start_machines = false` | Máquina parada = login falha até `fly machine start` |
 
 ### Checklist ao implementar feature
 
@@ -1064,6 +1099,7 @@ Só CRUD de `integracoes` (nome, `colecao_ids` ordenado, ativo, arquivada).
 
 ---
 
-*Documento gerado/atualizado para cobrir o estado do monorepo incluindo migrations
-até `023_conta_membros_papel.sql`, multi-conta, estoque de criação automática,
-contraste de Integrações e pipeline Vercel ↔ Fly ↔ Neon ↔ R2.*
+*Documento atualizado (ago/2026) para cobrir migrations até
+`023_conta_membros_papel.sql`, multi-conta, home compacta + botões 36px,
+visor sem corte, path quente de registros numa transação, cache de sessão/trava,
+prefetch leve e pipeline Vercel ↔ Fly ↔ Neon ↔ R2.*
