@@ -31,6 +31,34 @@ function limparToken(t: string): string {
   return t.replace(/^[^\p{L}\p{N}]+/u, '').replace(/[^\p{L}\p{N}]+$/u, '');
 }
 
+function textoBruto(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' && Number.isFinite(v)) return String(Math.trunc(v));
+  return '';
+}
+
+function nomeEhRef(nome: string): boolean {
+  const n = nome
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase();
+  // Igual ao importar fotos: "Referência", "Ref." e "Ref" (sem ponto).
+  return /(?:^|[^a-z])(?:referencia|ref\.?)/.test(n);
+}
+
+function ehCodigoNumerico(c: string): boolean {
+  return /^\d{3,6}$/.test(c);
+}
+
+/** Primeiro código 3–6 dígitos (4832, 4832macaquinho, "4832 biquíni"). */
+function codigoDeTexto(txt: string): string {
+  const limpo = normalizarRef(txt);
+  if (limpo === '') return '';
+  const m = limpo.match(/\d{3,6}/);
+  if (m?.[0] !== undefined) return m[0];
+  return codigoInicial(txt);
+}
+
 // CÓDIGO da referência: o primeiro pedaço que contém dígito (o código costuma ser
 // numérico), onde quer que ele esteja. Se nada tiver dígito, usa o primeiro pedaço.
 // Assim "4871 bory flaxh", "4871 curto", "bory 4871" e "#4871" casam todos por
@@ -41,26 +69,91 @@ export function codigoInicial(txt: string): string {
   const tokens = limpo.split(' ').map(limparToken).filter((t) => t !== '');
   if (tokens.length === 0) return '';
   const comDigito = tokens.find((t) => /\d/.test(t));
-  return comDigito ?? tokens[0] ?? '';
+  if (comDigito !== undefined) {
+    const m = comDigito.match(/\d{3,6}/);
+    if (m?.[0] !== undefined) return m[0];
+    return comDigito;
+  }
+  return tokens[0] ?? '';
 }
 
-// Chave de junção de um registro: o CÓDIGO INICIAL do primeiro bloco de referência
-// preenchido; se não houver, cai no código inicial do título. null = não dá para
-// unir. Casa quando o código inicial é igual (ex.: 4871).
-export function chaveReferencia(campos: Campo[], registro: Registro): string | null {
+function linhasDe(valor: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.filter((l): l is Record<string, unknown> => typeof l === 'object' && l !== null);
+}
+
+/** Todos os códigos de um registro (topo + seção R.Referência + texto começando com código). */
+export function codigosDoRegistro(campos: Campo[], registro: Registro): string[] {
+  const out: string[] = [];
+  const visto = new Set<string>();
+  const add = (bruto: string): void => {
+    const cod = codigoDeTexto(bruto);
+    if (cod === '' || visto.has(cod)) return;
+    visto.add(cod);
+    out.push(cod);
+  };
+
   for (const c of camposReferencia(campos)) {
-    const cod = codigoInicial(formatarValor(c, registro.valores[c.id]));
-    if (cod !== '') return cod;
+    add(formatarValor(c, registro.valores[c.id]));
+    add(textoBruto(registro.valores[c.id]));
   }
-  // Sem bloco de referência preenchido: tenta o título BRUTO. Se for vazio ou
-  // "Sem nome", o registro NÃO tem referência -> null (vira "solto", aparece
-  // sozinho em "Geral"). Antes reduzíamos o título com codigoInicial ANTES de
-  // checar: "Sem nome" virava "sem" e escapava do guard, colapsando todos os
-  // registros vazios num só grupo "sem" (escondia os demais).
-  const tituloBruto = tituloDoRegistro(campos, registro).trim().toLowerCase();
-  if (tituloBruto === '' || tituloBruto === 'sem nome') return null;
-  const cod = codigoInicial(tituloBruto);
-  return cod === '' ? null : cod;
+  for (const c of campos) {
+    if (c.tipo === 'secao') {
+      const subsRef = (c.config.subcampos ?? []).filter((s) => nomeEhRef(s.nome));
+      if (subsRef.length === 0) continue;
+      for (const linha of linhasDe(registro.valores[c.id])) {
+        for (const s of subsRef) {
+          add(textoBruto(linha[s.id]));
+          add(formatarValor(s, linha[s.id]));
+        }
+      }
+    }
+  }
+  // Título (bloco marcado / seção R) entra sempre: no Caderno o código 4832 pode
+  // estar no título/foto e um bloco "Referência" só com a descrição ("macaquinho").
+  const tituloBruto = tituloDoRegistro(campos, registro).trim();
+  if (tituloBruto !== '' && tituloBruto.toLowerCase() !== 'sem nome') add(tituloBruto);
+
+  if (!out.some(ehCodigoNumerico)) {
+    for (const c of campos) {
+      if (c.tipo !== 'texto' && c.tipo !== 'paragrafo') continue;
+      const t = textoBruto(registro.valores[c.id]).trim();
+      if (/^\d{3,6}\b/.test(t)) add(t);
+    }
+  }
+  return out;
+}
+
+/** Chaves em que o registro entra na planilha unida. Referência única → uma
+ *  chave (igual ao comportamento de sempre). Várias linhas em seção R (ex.:
+ *  Modelagem com 3 referências) → uma chave por código, para cada uma casar
+ *  com o Caderno correspondente. */
+export function chavesDeAgrupamento(campos: Campo[], registro: Registro): string[] {
+  const todos = codigosDoRegistro(campos, registro);
+  const numericos = todos.filter(ehCodigoNumerico);
+  if (numericos.length > 0) return numericos;
+  return todos[0] !== undefined ? [todos[0]] : [];
+}
+
+/** Pedaços do título que pertencem a ESTA chave (cartão 4832 não lista as outras
+ *  refs de um registro de Modelagem com 3 linhas). */
+export function pecasTituloDaChave(titulo: string, chave: string): string[] {
+  const pecas = titulo
+    .split(' | ')
+    .map((p) => p.trim())
+    .filter((p) => p !== '' && p.toLowerCase() !== 'sem nome');
+  if (!ehCodigoNumerico(chave)) return pecas;
+  const daChave = pecas.filter((p) => {
+    const m = p.match(/\d{3,6}/);
+    return m?.[0] === chave;
+  });
+  return daChave.length > 0 ? daChave : pecas;
+}
+
+// Chave de junção: prefere o código numérico 3–6 dígitos (4832 no Caderno e na
+// Modelagem, mesmo se um lado guarda "4832 macaquinho" ou o código só no título).
+export function chaveReferencia(campos: Campo[], registro: Registro): string | null {
+  return chavesDeAgrupamento(campos, registro)[0] ?? null;
 }
 
 // Campos vigentes de uma parte: os do registro (corpo próprio, se houver) ou, sem

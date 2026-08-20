@@ -3,20 +3,20 @@
 .colecao-barra {
   display: flex;
   align-items: center;
-  gap: var(--e3);
+  gap: var(--e2);
   flex-wrap: wrap;
-  margin-bottom: var(--e4);
+  margin-bottom: var(--e2);
 }
 .titulo-editavel {
   flex: 1;
-  min-width: 200px;
-  min-height: var(--toque);
+  min-width: 0;
+  min-height: 36px;
   padding: 4px var(--e2);
   border: 1px solid transparent;
   border-radius: var(--raio);
   background: transparent;
   color: var(--giz);
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   outline: none;
 }
@@ -36,6 +36,31 @@
 }
 .titulo-editavel:disabled:hover {
   border-color: transparent;
+}
+
+@media (max-width: 768px) {
+  .colecao-barra {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .titulo-editavel {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 32px;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 2px 6px;
+    line-height: 1.2;
+  }
+  .colecao-barra .btn--icone {
+    min-height: 36px;
+    min-width: 36px;
+  }
+  .colecao-barra .segmentado__opcao {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
 }
 
 /* duas colunas no desktop: editor + prévia */

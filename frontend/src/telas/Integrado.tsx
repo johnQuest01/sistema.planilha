@@ -37,9 +37,10 @@ import {
 } from '../preencher/derivarResumo';
 import { valoresVaziosDe } from '../preencher/valoresVazios';
 import {
-  chaveReferencia,
   camposDaParte,
+  chavesDeAgrupamento,
   codigoInicial,
+  pecasTituloDaChave,
   type RegistroIntegrado,
 } from '../integracao/merge';
 import { FichaIntegrada } from '../integracao/FichaIntegrada';
@@ -63,10 +64,13 @@ function chaveSel(registroId: string, campoId: string): string {
 const DEBOUNCE_MS = 300;
 const PAGINA = 20;
 
-// Agrupa registros de várias coleções pela referência (código inicial). Cada grupo
-// tem uma parte por coleção, na ordem do grupo (null quando não há registro pra ela).
-// Registros SEM referência detectável não somem: viram grupos "soltos" (só eles),
-// para aparecerem no modo "Geral" (tudo das planilhas).
+// Agrupa registros de várias coleções pela referência (código). Cada grupo tem
+// uma parte por coleção, na ordem do grupo (null quando não há registro pra ela).
+// Um registro com VÁRIAS referências (ex.: Modelagem, 3 linhas na seção R) entra
+// em CADA código — assim cada Caderno de Hugo (referência única, com foto) casa
+// com aquele registro, igual aos pares de referência única. O registro em si
+// continua um só no banco; só o cartão unido se repete por código.
+// Sem referência detectável: grupos "soltos" (modo Geral).
 function agruparPorReferencia(
   cols: Colecao[],
   porColecao: Registro[][],
@@ -78,25 +82,30 @@ function agruparPorReferencia(
   const soltos: RegistroIntegrado[] = [];
   cols.forEach((c, idx) => {
     for (const r of porColecao[idx] ?? []) {
-      const chave = chaveReferencia(camposDoRegistro(c, r), r);
-      if (chave === null) {
+      const chaves = chavesDeAgrupamento(camposDoRegistro(c, r), r);
+      if (chaves.length === 0) {
         soltos.push({
           chave: `solto:${c.id}:${r.id}`,
           partes: cols.map((cc, i) => ({ colecao: cc, registro: i === idx ? r : null })),
         });
         continue;
       }
-      let listas = mapa.get(chave);
-      if (listas === undefined) {
-        listas = cols.map(() => []);
-        mapa.set(chave, listas);
+      for (const chave of chaves) {
+        let listas = mapa.get(chave);
+        if (listas === undefined) {
+          listas = cols.map(() => []);
+          mapa.set(chave, listas);
+        }
+        // O mesmo registro não entra duas vezes no mesmo código (3 linhas iguais).
+        if (listas[idx]?.some((x) => x.id === r.id) === true) continue;
+        listas[idx]?.push(r);
       }
-      listas[idx]?.push(r);
     }
   });
   // "Zip": para cada chave, emite max(qtd por planilha) cartões, casando por posição
-  // (Caderno[i] com Modelagem[i]); sobras ficam com a outra parte null. Todo
-  // registro aparece exatamente uma vez.
+  // (Caderno[i] com Modelagem[i]); sobras ficam com a outra parte null.
+  // Um registro de Modelagem com 3 refs aparece em 3 chaves (compartilhado), cada
+  // uma com o Caderno daquela ref — criação/edição continua no registro original.
   const grupos: RegistroIntegrado[] = [];
   for (const [chave, listas] of mapa) {
     const max = Math.max(...listas.map((l) => l.length));
@@ -125,9 +134,7 @@ function tituloDoGrupo(grupo: RegistroIntegrado): string {
     if (p.registro === null) continue;
     const t = tituloDoRegistro(camposDaParte(p), p.registro).trim();
     if (t === '' || t === 'Sem nome') continue;
-    for (const bruta of t.split(' | ')) {
-      const ref = bruta.trim();
-      if (ref === '') continue;
+    for (const ref of pecasTituloDaChave(t, grupo.chave)) {
       const cod = codigoInicial(ref);
       const dedupe = cod !== '' ? cod : ref.toLowerCase();
       if (vistos.has(dedupe)) continue;
@@ -146,9 +153,10 @@ function tituloDoGrupo(grupo: RegistroIntegrado): string {
 }
 
 function capaDoGrupo(grupo: RegistroIntegrado): string | null {
+  const chaveCapa = /^\d{3,6}$/.test(grupo.chave) ? grupo.chave : undefined;
   for (const p of grupo.partes) {
     if (p.registro === null) continue;
-    const capa = capaDoRegistro(camposDaParte(p), p.registro);
+    const capa = capaDoRegistro(camposDaParte(p), p.registro, chaveCapa);
     if (capa !== null) return capa;
   }
   return null;
@@ -468,13 +476,21 @@ export function Integrado(): JSX.Element {
     return 'Pronto!';
   }
 
-  // Apaga o registro unificado: envia para a lixeira TODAS as partes presentes do
-  // grupo (ex.: Modelagem + Caderno do Hugo de uma mesma referência). A remoção na
-  // lista crua faz os grupos recalcularem; o eco do realtime é idempotente.
+  // Apaga o registro unificado desta referência. Planilha com VÁRIAS refs no mesmo
+  // registro (ex.: Modelagem com 3 linhas) NÃO vai para a lixeira — senão sumiriam
+  // as outras referências. Referência única (Caderno, Modelagem de 1 código) some
+  // como sempre.
   async function apagarGrupo(grupo: RegistroIntegrado): Promise<void> {
     const alvos: { indice: number; reg: Registro }[] = [];
     grupo.partes.forEach((p, i) => {
-      if (p.registro !== null) alvos.push({ indice: i, reg: p.registro });
+      if (p.registro === null) return;
+      const chaves = chavesDeAgrupamento(camposDaParte(p), p.registro);
+      const compartilhado =
+        /^\d{3,6}$/.test(grupo.chave) &&
+        chaves.length > 1 &&
+        chaves.some((c) => c !== grupo.chave);
+      if (compartilhado) return;
+      alvos.push({ indice: i, reg: p.registro });
     });
     for (const { indice, reg } of alvos) {
       await api.apagarRegistro(reg.id);
@@ -825,7 +841,7 @@ function PreviaCorpo({
       if (p.registro === null) continue;
       const a = alvoTitulo(camposDaParte(p));
       if (a === undefined) continue;
-      setRascunhoNome(lerAlvoTitulo(p.registro, a));
+      setRascunhoNome(lerAlvoTitulo(p.registro, a, grupo.chave));
       setErroNome(null);
       setEditandoNome(true);
       return;
@@ -847,11 +863,11 @@ function PreviaCorpo({
         if (p.registro === null) continue;
         const a = alvoTitulo(camposDaParte(p));
         if (a === undefined) continue;
-        const atual = lerAlvoTitulo(p.registro, a);
+        const atual = lerAlvoTitulo(p.registro, a, grupo.chave);
         if (atual.trim() === novo) continue;
         const atualizado = await api.editarRegistro(
           p.registro.id,
-          patchAlvoTitulo(p.registro, a, novo),
+          patchAlvoTitulo(p.registro, a, novo, grupo.chave),
         );
         aoAtualizarRegistro?.(atualizado);
       }
@@ -1295,7 +1311,7 @@ function AcaoApagarIntegrado({
       <button
         type="button"
         className="btn btn--icone integ-apagar-btn"
-        title="Enviar para a lixeira (em todas as planilhas)"
+        title="Enviar para a lixeira (esta referência)"
         aria-label="Apagar registro"
         onClick={() => {
           setConfirmando(true);
@@ -1310,7 +1326,8 @@ function AcaoApagarIntegrado({
   return (
     <div className="integ-apagar-confirma">
       <span className="integ-apagar-confirma__txt">
-        Mover para a lixeira em todas as planilhas? Dados e fotos ficam salvos até apagar definitivo.
+        Mover para a lixeira esta referência? Um registro que também tem outras
+        referências (ex.: Modelagem com várias linhas) permanece.
       </span>
       <div className="integ-apagar-confirma__acoes">
         <Botao variante="perigo" disabled={apagando} onClick={() => void confirmar()}>

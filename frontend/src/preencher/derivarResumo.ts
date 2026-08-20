@@ -184,32 +184,58 @@ function valorParaAlvo(tipo: TipoCampo, texto: string): unknown {
   return t;
 }
 
-export function lerAlvoTitulo(registro: Registro, alvo: AlvoTitulo): string {
+function indiceLinhaDoAlvo(registro: Registro, alvo: AlvoTitulo, codigo?: string): number {
+  if (alvo.subcampoId === undefined) return 0;
+  const linhas = linhasDeSecao(registro, alvo.campoId);
+  const alvoCod = codigo !== undefined && /^\d{3,6}$/.test(codigo) ? codigo : '';
+  if (alvoCod !== '') {
+    const idx = linhas.findIndex((l) => {
+      const v = l[alvo.subcampoId ?? ''];
+      const s =
+        typeof v === 'number' && Number.isFinite(v)
+          ? String(Math.trunc(v))
+          : typeof v === 'string'
+            ? v
+            : '';
+      return s.match(/\d{3,6}/)?.[0] === alvoCod;
+    });
+    if (idx >= 0) return idx;
+  }
+  return 0;
+}
+
+export function lerAlvoTitulo(registro: Registro, alvo: AlvoTitulo, codigo?: string): string {
   const bruto =
     alvo.subcampoId === undefined
       ? registro.valores[alvo.campoId]
-      : linhasDeSecao(registro, alvo.campoId)[0]?.[alvo.subcampoId];
+      : linhasDeSecao(registro, alvo.campoId)[indiceLinhaDoAlvo(registro, alvo, codigo)]?.[
+          alvo.subcampoId
+        ];
   if (alvo.tipo === 'numero') return typeof bruto === 'number' ? String(bruto) : '';
   return textoDe(bruto);
 }
 
 // Monta o PATCH mínimo para gravar o novo título. Para subcampo, reescreve a
-// seção inteira preservando as demais linhas (só a 1ª linha muda; cria uma se
-// não houver nenhuma).
+// seção inteira preservando as demais linhas (só a linha da referência muda;
+// cria uma se não houver nenhuma). `codigo` escolhe a linha quando o registro
+// tem várias refs (Modelagem) — sem isto o renomear da planilha unida apagaria
+// as outras referências.
 export function patchAlvoTitulo(
   registro: Registro,
   alvo: AlvoTitulo,
   texto: string,
+  codigo?: string,
 ): Record<string, unknown> {
   const valor = valorParaAlvo(alvo.tipo, texto);
   if (alvo.subcampoId === undefined) return { [alvo.campoId]: valor };
   const brutas = registro.valores[alvo.campoId];
   const linhas = Array.isArray(brutas) ? [...(brutas as unknown[])] : [];
-  const base = typeof linhas[0] === 'object' && linhas[0] !== null
-    ? { ...(linhas[0] as Record<string, unknown>) }
-    : {};
+  const i = indiceLinhaDoAlvo(registro, alvo, codigo);
+  const atual = linhas[i];
+  const base =
+    typeof atual === 'object' && atual !== null ? { ...(atual as Record<string, unknown>) } : {};
   base[alvo.subcampoId] = valor;
-  linhas[0] = base;
+  linhas[i] = base;
   return { [alvo.campoId]: linhas };
 }
 
@@ -270,7 +296,34 @@ export function keysDeImagensDoCampo(campo: Campo, registro: Registro): string[]
 }
 
 // Capa = foto do bloco de referência/modelagem, senão 1ª imagem de qualquer campo/seção.
-export function capaDoRegistro(campos: Campo[], registro: Registro): string | null {
+export function capaDoRegistro(campos: Campo[], registro: Registro, codigo?: string): string | null {
+  // Na planilha unida, um registro de Modelagem pode ter várias linhas em R:
+  // a miniatura do cartão 4832 deve ser a foto DESSA linha, não a da primeira.
+  const alvo = codigo !== undefined && /^\d{3,6}$/.test(codigo) ? codigo : '';
+  if (alvo !== '') {
+    for (const c of campos) {
+      if (c.tipo !== 'secao') continue;
+      const subs = c.config.subcampos ?? [];
+      const subRef = subs.find((s) => nomeEhReferencia(s.nome));
+      const subFoto = subs.find((s) => s.tipo === 'imagem');
+      if (subRef === undefined || subFoto === undefined) continue;
+      for (const linha of linhasDeSecao(registro, c.id)) {
+        const bruto = linha[subRef.id];
+        const s =
+          typeof bruto === 'number' && Number.isFinite(bruto)
+            ? String(Math.trunc(bruto))
+            : typeof bruto === 'string'
+              ? bruto
+              : '';
+        const m = s.match(/\d{3,6}/);
+        if (m?.[0] !== alvo) continue;
+        const v = linha[subFoto.id];
+        if (!Array.isArray(v)) continue;
+        const k = v.find((x): x is string => typeof x === 'string');
+        if (k !== undefined) return k;
+      }
+    }
+  }
   const preferidos = [
     ...campos.filter((c) => c.tipo === 'imagem' && nomeSugereFotoRef(c.nome)),
     ...campos.filter((c) => c.tipo === 'imagem'),

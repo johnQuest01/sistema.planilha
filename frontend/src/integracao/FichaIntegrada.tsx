@@ -7,7 +7,7 @@ import { Botao } from '../ui/Botao';
 import { alvoTitulo, camposDoRegistro, tituloDoRegistro } from '../preencher/derivarResumo';
 import { CorpoRegistroEditor } from '../preencher/CorpoRegistroEditor';
 import { ParteEditor, type ParteEditorHandle } from './ParteEditor';
-import { camposDaParte, chaveReferencia, type ParteIntegrada, type RegistroIntegrado } from './merge';
+import { camposDaParte, chaveReferencia, codigoInicial, pecasTituloDaChave, type ParteIntegrada, type RegistroIntegrado } from './merge';
 
 // Título do registro unido a partir das referências reais das partes (sem repetir).
 // Nunca mostra a chave interna (`sep:`/`solto:`), que virava "Ref. sep:<uuid>".
@@ -18,10 +18,12 @@ function tituloUnificado(chave: string, partes: ParteIntegrada[]): string {
     if (p.registro === null) continue;
     const t = tituloDoRegistro(camposDaParte(p), p.registro).trim();
     if (t === '' || t === 'Sem nome') continue;
-    for (const bruta of t.split(' | ')) {
-      const ref = bruta.trim();
-      if (ref === '' || vistos.has(ref.toLowerCase())) continue;
-      vistos.add(ref.toLowerCase());
+    for (const ref of pecasTituloDaChave(t, chave)) {
+      if (ref === '') continue;
+      const cod = codigoInicial(ref);
+      const dedupe = cod !== '' ? cod : ref.toLowerCase();
+      if (vistos.has(dedupe)) continue;
+      vistos.add(dedupe);
       refs.push(ref);
     }
   }
@@ -239,9 +241,11 @@ export function FichaIntegrada({
       }
       const primeira = novas.find((p) => p.registro !== null);
       const novaChave =
-        primeira?.registro != null
-          ? chaveReferencia(camposDaParte(primeira), primeira.registro) ?? chave
-          : chave;
+        chave !== '' && !chave.startsWith('sep:') && !chave.startsWith('solto:')
+          ? chave
+          : primeira?.registro != null
+            ? chaveReferencia(camposDaParte(primeira), primeira.registro) ?? chave
+            : chave;
       aoAbrirGrupo({ chave: novaChave, partes: novas });
     } catch (e) {
       setErro(e instanceof ErroApi ? e.message : 'não foi possível duplicar');

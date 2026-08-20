@@ -235,6 +235,7 @@ export function Ficha({ colecao, registro, aoFechar, aoAtualizar, aoApagar, aoCr
 
   return (
     <FolhaInferior
+      alta
       titulo={tituloDoRegistro(corpo, registroLocal)}
       subtitulo={
         <>

@@ -7,6 +7,12 @@
   gap: var(--e2);
   margin-bottom: var(--e3);
 }
+@media (max-width: 768px) {
+  .preencher-barra {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+}
 .preencher-barra .btn,
 .preencher-barra .trava-edicao {
   min-height: 36px;
@@ -1084,6 +1090,22 @@
 .ficha__acoes-topo .btn svg {
   width: 14px;
   height: 14px;
+}
+@media (max-width: 768px) {
+  .ficha__acoes-topo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .ficha__acoes-topo .btn {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 8px;
+  }
 }
 
 .corpo-editor {
