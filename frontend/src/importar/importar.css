@@ -130,3 +130,64 @@
   color: var(--tinta);
   font-weight: 600;
 }
+
+@media (max-width: 768px) {
+  .importar-zip {
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .importar-zip__ajuda {
+    font-size: 0.78rem;
+    line-height: 1.3;
+  }
+  /* Sem rolagem interna: a folha já rola. Um `max-height` aqui cortava a lista
+     do estoque no meio de uma linha. */
+  .criacao-estoque {
+    padding: 0.45rem 0.55rem;
+  }
+  .criacao-estoque__titulo {
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
+  }
+  .criacao-estoque__lista {
+    font-size: 0.72rem;
+    gap: 0.15rem;
+  }
+  .importar-zip .campo {
+    min-width: 0;
+  }
+  .importar-zip .campo__rotulo {
+    font-size: 11px;
+  }
+  .importar-zip textarea.campo__controle {
+    min-height: 88px;
+    max-height: 22vh;
+  }
+  .conversao-acoes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .conversao-acoes .btn {
+    width: 100%;
+    min-height: 36px;
+    font-size: 13px;
+    padding: 0 8px;
+  }
+  .conversao-acoes .btn:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+  .importar-lista-colecoes {
+    max-height: 22vh;
+  }
+  .importar-zip .btn {
+    min-height: 36px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .conversao-grid {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  }
+}

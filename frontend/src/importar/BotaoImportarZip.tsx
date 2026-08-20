@@ -101,7 +101,7 @@ export function BotaoImportarZip({ aoImportado, aoImportadoIntegracao }: Props):
         <FileUp size={15} /> Importar de arquivo
       </Botao>
       {aberto && (
-        <FolhaInferior titulo="Importar planilha de um arquivo" onFechar={fechar}>
+        <FolhaInferior titulo="Importar de arquivo" onFechar={fechar}>
           <div className="importar-zip">
             <p className="importar-zip__ajuda">
               Envie um <strong>.zip</strong>. Se for um <strong>backup</strong> (baixado pelo

@@ -101,7 +101,12 @@ export function FolhaInferior({
             {subtitulo !== undefined && <p className="folha__subtitulo">{subtitulo}</p>}
           </div>
           {acaoTopo}
-          <button type="button" className="btn btn--icone" aria-label="Fechar" onClick={onFechar}>
+          <button
+            type="button"
+            className="btn btn--icone folha__fechar"
+            aria-label="Fechar"
+            onClick={onFechar}
+          >
             <X size={20} />
           </button>
         </div>

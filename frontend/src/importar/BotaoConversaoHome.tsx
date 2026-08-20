@@ -165,7 +165,7 @@ export function BotaoConversaoHome({ colecoes, aoConcluir }: Props): JSX.Element
       </Botao>
 
       {aberto && (
-        <FolhaInferior titulo="Conversão — 1 foto por referência" onFechar={fechar}>
+        <FolhaInferior titulo="Converter fotos" onFechar={fechar}>
           <div className="importar-zip">
             <p className="importar-zip__ajuda">
               Igual à conversão dentro da planilha: escreva as <strong>referências</strong> na

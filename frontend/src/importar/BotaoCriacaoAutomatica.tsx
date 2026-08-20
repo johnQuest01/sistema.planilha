@@ -104,7 +104,7 @@ export function BotaoCriacaoAutomatica({ aoImportado }: Props): JSX.Element {
 
             <Campo
               multilinha
-              rows={10}
+              rows={5}
               rotulo="Cole o texto aqui"
               placeholder={
                 '4785 bory. cor: rosa. modelagem. tecido: algodão. observação:\n---\n4786 curto. cor: azul. caderno.'

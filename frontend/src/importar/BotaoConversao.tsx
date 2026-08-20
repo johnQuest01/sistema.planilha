@@ -124,7 +124,7 @@ export function BotaoConversao({ colecao, aoConcluir }: Props): JSX.Element {
         <Camera size={18} /> Conversão
       </Botao>
       {aberto && (
-        <FolhaInferior titulo="Conversão — 1 foto por referência" onFechar={fechar}>
+        <FolhaInferior titulo="Converter fotos" onFechar={fechar}>
           <div className="importar-zip">
             <p className="importar-zip__ajuda">
               Escreva as <strong>referências existentes</strong> na ordem em que vai fotografar.
